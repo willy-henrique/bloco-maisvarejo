@@ -1,0 +1,12 @@
+rules_version = '2';
+// RLS para Firebase Storage: apenas usuários autenticados.
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /strategic/{allPaths=**} {
+      allow read, write: if request.auth != null;
+    }
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}
