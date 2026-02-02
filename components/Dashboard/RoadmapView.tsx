@@ -47,7 +47,7 @@ export const RoadmapView: React.FC<RoadmapViewProps> = ({ items, onOpenItem }) =
   }), [items]);
 
   return (
-    <div className="max-w-4xl mx-auto space-y-8">
+    <div className="max-w-4xl mx-auto space-y-8 w-full min-w-0 px-0 sm:px-0">
       <p className="text-sm text-slate-400">
         Iniciativas planejadas para 2025, agrupadas por mês.
       </p>

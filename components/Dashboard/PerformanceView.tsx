@@ -31,8 +31,8 @@ export const PerformanceView: React.FC<PerformanceViewProps> = ({ items }) => {
   const blockedItems = items.filter(i => i.status === ItemStatus.BLOCKED);
 
   return (
-    <div className="max-w-5xl mx-auto space-y-6">
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+    <div className="max-w-5xl mx-auto space-y-6 w-full min-w-0">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         <div className="bg-slate-900/50 p-4 rounded-lg border border-slate-800 flex items-center gap-3">
           <div className="p-2 rounded-lg bg-slate-800 text-slate-400">
             <Target size={18} />

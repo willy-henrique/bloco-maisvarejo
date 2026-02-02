@@ -19,9 +19,10 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ items, onStatusChange,
   ];
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+    <div className="max-lg:overflow-x-auto max-lg:overflow-y-visible max-lg:pb-2 overflow-touch max-lg:-mx-1 max-lg:px-1">
+      <div className="max-lg:flex max-lg:gap-4 max-lg:min-w-max lg:grid lg:grid-cols-4 gap-4">
       {columns.map(column => (
-        <div key={column.id} className="flex flex-col bg-slate-900/50 border border-slate-800 rounded-lg overflow-hidden">
+        <div key={column.id} className="flex flex-col bg-slate-900/50 border border-slate-800 rounded-lg overflow-hidden max-lg:min-w-[280px] max-lg:flex-shrink-0 lg:min-w-0">
           <div className="px-3 py-2.5 border-b border-slate-800 flex items-center justify-between bg-slate-900/80">
             <div className="flex items-center gap-2">
               <div className={`w-1.5 h-1.5 rounded-full ${column.color}`} />
@@ -41,7 +42,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ items, onStatusChange,
                   tabIndex={0}
                   onClick={() => onOpenItem?.(item)}
                   onKeyDown={(e) => e.key === 'Enter' && onOpenItem?.(item)}
-                  className="bg-slate-800/60 p-3 rounded border border-slate-700/50 hover:border-slate-600 hover:ring-1 hover:ring-slate-500/50 transition-all cursor-pointer group focus:outline-none focus:ring-1 focus:ring-blue-500/50"
+                  className="bg-slate-800/60 p-3 rounded border border-slate-700/50 hover:border-slate-600 hover:ring-1 hover:ring-slate-500/50 transition-all cursor-pointer group focus:outline-none focus:ring-1 focus:ring-blue-500/50 touch-manipulation active:bg-slate-800/80"
                 >
                   <div className="flex justify-between items-start gap-1 mb-1.5">
                     <Badge type="urgency" value={item.urgency} />
@@ -88,7 +89,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ items, onStatusChange,
               <button
                 type="button"
                 onClick={() => onAddInColumn(column.id)}
-                className="mt-1 flex items-center justify-center gap-2 py-3 px-3 rounded border border-dashed border-slate-600 hover:border-slate-500 hover:bg-slate-800/40 text-slate-500 hover:text-slate-300 text-[11px] font-medium transition-colors focus:outline-none focus:ring-1 focus:ring-slate-500"
+                className="mt-1 flex items-center justify-center gap-2 py-3 px-3 min-h-[44px] rounded border border-dashed border-slate-600 hover:border-slate-500 hover:bg-slate-800/40 text-slate-500 hover:text-slate-300 text-[11px] font-medium transition-colors focus:outline-none focus:ring-1 focus:ring-slate-500 touch-manipulation"
               >
                 <Plus size={14} />
                 Novo módulo
@@ -97,6 +98,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ items, onStatusChange,
           </div>
         </div>
       ))}
+      </div>
     </div>
   );
 };

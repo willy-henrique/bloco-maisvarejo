@@ -12,7 +12,7 @@ interface Table5W2HProps {
 
 export const Table5W2H: React.FC<Table5W2HProps> = ({ items, onUpdate, onDelete, onEditItem }) => {
   return (
-    <div className="w-full overflow-x-auto rounded-lg border border-slate-800 bg-slate-900/50">
+    <div className="w-full overflow-x-auto overflow-touch rounded-lg border border-slate-800 bg-slate-900/50 -mx-1 px-1 max-lg:scroll-px-2">
       <table className="w-full text-left border-collapse min-w-[1400px]">
         <thead>
           <tr className="bg-slate-900/80 text-slate-400 text-[10px] uppercase tracking-wider border-b border-slate-800">

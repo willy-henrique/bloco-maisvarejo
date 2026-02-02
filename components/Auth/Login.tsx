@@ -94,8 +94,8 @@ export const Login: React.FC = () => {
   const isLockedOut = lockoutRemaining > 0;
 
   return (
-    <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-slate-900 via-slate-950 to-slate-950">
-      <div className="w-full max-w-[360px]">
+    <div className="min-h-screen min-h-[100dvh] bg-slate-950 flex items-center justify-center p-4 pt-[env(safe-area-inset-top,0)] pb-[env(safe-area-inset-bottom,0)] bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-slate-900 via-slate-950 to-slate-950">
+      <div className="w-full max-w-[360px] min-w-0">
         <div className="text-center mb-6">
           <div className="inline-flex items-center justify-center w-10 h-10 bg-blue-600/10 text-blue-500 rounded-lg mb-3 border border-slate-700">
             <ShieldCheck size={20} />
@@ -135,7 +135,7 @@ export const Login: React.FC = () => {
             <button
               type="submit"
               disabled={isSubmitting || isLockedOut}
-              className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-slate-700 disabled:cursor-not-allowed text-white text-sm font-medium py-2.5 rounded-lg transition-all flex items-center justify-center gap-2 group disabled:opacity-70"
+              className="w-full min-h-[48px] bg-blue-600 hover:bg-blue-700 disabled:bg-slate-700 disabled:cursor-not-allowed text-white text-sm font-medium py-2.5 rounded-lg transition-all flex items-center justify-center gap-2 group disabled:opacity-70 touch-manipulation"
             >
               {isSubmitting ? (
                 <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />

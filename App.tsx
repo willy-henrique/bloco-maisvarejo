@@ -71,7 +71,7 @@ function AppContent() {
   if (!isAuthenticated) return <Login />;
 
   return (
-    <div className="flex h-screen bg-slate-950 overflow-hidden text-slate-100">
+    <div className="flex h-screen min-h-[100dvh] bg-slate-950 overflow-hidden text-slate-100">
       <Sidebar
         activeView={activeView}
         setView={setActiveView}
@@ -80,12 +80,12 @@ function AppContent() {
         onClose={() => setIsSidebarOpen(false)}
       />
 
-      <main className="flex-1 flex flex-col overflow-hidden relative">
-        <header className="h-14 bg-slate-900/95 border-b border-slate-800 flex items-center justify-between px-4 md:px-6 z-30">
+      <main className="flex-1 flex flex-col overflow-hidden relative min-h-0">
+        <header className="h-14 min-h-[52px] bg-slate-900/95 border-b border-slate-800 flex items-center justify-between px-3 sm:px-4 md:px-6 z-30 shrink-0">
           <div className="flex items-center gap-3">
             <button
               onClick={() => setIsSidebarOpen(true)}
-              className="lg:hidden p-2 text-slate-400 hover:text-white bg-slate-800/80 rounded-lg"
+              className="lg:hidden p-2.5 min-h-[44px] min-w-[44px] text-slate-400 hover:text-white bg-slate-800/80 rounded-lg touch-manipulation"
             >
               <Menu size={20} />
             </button>
@@ -115,16 +115,16 @@ function AppContent() {
             </div>
             <button
               onClick={handleAddNew}
-              className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-lg flex items-center gap-2 transition-colors shrink-0"
+              className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2.5 min-h-[44px] rounded-lg flex items-center gap-2 transition-colors shrink-0 touch-manipulation"
             >
               <Plus size={16} /> <span className="hidden sm:inline">Nova Iniciativa</span>
             </button>
           </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto p-4 md:p-6">
+        <div className="flex-1 overflow-y-auto overflow-x-hidden min-h-0 p-3 sm:p-4 md:p-6">
           {(activeView === 'dashboard' || activeView === 'table') && (
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-4 sm:mb-6">
               {[
                 { label: 'Ações Totais', val: items.length, color: 'blue', icon: Zap },
                 { label: 'Em Execução', val: items.filter(i => i.status === ItemStatus.EXECUTING).length, color: 'amber', icon: Activity },
@@ -169,7 +169,7 @@ function AppContent() {
               )}
               {activeView === 'notes' && (
                 <div className="max-w-4xl mx-auto space-y-4">
-                  <div className="bg-slate-900/60 border border-slate-800 p-4 rounded-lg flex items-center justify-between">
+                  <div className="bg-slate-900/60 border border-slate-800 p-4 rounded-lg flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                     <div className="flex items-center gap-3 text-slate-400">
                       <Lock size={18} />
                       <div>
@@ -208,7 +208,7 @@ function AppContent() {
           onUpdate={updateItem}
         />
 
-        <footer className="h-8 bg-slate-900/95 border-t border-slate-800 px-4 flex items-center justify-between text-[10px] text-slate-500 uppercase tracking-wider z-30">
+        <footer className="h-8 min-h-[32px] bg-slate-900/95 border-t border-slate-800 px-3 sm:px-4 flex items-center justify-between text-[10px] text-slate-500 uppercase tracking-wider z-30 shrink-0">
           <div className="flex items-center gap-2">
             <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
             Conectado

@@ -7,7 +7,10 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "generate-password": "node scripts/generate-password-hash.js"
+    "generate-password": "node scripts/generate-password-hash.js",
+    "auto-commit": "node scripts/auto-commit.cjs",
+    "auto-commit:push": "node scripts/auto-commit.cjs --push",
+    "build:auto-commit": "pkg scripts/auto-commit.cjs --targets node18-win-x64 --output dist/auto-commit.exe"
   },
   "dependencies": {
     "crypto-js": "^4.2.0",
@@ -21,6 +24,7 @@
     "@types/node": "^22.14.0",
     "@vitejs/plugin-react": "^5.0.0",
     "autoprefixer": "^10.4.24",
+    "pkg": "^5.8.1",
     "postcss": "^8.5.6",
     "tailwindcss": "^4.1.18",
     "typescript": "~5.8.2",
