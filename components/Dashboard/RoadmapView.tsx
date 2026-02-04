@@ -28,7 +28,7 @@ export const RoadmapView: React.FC<RoadmapViewProps> = ({ items, onOpenItem }) =
     const map = new Map<string, ActionItem[]>();
     items.forEach(item => {
       const { month, year } = getMonthYear(item.when);
-      if (year !== 2025) return;
+      if (year !== 2026) return;
       const key = formatMonthKey(month, year);
       if (!map.has(key)) map.set(key, []);
       map.get(key)!.push(item);
@@ -43,19 +43,19 @@ export const RoadmapView: React.FC<RoadmapViewProps> = ({ items, onOpenItem }) =
 
   const noDate = useMemo(() => items.filter(i => {
     const { year } = getMonthYear(i.when);
-    return isNaN(year) || year !== 2025;
+    return isNaN(year) || year !== 2026;
   }), [items]);
 
   return (
     <div className="max-w-4xl mx-auto space-y-8 w-full min-w-0 px-0 sm:px-0">
       <p className="text-sm text-slate-400">
-        Iniciativas planejadas para 2025, agrupadas por mês.
+        Iniciativas planejadas para 2026, agrupadas por mês.
       </p>
 
       {byMonth.length === 0 && noDate.length === 0 ? (
         <div className="bg-slate-900/50 border border-slate-800 rounded-lg p-8 text-center">
           <Calendar size={32} className="mx-auto text-slate-600 mb-3" />
-          <p className="text-slate-400 text-sm">Nenhuma iniciativa com data em 2025. Edite os itens na Matriz 5W2H e defina &quot;Quando&quot;.</p>
+          <p className="text-slate-400 text-sm">Nenhuma iniciativa com data em 2026. Edite os itens na Matriz 5W2H e defina &quot;Quando&quot;.</p>
         </div>
       ) : (
         <div className="space-y-6">
@@ -100,7 +100,7 @@ export const RoadmapView: React.FC<RoadmapViewProps> = ({ items, onOpenItem }) =
           {noDate.length > 0 && (
             <div className="bg-slate-900/50 border border-slate-800 rounded-lg overflow-hidden">
               <div className="px-4 py-3 border-b border-slate-800 bg-slate-900/80">
-                <h3 className="text-sm font-semibold text-slate-400">Sem data em 2025</h3>
+                <h3 className="text-sm font-semibold text-slate-400">Sem data em 2026</h3>
               </div>
               <ul className="divide-y divide-slate-800">
                 {noDate.map(item => (

@@ -92,7 +92,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeView, setView, onLogout,
                   : 'text-slate-400 hover:bg-slate-800/60 hover:text-slate-100'
               }`}
             >
-              <Briefcase size={18} /> Roadmap 2025
+              <Briefcase size={18} /> Roadmap 2026
             </button>
           </div>
         </nav>

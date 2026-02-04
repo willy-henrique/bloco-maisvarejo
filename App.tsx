@@ -100,7 +100,7 @@ function AppContent() {
                 {activeView === 'table' && 'Matriz 5W2H'}
                 {activeView === 'notes' && 'Decisões'}
                 {activeView === 'performance' && 'Desempenho'}
-                {activeView === 'roadmap' && 'Roadmap 2025'}
+                {activeView === 'roadmap' && 'Roadmap 2026'}
               </h2>
             </div>
           </div>
