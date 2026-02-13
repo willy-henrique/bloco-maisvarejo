@@ -1,8 +1,8 @@
 
 import React from 'react';
-import { LayoutDashboard, Table, LogOut, ShieldCheck, PieChart, Briefcase, X, FileText } from 'lucide-react';
+import { LayoutDashboard, Table, LogOut, ShieldCheck, PieChart, Briefcase, X, ListTodo } from 'lucide-react';
 
-export type ViewId = 'dashboard' | 'table' | 'notes' | 'performance' | 'roadmap';
+export type ViewId = 'dashboard' | 'table' | 'backlog' | 'performance' | 'roadmap';
 
 interface SidebarProps {
   activeView: ViewId;
@@ -16,7 +16,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeView, setView, onLogout,
   const menuItems = [
     { id: 'dashboard', icon: LayoutDashboard, label: 'Prioridades' },
     { id: 'table', icon: Table, label: 'Matriz 5W2H' },
-    { id: 'notes', icon: FileText, label: 'Central de Notas' },
+    { id: 'backlog', icon: ListTodo, label: 'Back Log' },
   ];
 
   const handleNavClick = (view: ViewId) => {
