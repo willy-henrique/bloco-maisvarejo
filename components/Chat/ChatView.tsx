@@ -1,7 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Send, Loader2, Sparkles } from 'lucide-react';
 
-const API_URL = import.meta.env.VITE_5W2H_CHAT_API_URL as string | undefined;
+// Usar /api/chat (Vercel) por padrão. Se VITE_5W2H_CHAT_API_URL for uma chave (gsk_...) por engano, ignorar.
+const ENV_URL = import.meta.env.VITE_5W2H_CHAT_API_URL as string | undefined;
+const API_URL =
+  ENV_URL && typeof ENV_URL === 'string' && ENV_URL.trim() && !ENV_URL.trim().toLowerCase().startsWith('gsk')
+    ? ENV_URL.trim()
+    : '/api/chat';
 
 interface ChatMessage {
   id: string;
@@ -38,20 +43,6 @@ export const ChatView: React.FC = () => {
     setError(null);
     setLoading(true);
 
-    if (!API_URL) {
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: `a-${Date.now()}`,
-          role: 'assistant',
-          content: 'Configure a variável VITE_5W2H_CHAT_API_URL no Vercel (e no .env.local em dev) com a URL da sua API de chat para ativar as respostas da IA.',
-          timestamp: Date.now(),
-        },
-      ]);
-      setLoading(false);
-      return;
-    }
-
     try {
       const res = await fetch(API_URL, {
         method: 'POST',
@@ -80,7 +71,7 @@ export const ChatView: React.FC = () => {
         {
           id: `a-${Date.now()}`,
           role: 'assistant',
-          content: `Erro: ${errMsg}. Verifique a URL da API e CORS no Vercel.`,
+          content: `Erro: ${errMsg}. No Vercel, defina GROQ_API_KEY em Settings > Environment Variables e faça redeploy.`,
           timestamp: Date.now(),
         },
       ]);
@@ -103,7 +94,7 @@ export const ChatView: React.FC = () => {
               </div>
               <h3 className="text-slate-200 font-semibold text-lg mb-1">5W2H CHAT</h3>
               <p className="text-slate-500 text-sm max-w-xs">
-                Envie uma mensagem. Quando a API estiver configurada no Vercel, a IA responderá aqui.
+                Envie uma mensagem. A IA é especializada em 5W2H e planejamento estratégico.
               </p>
             </div>
           )}
