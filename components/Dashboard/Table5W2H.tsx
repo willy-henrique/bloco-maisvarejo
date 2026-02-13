@@ -1,7 +1,7 @@
 
-import React from 'react';
+import React, { useMemo, useState } from 'react';
 import { ActionItem, ItemStatus, UrgencyLevel } from '../../types';
-import { Trash2, Pencil, ShieldAlert, Calendar, User, Info, MapPin, FileText } from 'lucide-react';
+import { Trash2, Pencil, ShieldAlert, Calendar, User, Info, MapPin, FileText, ChevronDown, ChevronRight, CheckCircle } from 'lucide-react';
 
 interface Table5W2HProps {
   items: ActionItem[];
@@ -11,8 +11,18 @@ interface Table5W2HProps {
 }
 
 export const Table5W2H: React.FC<Table5W2HProps> = ({ items, onUpdate, onDelete, onEditItem }) => {
+  const [concluidosOpen, setConcluidosOpen] = useState(false);
+
+  const { activeItems, completedItems } = useMemo(() => {
+    const completed = items.filter((i) => i.status === ItemStatus.COMPLETED);
+    const active = items.filter((i) => i.status !== ItemStatus.COMPLETED);
+    completed.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+    return { activeItems: active, completedItems: completed };
+  }, [items]);
+
   return (
-    <div className="w-full overflow-x-auto overflow-touch rounded-lg border border-slate-800 bg-slate-900/50 -mx-1 px-1 max-lg:scroll-px-2">
+    <div className="space-y-6">
+      <div className="w-full overflow-x-auto overflow-touch rounded-lg border border-slate-800 bg-slate-900/50 -mx-1 px-1 max-lg:scroll-px-2">
       <table className="w-full text-left border-collapse min-w-[1400px]">
         <thead>
           <tr className="bg-slate-900/80 text-slate-400 text-[10px] uppercase tracking-wider border-b border-slate-800">
@@ -29,7 +39,7 @@ export const Table5W2H: React.FC<Table5W2HProps> = ({ items, onUpdate, onDelete,
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-800">
-          {items.map(item => (
+          {activeItems.map(item => (
             <tr key={`${item.id}-${item.updatedAt}`} className="hover:bg-slate-800/30 transition-colors group">
               <td className="px-4 py-3 min-w-[200px]">
                 <div className="flex flex-col gap-1">
@@ -152,13 +162,83 @@ export const Table5W2H: React.FC<Table5W2HProps> = ({ items, onUpdate, onDelete,
           ))}
         </tbody>
       </table>
-      {items.length === 0 && (
+      {activeItems.length === 0 && (
         <div className="py-16 text-center flex flex-col items-center gap-4">
           <div className="p-4 bg-slate-800/50 rounded-full">
             <ShieldAlert size={32} className="text-slate-600" />
           </div>
-          <p className="text-slate-400 text-sm font-medium">Nenhum item. Use &quot;Nova Iniciativa&quot; para começar.</p>
+          <p className="text-slate-400 text-sm font-medium">Nenhum item em andamento. Use &quot;Nova Iniciativa&quot; ou abra um concluído para reativar.</p>
         </div>
+      )}
+      </div>
+
+      {/* Concluídos: abrir para ver detalhes e editar */}
+      {completedItems.length > 0 && (
+        <section className="bg-slate-900/30 border border-slate-800/80 rounded-lg overflow-hidden">
+          <button
+            type="button"
+            onClick={() => setConcluidosOpen((o) => !o)}
+            className="w-full px-4 py-3 flex items-center justify-between text-left hover:bg-slate-800/30 transition-colors"
+          >
+            <div className="flex items-center gap-2 text-slate-400">
+              {concluidosOpen ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
+              <CheckCircle size={16} className="text-emerald-500/80" />
+              <span className="text-sm font-medium text-slate-300">Concluídos</span>
+              <span className="text-[11px] text-slate-500">— abrir para ver detalhes e editar</span>
+            </div>
+            <span className="text-[10px] text-slate-600 bg-slate-800 px-2 py-0.5 rounded tabular-nums">
+              {completedItems.length}
+            </span>
+          </button>
+          {concluidosOpen && (
+            <div className="border-t border-slate-800/80 overflow-x-auto overflow-touch">
+              <table className="w-full text-left border-collapse min-w-[600px]">
+                <thead>
+                  <tr className="text-slate-500 text-[10px] uppercase tracking-wider border-b border-slate-800/80 bg-slate-900/60">
+                    <th className="px-3 py-2.5 font-semibold">O quê?</th>
+                    <th className="px-3 py-2.5 font-semibold">Quem / Quando</th>
+                    <th className="px-3 py-2.5 font-semibold text-right w-24">Ações</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800/60">
+                  {completedItems.map((item) => (
+                    <tr
+                      key={item.id}
+                      className="hover:bg-slate-800/30 transition-colors"
+                    >
+                      <td className="px-3 py-2.5 text-sm font-medium text-slate-200">
+                        {item.what || '—'}
+                      </td>
+                      <td className="px-3 py-2.5 text-[11px] text-slate-500">
+                        {item.who || '—'} · {item.when ? new Date(item.when).toLocaleDateString('pt-BR') : '—'}
+                      </td>
+                      <td className="px-3 py-2.5 text-right">
+                        {onEditItem && (
+                          <button
+                            type="button"
+                            onClick={() => onEditItem(item)}
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-slate-300 hover:text-blue-400 hover:bg-blue-500/10 rounded transition-colors"
+                          >
+                            <Pencil size={12} />
+                            Abrir detalhes
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => onDelete(item.id)}
+                          className="ml-1 p-1.5 text-slate-500 hover:text-red-400 hover:bg-red-500/10 rounded transition-colors"
+                          title="Excluir"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
       )}
     </div>
   );
