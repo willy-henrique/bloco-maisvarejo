@@ -1,8 +1,8 @@
 
 import React from 'react';
-import { LayoutDashboard, Table, LogOut, ShieldCheck, PieChart, Briefcase, X, ListTodo } from 'lucide-react';
+import { LayoutDashboard, Table, LogOut, ShieldCheck, PieChart, Briefcase, X, ListTodo, Bot } from 'lucide-react';
 
-export type ViewId = 'dashboard' | 'table' | 'backlog' | 'performance' | 'roadmap';
+export type ViewId = 'dashboard' | 'table' | 'backlog' | 'performance' | 'roadmap' | 'ia';
 
 interface SidebarProps {
   activeView: ViewId;
@@ -93,6 +93,21 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeView, setView, onLogout,
               }`}
             >
               <Briefcase size={18} /> Roadmap 2026
+            </button>
+          </div>
+
+          <div className="mt-4 pt-4 border-t border-slate-800 flex flex-col gap-0.5">
+            <p className="px-3 py-1.5 text-[10px] text-slate-500 uppercase tracking-wider font-medium">IA</p>
+            <button
+              type="button"
+              onClick={() => handleNavClick('ia')}
+              className={`flex items-center gap-2.5 px-3 py-2.5 min-h-[44px] rounded-lg text-sm font-medium transition-all text-left w-full touch-manipulation ${
+                activeView === 'ia'
+                  ? 'bg-blue-600 text-white'
+                  : 'text-slate-400 hover:bg-slate-800/60 hover:text-slate-100'
+              }`}
+            >
+              <Bot size={18} /> 5W2H CHAT
             </button>
           </div>
         </nav>

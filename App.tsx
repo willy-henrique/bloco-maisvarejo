@@ -12,9 +12,10 @@ import type { ViewId } from './components/Layout/Sidebar';
 import { useStrategicBoard } from './controllers/useStrategicBoard';
 import { StorageService } from './services/storageService';
 import { isFirebaseConfigured, subscribeBoard, saveBoardNotes } from './services/firestoreSync';
-import { Plus, Search, Activity, Target, Zap, Menu, ListTodo, AlertCircle, PieChart, Briefcase } from 'lucide-react';
+import { Plus, Search, Activity, Target, Zap, Menu, ListTodo, AlertCircle, PieChart, Briefcase, Bot } from 'lucide-react';
 import { ActionItem, ItemStatus, UrgencyLevel } from './types';
 import { Toast, type ToastType } from './components/Shared/Toast';
+import { ChatView } from './components/Chat/ChatView';
 
 function AppContent() {
   const { isAuthenticated, encryptionKey, logout } = useAuth();
@@ -104,12 +105,14 @@ function AppContent() {
               {activeView === 'backlog' && <ListTodo size={18} className="text-emerald-500 shrink-0" />}
               {activeView === 'performance' && <PieChart size={18} className="text-violet-500 shrink-0" />}
               {activeView === 'roadmap' && <Briefcase size={18} className="text-cyan-500 shrink-0" />}
+              {activeView === 'ia' && <Bot size={18} className="text-blue-400 shrink-0" />}
               <h2 className="text-base font-semibold text-slate-100 tracking-tight">
                 {activeView === 'dashboard' && 'Dashboard'}
                 {activeView === 'table' && 'Matriz 5W2H'}
                 {activeView === 'backlog' && 'Back Log'}
                 {activeView === 'performance' && 'Desempenho'}
                 {activeView === 'roadmap' && 'Roadmap 2026'}
+                {activeView === 'ia' && '5W2H CHAT'}
               </h2>
             </div>
           </div>
@@ -122,12 +125,14 @@ function AppContent() {
                 className="bg-slate-950/80 border border-slate-800 rounded-lg py-2 pl-9 pr-3 text-sm text-slate-300 outline-none focus:border-slate-600 w-48 transition-all"
               />
             </div>
+            {activeView !== 'ia' && (
             <button
               onClick={handleAddNew}
               className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2.5 min-h-[44px] rounded-lg flex items-center gap-2 transition-colors shrink-0 touch-manipulation"
             >
               <Plus size={16} /> <span className="hidden sm:inline">Nova Iniciativa</span>
             </button>
+            )}
           </div>
         </header>
 
@@ -153,7 +158,11 @@ function AppContent() {
             </div>
           )}
 
-          {loading ? (
+          {activeView === 'ia' ? (
+            <div className="pb-8 h-full min-h-0 flex flex-col">
+              <ChatView />
+            </div>
+          ) : loading ? (
             <div className="flex flex-col items-center justify-center h-64 gap-4">
               <div className="w-8 h-8 border-2 border-slate-700 border-t-blue-500 rounded-full animate-spin" />
               <p className="text-slate-500 text-xs uppercase tracking-wider">Carregando...</p>
