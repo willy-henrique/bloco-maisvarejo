@@ -14,16 +14,18 @@ import { StorageService } from './services/storageService';
 import { isFirebaseConfigured, subscribeBoard, saveBoardNotes } from './services/firestoreSync';
 import { Plus, Search, Activity, Target, Zap, Menu, ListTodo, AlertCircle, PieChart, Briefcase } from 'lucide-react';
 import { ActionItem, ItemStatus, UrgencyLevel } from './types';
+import { Toast, type ToastType } from './components/Shared/Toast';
 
 function AppContent() {
   const { isAuthenticated, encryptionKey, logout } = useAuth();
-  const [activeView, setActiveView] = useState<ViewId>('dashboard');
+  const [activeView, setActiveView] = useState<ViewId>('backlog');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [strategicNote, setStrategicNote] = useState('');
   const [noteSaving, setNoteSaving] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState<ActionItem | null>(null);
   const [defaultStatusForNew, setDefaultStatusForNew] = useState<ItemStatus | null>(null);
+  const [toast, setToast] = useState<{ message: string; type: ToastType } | null>(null);
   const { items, loading, addItem, updateItem, deleteItem, updateStatus } = useStrategicBoard(encryptionKey ?? null);
 
   const openItemModal = useCallback((item: ActionItem | null, statusForNew?: ItemStatus) => {
@@ -59,9 +61,9 @@ function AppContent() {
     try {
       await StorageService.saveStrategicNote(strategicNote, encryptionKey);
       if (isFirebaseConfigured) await saveBoardNotes(strategicNote, encryptionKey);
-      alert('Decisão salva e criptografada com sucesso.');
+      setToast({ message: 'Decisão salva e criptografada com sucesso.', type: 'success' });
     } catch (e) {
-      alert('Erro ao salvar. Faça login novamente.');
+      setToast({ message: 'Erro ao salvar. Faça login novamente.', type: 'error' });
     } finally {
       setNoteSaving(false);
     }
@@ -73,6 +75,12 @@ function AppContent() {
 
   return (
     <div className="flex h-screen min-h-[100dvh] bg-slate-950 overflow-hidden text-slate-100">
+      <Toast
+        message={toast?.message ?? ''}
+        type={toast?.type ?? 'success'}
+        visible={toast !== null}
+        onClose={() => setToast(null)}
+      />
       <Sidebar
         activeView={activeView}
         setView={setActiveView}
@@ -158,6 +166,7 @@ function AppContent() {
                   onStatusChange={updateStatus}
                   onOpenItem={openItemModal}
                   onAddInColumn={(status) => openItemModal(null, status)}
+                  onDelete={deleteItem}
                 />
               )}
               {activeView === 'table' && (

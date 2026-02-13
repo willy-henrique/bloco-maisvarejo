@@ -14,9 +14,9 @@ interface SidebarProps {
 
 export const Sidebar: React.FC<SidebarProps> = ({ activeView, setView, onLogout, isOpen, onClose }) => {
   const menuItems = [
+    { id: 'backlog', icon: ListTodo, label: 'Back Log' },
     { id: 'dashboard', icon: LayoutDashboard, label: 'Prioridades' },
     { id: 'table', icon: Table, label: 'Matriz 5W2H' },
-    { id: 'backlog', icon: ListTodo, label: 'Back Log' },
   ];
 
   const handleNavClick = (view: ViewId) => {

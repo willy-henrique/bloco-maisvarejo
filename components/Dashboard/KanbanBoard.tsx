@@ -1,13 +1,14 @@
 import React, { useMemo, useState } from 'react';
 import { ActionItem, ItemStatus } from '../../types';
 import { Badge } from '../Shared/Badge';
-import { Clock, User, Plus, ChevronDown, ChevronRight, CheckCircle, Pencil } from 'lucide-react';
+import { Clock, User, Plus, ChevronDown, ChevronRight, CheckCircle, Pencil, Trash2 } from 'lucide-react';
 
 interface KanbanBoardProps {
   items: ActionItem[];
   onStatusChange: (id: string, status: ItemStatus) => void;
   onOpenItem?: (item: ActionItem) => void;
   onAddInColumn?: (status: ItemStatus) => void;
+  onDelete?: (id: string) => void;
 }
 
 const BOARD_COLUMNS = [
@@ -21,7 +22,7 @@ const ALL_STATUS_OPTIONS = [
   { id: ItemStatus.COMPLETED, label: 'Concluído', color: 'bg-emerald-500' },
 ];
 
-export const KanbanBoard: React.FC<KanbanBoardProps> = ({ items, onStatusChange, onOpenItem, onAddInColumn }) => {
+export const KanbanBoard: React.FC<KanbanBoardProps> = ({ items, onStatusChange, onOpenItem, onAddInColumn, onDelete }) => {
   const [concluidosOpen, setConcluidosOpen] = useState(false);
 
   const completedItems = useMemo(
@@ -58,18 +59,34 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ items, onStatusChange,
                     >
                       <div className="flex justify-between items-start gap-1 mb-1.5">
                         <Badge type="urgency" value={item.urgency} />
-                        <select
-                          value={item.status}
-                          onChange={(e) => onStatusChange(item.id, e.target.value as ItemStatus)}
-                          className="bg-slate-700/80 border border-slate-600 text-[10px] font-medium rounded px-1.5 py-1 text-slate-200 outline-none cursor-pointer shrink-0 max-w-[110px]"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          {ALL_STATUS_OPTIONS.map((col) => (
-                            <option key={col.id} value={col.id} className="bg-slate-900">
-                              {col.label}
-                            </option>
-                          ))}
-                        </select>
+                        <div className="flex items-center gap-0.5 shrink-0">
+                          <select
+                            value={item.status}
+                            onChange={(e) => onStatusChange(item.id, e.target.value as ItemStatus)}
+                            className="bg-slate-700/80 border border-slate-600 text-[10px] font-medium rounded px-1.5 py-1 text-slate-200 outline-none cursor-pointer max-w-[110px]"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            {ALL_STATUS_OPTIONS.map((col) => (
+                              <option key={col.id} value={col.id} className="bg-slate-900">
+                                {col.label}
+                              </option>
+                            ))}
+                          </select>
+                          {onDelete && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onDelete(item.id);
+                              }}
+                              className="p-1.5 rounded text-slate-500 hover:text-red-400 hover:bg-red-500/10 opacity-60 hover:opacity-100 transition-all touch-manipulation"
+                              title="Excluir"
+                              aria-label="Excluir iniciativa"
+                            >
+                              <Trash2 size={12} />
+                            </button>
+                          )}
+                        </div>
                       </div>
                       <h4 className="text-xs font-medium text-slate-100 mb-1.5 leading-tight line-clamp-2">
                         {item.what}
