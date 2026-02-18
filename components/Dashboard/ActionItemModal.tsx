@@ -128,6 +128,7 @@ export const ActionItemModal: React.FC<ActionItemModalProps> = ({
                 onChange={(e) => update('who', e.target.value)}
                 placeholder="Responsável"
                 className="w-full bg-slate-800/50 border border-slate-700 rounded-lg pl-9 pr-3 py-2.5 text-sm text-slate-200 placeholder:text-slate-500 outline-none focus:border-slate-600"
+                required
               />
             </div>
           </div>
@@ -142,6 +143,7 @@ export const ActionItemModal: React.FC<ActionItemModalProps> = ({
                 value={form.when}
                 onChange={(e) => update('when', e.target.value)}
                 className="w-full bg-slate-800/50 border border-slate-700 rounded-lg pl-9 pr-3 py-2.5 text-sm text-slate-200 outline-none focus:border-slate-600"
+                required
               />
             </div>
           </div>

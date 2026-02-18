@@ -3,17 +3,21 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { Login } from './components/Auth/Login';
 import { Sidebar } from './components/Layout/Sidebar';
 import { KanbanBoard } from './components/Dashboard/KanbanBoard';
-import { Table5W2H } from './components/Dashboard/Table5W2H';
+import { PrioridadeTable } from './components/Dashboard/PrioridadeTable';
 import { BacklogView } from './components/Dashboard/BacklogView';
-import { ActionItemModal } from './components/Dashboard/ActionItemModal';
+import { PrioridadeModal } from './components/Dashboard/PrioridadeModal';
+import { PrioridadeDetailModal } from './components/Dashboard/PrioridadeDetailModal';
+import { BacklogModal } from './components/Dashboard/BacklogModal';
 import { PerformanceView } from './components/Dashboard/PerformanceView';
+import { AlertasPanel } from './components/Dashboard/AlertasPanel';
 import { RoadmapView } from './components/Dashboard/RoadmapView';
 import type { ViewId } from './components/Layout/Sidebar';
-import { useStrategicBoard } from './controllers/useStrategicBoard';
+import { usePrioridadesBoard } from './controllers/usePrioridadesBoard';
 import { StorageService } from './services/storageService';
 import { isFirebaseConfigured, subscribeBoard, saveBoardNotes } from './services/firestoreSync';
-import { Plus, Search, Activity, Target, Zap, Menu, ListTodo, AlertCircle, PieChart, Briefcase, Bot } from 'lucide-react';
-import { ActionItem, ItemStatus, UrgencyLevel } from './types';
+import { Plus, Search, Activity, Target, Menu, ListTodo, AlertCircle, PieChart, Briefcase, Bot } from 'lucide-react';
+import type { Prioridade, PrioridadeStatus } from './types';
+import type { BacklogItem } from './types';
 import { Toast, type ToastType } from './components/Shared/Toast';
 import { ChatView } from './components/Chat/ChatView';
 
@@ -23,22 +27,74 @@ function AppContent() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [strategicNote, setStrategicNote] = useState('');
   const [noteSaving, setNoteSaving] = useState(false);
-  const [modalOpen, setModalOpen] = useState(false);
-  const [selectedItem, setSelectedItem] = useState<ActionItem | null>(null);
-  const [defaultStatusForNew, setDefaultStatusForNew] = useState<ItemStatus | null>(null);
+  const [prioridadeModalOpen, setPrioridadeModalOpen] = useState(false);
+  const [selectedPrioridade, setSelectedPrioridade] = useState<Prioridade | null>(null);
+  const [defaultStatusForNew, setDefaultStatusForNew] = useState<PrioridadeStatus | null>(null);
+  const [backlogModalOpen, setBacklogModalOpen] = useState(false);
+  const [selectedBacklogItem, setSelectedBacklogItem] = useState<BacklogItem | null>(null);
   const [toast, setToast] = useState<{ message: string; type: ToastType } | null>(null);
-  const { items, loading, addItem, updateItem, deleteItem, updateStatus } = useStrategicBoard(encryptionKey ?? null);
 
-  const openItemModal = useCallback((item: ActionItem | null, statusForNew?: ItemStatus) => {
-    setSelectedItem(item);
-    setDefaultStatusForNew(item === null && statusForNew ? statusForNew : null);
-    setModalOpen(true);
+  const {
+    prioridades,
+    backlog,
+    planos,
+    tarefas,
+    loading,
+    addPrioridade,
+    updatePrioridade,
+    deletePrioridade,
+    updatePrioridadeStatus,
+    addBacklogItem,
+    updateBacklogItem,
+    deleteBacklogItem,
+    promoteToPrioridade,
+    addPlano,
+    updatePlano,
+    deletePlano,
+    addTarefa,
+    updateTarefa,
+    deleteTarefa,
+    maxPrioridadesAtivas,
+    countPrioridadesAtivas,
+  } = usePrioridadesBoard(encryptionKey ?? null);
+
+  const [detailModalOpen, setDetailModalOpen] = useState(false);
+  const [selectedPrioridadeIdForDetail, setSelectedPrioridadeIdForDetail] = useState<string | null>(null);
+
+  const openDetailModal = useCallback((prioridade: Prioridade) => {
+    setSelectedPrioridadeIdForDetail(prioridade.id);
+    setDetailModalOpen(true);
   }, []);
 
-  const closeItemModal = useCallback(() => {
-    setModalOpen(false);
-    setSelectedItem(null);
+  const closeDetailModal = useCallback(() => {
+    setDetailModalOpen(false);
+    setSelectedPrioridadeIdForDetail(null);
+  }, []);
+
+  const selectedPrioridadeForDetail = selectedPrioridadeIdForDetail
+    ? prioridades.find((p) => p.id === selectedPrioridadeIdForDetail) ?? null
+    : null;
+
+  const openPrioridadeModal = useCallback((item: Prioridade | null, statusForNew?: PrioridadeStatus) => {
+    setSelectedPrioridade(item);
+    setDefaultStatusForNew(item === null && statusForNew ? statusForNew : null);
+    setPrioridadeModalOpen(true);
+  }, []);
+
+  const closePrioridadeModal = useCallback(() => {
+    setPrioridadeModalOpen(false);
+    setSelectedPrioridade(null);
     setDefaultStatusForNew(null);
+  }, []);
+
+  const openBacklogModal = useCallback((item: BacklogItem | null) => {
+    setSelectedBacklogItem(item);
+    setBacklogModalOpen(true);
+  }, []);
+
+  const closeBacklogModal = useCallback(() => {
+    setBacklogModalOpen(false);
+    setSelectedBacklogItem(null);
   }, []);
 
   const notesUnsubRef = useRef<(() => void) | null>(null);
@@ -70,9 +126,54 @@ function AppContent() {
     }
   }, [encryptionKey, strategicNote]);
 
-  const handleAddNew = () => openItemModal(null);
+  const handlePrioridadeStatusChange = useCallback(
+    async (id: string, newStatus: PrioridadeStatus) => {
+      const ok = await updatePrioridadeStatus(id, newStatus);
+      if (ok === false) {
+        setToast({
+          message: `Limite de ${maxPrioridadesAtivas} prioridades ativas no quadro. Conclua ou rebaixe uma antes de ativar outra.`,
+          type: 'error',
+        });
+      }
+    },
+    [updatePrioridadeStatus, maxPrioridadesAtivas]
+  );
+
+  const handleSaveNewPrioridade = useCallback(
+    async (data: Omit<Prioridade, 'id' | 'createdAt' | 'updatedAt'>) => {
+      const ok = await addPrioridade(data);
+      if (ok === false) {
+        setToast({
+          message: `Limite de ${maxPrioridadesAtivas} prioridades ativas. Ajuste as prioridades antes de criar uma nova.`,
+          type: 'error',
+        });
+      }
+    },
+    [addPrioridade, maxPrioridadesAtivas]
+  );
+
+  const handlePromote = useCallback(
+    async (backlogId: string) => {
+      const ok = await promoteToPrioridade(backlogId);
+      if (!ok) {
+        setToast({
+          message: `Limite de ${maxPrioridadesAtivas} prioridades ativas. Conclua ou rebaixe uma antes de promover.`,
+          type: 'error',
+        });
+      }
+    },
+    [promoteToPrioridade, maxPrioridadesAtivas]
+  );
+
+  const handleAddNewPrioridade = () => openPrioridadeModal(null);
 
   if (!isAuthenticated) return <Login />;
+
+  const ativasCount = countPrioridadesAtivas();
+  const limiteAtivo = ativasCount >= maxPrioridadesAtivas;
+  const execucaoCount = prioridades.filter((p) => p.status_prioridade === PrioridadeStatus.EXECUCAO).length;
+  const bloqueadoCount = prioridades.filter((p) => p.status_prioridade === PrioridadeStatus.BLOQUEADO).length;
+  const concluidoCount = prioridades.filter((p) => p.status_prioridade === PrioridadeStatus.CONCLUIDO).length;
 
   return (
     <div className="flex h-screen min-h-[100dvh] bg-slate-950 overflow-hidden text-slate-100">
@@ -100,18 +201,18 @@ function AppContent() {
               <Menu size={20} />
             </button>
             <div className="flex items-center gap-2.5">
-              {activeView === 'dashboard' && <Zap size={18} className="text-amber-500 shrink-0" />}
+              {activeView === 'dashboard' && <Target size={18} className="text-amber-500 shrink-0" />}
               {activeView === 'table' && <Target size={18} className="text-blue-500 shrink-0" />}
               {activeView === 'backlog' && <ListTodo size={18} className="text-emerald-500 shrink-0" />}
               {activeView === 'performance' && <PieChart size={18} className="text-violet-500 shrink-0" />}
               {activeView === 'roadmap' && <Briefcase size={18} className="text-cyan-500 shrink-0" />}
               {activeView === 'ia' && <Bot size={18} className="text-blue-400 shrink-0" />}
               <h2 className="text-base font-semibold text-slate-100 tracking-tight">
-                {activeView === 'dashboard' && 'Dashboard'}
-                {activeView === 'table' && 'Matriz 5W2H'}
-                {activeView === 'backlog' && 'Back Log'}
+                {activeView === 'dashboard' && 'Quadro de Prioridades'}
+                {activeView === 'table' && 'Prioridades'}
+                {activeView === 'backlog' && 'Backlog'}
                 {activeView === 'performance' && 'Desempenho'}
-                {activeView === 'roadmap' && 'Roadmap 2026'}
+                {activeView === 'roadmap' && 'Roadmap'}
                 {activeView === 'ia' && '5W2H CHAT'}
               </h2>
             </div>
@@ -125,13 +226,23 @@ function AppContent() {
                 className="bg-slate-950/80 border border-slate-800 rounded-lg py-2 pl-9 pr-3 text-sm text-slate-300 outline-none focus:border-slate-600 w-48 transition-all"
               />
             </div>
-            {activeView !== 'ia' && (
-            <button
-              onClick={handleAddNew}
-              className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2.5 min-h-[44px] rounded-lg flex items-center gap-2 transition-colors shrink-0 touch-manipulation"
-            >
-              <Plus size={16} /> <span className="hidden sm:inline">Nova Iniciativa</span>
-            </button>
+            {activeView !== 'ia' && activeView !== 'backlog' && (
+              <button
+                onClick={handleAddNewPrioridade}
+                disabled={limiteAtivo}
+                title={
+                  limiteAtivo
+                    ? `Limite de ${maxPrioridadesAtivas} prioridades ativas. Conclua ou rebaixe uma antes de criar outra.`
+                    : 'Criar nova prioridade estratégica'
+                }
+                className={`text-white text-sm font-medium px-4 py-2.5 min-h-[44px] rounded-lg flex items-center gap-2 transition-colors shrink-0 touch-manipulation ${
+                  limiteAtivo
+                    ? 'bg-slate-700 cursor-not-allowed opacity-60'
+                    : 'bg-blue-600 hover:bg-blue-700'
+                }`}
+              >
+                <Plus size={16} /> <span className="hidden sm:inline">Nova prioridade</span>
+              </button>
             )}
           </div>
         </header>
@@ -140,13 +251,13 @@ function AppContent() {
           {(activeView === 'dashboard' || activeView === 'table' || activeView === 'backlog') && (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-4 sm:mb-6">
               {[
-                { label: 'Ações Totais', val: items.length, color: 'blue', icon: Zap },
-                { label: 'Em Execução', val: items.filter(i => i.status === ItemStatus.EXECUTING).length, color: 'amber', icon: Activity },
-                { label: 'Bloqueios', val: items.filter(i => i.status === ItemStatus.BLOCKED).length, color: 'red', icon: AlertCircle },
-                { label: 'Concluídas', val: items.filter(i => i.status === ItemStatus.COMPLETED).length, color: 'emerald', icon: Target },
+                { label: 'Prioridades', val: prioridades.length, icon: Target },
+                { label: 'Em Execução', val: execucaoCount, icon: Activity },
+                { label: 'Bloqueios', val: bloqueadoCount, icon: AlertCircle },
+                { label: 'Concluídas', val: concluidoCount, icon: Target },
               ].map((stat, i) => (
                 <div key={i} className="bg-slate-900/50 p-4 rounded-lg border border-slate-800 flex items-center gap-3 hover:border-slate-700 transition-colors">
-                  <div className={`p-2 rounded-lg bg-slate-800 text-slate-400`}>
+                  <div className="p-2 rounded-lg bg-slate-800 text-slate-400">
                     <stat.icon size={18} />
                   </div>
                   <div className="min-w-0">
@@ -170,48 +281,102 @@ function AppContent() {
           ) : (
             <div className="pb-8">
               {activeView === 'dashboard' && (
-                <KanbanBoard
-                  items={items}
-                  onStatusChange={updateStatus}
-                  onOpenItem={openItemModal}
-                  onAddInColumn={(status) => openItemModal(null, status)}
-                  onDelete={deleteItem}
+                <>
+                  <AlertasPanel
+                    prioridades={prioridades}
+                    tarefas={tarefas}
+                    onOpenPrioridade={openDetailModal}
+                  />
+                  <KanbanBoard
+                  prioridades={prioridades}
+                  onStatusChange={handlePrioridadeStatusChange}
+                  onOpenItem={openDetailModal}
+                  onAddInColumn={(status) => openPrioridadeModal(null, status)}
+                  onDelete={deletePrioridade}
                 />
+                </>
               )}
               {activeView === 'table' && (
-                <Table5W2H
-                  items={items}
-                  onUpdate={updateItem}
-                  onDelete={deleteItem}
-                  onEditItem={openItemModal}
-                />
+                <>
+                  <AlertasPanel
+                    prioridades={prioridades}
+                    tarefas={tarefas}
+                    onOpenPrioridade={openDetailModal}
+                  />
+                  <PrioridadeTable
+                    prioridades={prioridades}
+                    onUpdate={updatePrioridade}
+                    onDelete={deletePrioridade}
+                    onEditItem={openDetailModal}
+                  />
+                </>
               )}
               {activeView === 'backlog' && (
                 <BacklogView
-                  items={items}
-                  onUpdate={updateItem}
-                  onDelete={deleteItem}
-                  onEditItem={openItemModal}
-                  onStatusChange={updateStatus}
+                  backlog={backlog}
+                  prioridadesAtivasCount={ativasCount}
+                  maxPrioridadesAtivas={maxPrioridadesAtivas}
+                  onUpdate={updateBacklogItem}
+                  onDelete={deleteBacklogItem}
+                  onPromote={handlePromote}
+                  onEditItem={openBacklogModal}
+                  onAddNew={() => openBacklogModal(null)}
                   strategicNote={strategicNote}
                   onStrategicNoteChange={setStrategicNote}
                   onSaveStrategicNote={saveNote}
                   noteSaving={noteSaving}
                 />
               )}
-              {activeView === 'performance' && <PerformanceView items={items} />}
-              {activeView === 'roadmap' && <RoadmapView items={items} onOpenItem={openItemModal} />}
+              {activeView === 'performance' && <PerformanceView prioridades={prioridades} />}
+              {activeView === 'roadmap' && (
+                <RoadmapView prioridades={prioridades} onOpenItem={openDetailModal} />
+              )}
             </div>
           )}
         </div>
 
-        <ActionItemModal
-          isOpen={modalOpen}
-          onClose={closeItemModal}
-          item={selectedItem}
-          initialStatus={selectedItem === null ? defaultStatusForNew ?? undefined : undefined}
-          onSave={addItem}
-          onUpdate={updateItem}
+        <PrioridadeModal
+          isOpen={prioridadeModalOpen}
+          onClose={closePrioridadeModal}
+          item={selectedPrioridade}
+          initialStatus={selectedPrioridade === null ? defaultStatusForNew ?? undefined : undefined}
+          onSave={handleSaveNewPrioridade}
+          onUpdate={(id, data) => {
+            updatePrioridade(id, data);
+            closePrioridadeModal();
+          }}
+        />
+
+        <PrioridadeDetailModal
+          isOpen={detailModalOpen}
+          onClose={closeDetailModal}
+          prioridade={selectedPrioridadeForDetail}
+          planos={planos}
+          tarefas={tarefas}
+          onEditPrioridade={(p) => {
+            setSelectedPrioridade(p);
+            setPrioridadeModalOpen(true);
+          }}
+          onAddPlano={addPlano}
+          onUpdatePlano={updatePlano}
+          onDeletePlano={deletePlano}
+          onAddTarefa={addTarefa}
+          onUpdateTarefa={updateTarefa}
+          onDeleteTarefa={deleteTarefa}
+        />
+
+        <BacklogModal
+          isOpen={backlogModalOpen}
+          onClose={closeBacklogModal}
+          item={selectedBacklogItem}
+          onSave={(data) => {
+            addBacklogItem(data);
+            closeBacklogModal();
+          }}
+          onUpdate={(id, data) => {
+            updateBacklogItem(id, data);
+            closeBacklogModal();
+          }}
         />
 
         <footer className="h-8 min-h-[32px] bg-slate-900/95 border-t border-slate-800 px-3 sm:px-4 flex items-center justify-between text-[10px] text-slate-500 uppercase tracking-wider z-30 shrink-0">

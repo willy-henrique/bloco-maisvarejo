@@ -1,11 +1,10 @@
 import React, { useMemo } from 'react';
-import { ActionItem, ItemStatus } from '../../types';
+import { Prioridade, PrioridadeStatus } from '../../types';
 import { Calendar, User, ChevronRight } from 'lucide-react';
-import { Badge } from '../Shared/Badge';
 
 interface RoadmapViewProps {
-  items: ActionItem[];
-  onOpenItem?: (item: ActionItem) => void;
+  prioridades: Prioridade[];
+  onOpenItem?: (item: Prioridade) => void;
 }
 
 const MONTHS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
@@ -23,12 +22,14 @@ function formatMonthLabel(month: number, year: number): string {
   return `${MONTHS[month]} ${year}`;
 }
 
-export const RoadmapView: React.FC<RoadmapViewProps> = ({ items, onOpenItem }) => {
+export const RoadmapView: React.FC<RoadmapViewProps> = ({ prioridades, onOpenItem }) => {
+  const currentYear = new Date().getFullYear();
+
   const byMonth = useMemo(() => {
-    const map = new Map<string, ActionItem[]>();
-    items.forEach(item => {
-      const { month, year } = getMonthYear(item.when);
-      if (year !== 2026) return;
+    const map = new Map<string, Prioridade[]>();
+    prioridades.forEach((item) => {
+      const { month, year } = getMonthYear(item.data_alvo || item.data_inicio || '');
+      if (year !== currentYear) return;
       const key = formatMonthKey(month, year);
       if (!map.has(key)) map.set(key, []);
       map.get(key)!.push(item);
@@ -39,23 +40,30 @@ export const RoadmapView: React.FC<RoadmapViewProps> = ({ items, onOpenItem }) =
         const [y, m] = key.split('-').map(Number);
         return { key, label: formatMonthLabel(m - 1, y), items: list };
       });
-  }, [items]);
+  }, [prioridades, currentYear]);
 
-  const noDate = useMemo(() => items.filter(i => {
-    const { year } = getMonthYear(i.when);
-    return isNaN(year) || year !== 2026;
-  }), [items]);
+  const noDate = useMemo(
+    () =>
+      prioridades.filter((p) => {
+        const d = p.data_alvo || p.data_inicio || '';
+        const { year } = getMonthYear(d);
+        return !d || isNaN(year) || year !== currentYear;
+      }),
+    [prioridades, currentYear]
+  );
 
   return (
     <div className="max-w-4xl mx-auto space-y-8 w-full min-w-0 px-0 sm:px-0">
       <p className="text-sm text-slate-400">
-        Iniciativas planejadas para 2026, agrupadas por mês.
+        Prioridades por data alvo em {currentYear}, agrupadas por mês.
       </p>
 
       {byMonth.length === 0 && noDate.length === 0 ? (
         <div className="bg-slate-900/50 border border-slate-800 rounded-lg p-8 text-center">
           <Calendar size={32} className="mx-auto text-slate-600 mb-3" />
-          <p className="text-slate-400 text-sm">Nenhuma iniciativa com data em 2026. Edite os itens na Matriz 5W2H e defina &quot;Quando&quot;.</p>
+          <p className="text-slate-400 text-sm">
+            Nenhuma prioridade com data alvo em {currentYear}. Edite as prioridades e defina a data alvo.
+          </p>
         </div>
       ) : (
         <div className="space-y-6">
@@ -69,24 +77,27 @@ export const RoadmapView: React.FC<RoadmapViewProps> = ({ items, onOpenItem }) =
                 </span>
               </div>
               <ul className="divide-y divide-slate-800">
-                {monthItems.map(item => (
+                {monthItems.map((item) => (
                   <li key={item.id}>
                     <button
                       type="button"
                       onClick={() => onOpenItem?.(item)}
                       className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-slate-800/40 transition-colors group"
                     >
-                      <Badge type="urgency" value={item.urgency} />
-                      <Badge type="status" value={item.status} />
+                      <span className="text-[10px] font-medium text-slate-500 uppercase tracking-wider shrink-0">
+                        {item.status_prioridade}
+                      </span>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-slate-100 truncate group-hover:text-blue-300 transition-colors">
-                          {item.what}
+                          {item.titulo}
                         </p>
                         <p className="text-[11px] text-slate-500 flex items-center gap-1.5 mt-0.5">
                           <User size={10} />
-                          {item.who}
+                          {item.dono_id}
                           <span className="text-slate-600">•</span>
-                          {new Date(item.when).toLocaleDateString('pt-BR')}
+                          {item.data_alvo
+                            ? new Date(item.data_alvo).toLocaleDateString('pt-BR')
+                            : '—'}
                         </p>
                       </div>
                       <ChevronRight size={16} className="text-slate-500 group-hover:text-slate-300 shrink-0" />
@@ -100,25 +111,26 @@ export const RoadmapView: React.FC<RoadmapViewProps> = ({ items, onOpenItem }) =
           {noDate.length > 0 && (
             <div className="bg-slate-900/50 border border-slate-800 rounded-lg overflow-hidden">
               <div className="px-4 py-3 border-b border-slate-800 bg-slate-900/80">
-                <h3 className="text-sm font-semibold text-slate-400">Sem data em 2026</h3>
+                <h3 className="text-sm font-semibold text-slate-400">Sem data alvo em {currentYear}</h3>
               </div>
               <ul className="divide-y divide-slate-800">
-                {noDate.map(item => (
+                {noDate.map((item) => (
                   <li key={item.id}>
                     <button
                       type="button"
                       onClick={() => onOpenItem?.(item)}
                       className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-slate-800/40 transition-colors group"
                     >
-                      <Badge type="urgency" value={item.urgency} />
-                      <Badge type="status" value={item.status} />
+                      <span className="text-[10px] font-medium text-slate-500 uppercase tracking-wider shrink-0">
+                        {item.status_prioridade}
+                      </span>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-slate-100 truncate group-hover:text-blue-300 transition-colors">
-                          {item.what}
+                          {item.titulo}
                         </p>
                         <p className="text-[11px] text-slate-500 flex items-center gap-1.5 mt-0.5">
                           <User size={10} />
-                          {item.who}
+                          {item.dono_id}
                         </p>
                       </div>
                       <ChevronRight size={16} className="text-slate-500 group-hover:text-slate-300 shrink-0" />
