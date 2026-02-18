@@ -16,8 +16,8 @@ import { usePrioridadesBoard } from './controllers/usePrioridadesBoard';
 import { StorageService } from './services/storageService';
 import { isFirebaseConfigured, subscribeBoard, saveBoardNotes } from './services/firestoreSync';
 import { Plus, Search, Activity, Target, Menu, ListTodo, AlertCircle, PieChart, Briefcase, Bot } from 'lucide-react';
-import type { Prioridade, PrioridadeStatus } from './types';
-import type { BacklogItem } from './types';
+import { PrioridadeStatus } from './types';
+import type { Prioridade, BacklogItem } from './types';
 import { Toast, type ToastType } from './components/Shared/Toast';
 import { ChatView } from './components/Chat/ChatView';
 
