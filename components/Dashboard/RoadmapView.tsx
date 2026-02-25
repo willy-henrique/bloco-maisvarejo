@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import { ActionItem, ItemStatus } from '../../types';
+import { formatDateOnlyPtBr } from '../../utils/date';
 import { Calendar, User, ChevronRight } from 'lucide-react';
 import { Badge } from '../Shared/Badge';
 
@@ -11,8 +12,10 @@ interface RoadmapViewProps {
 const MONTHS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 
 function getMonthYear(dateStr: string): { month: number; year: number } {
-  const d = new Date(dateStr);
-  return { month: d.getMonth(), year: d.getFullYear() };
+  const parts = (dateStr || '').split('-').map(Number);
+  const year = parts[0] || NaN;
+  const month = (parts[1] || 1) - 1;
+  return { month, year };
 }
 
 function formatMonthKey(month: number, year: number): string {
@@ -86,7 +89,7 @@ export const RoadmapView: React.FC<RoadmapViewProps> = ({ items, onOpenItem }) =
                           <User size={10} />
                           {item.who}
                           <span className="text-slate-600">•</span>
-                          {new Date(item.when).toLocaleDateString('pt-BR')}
+                          {formatDateOnlyPtBr(item.when)}
                         </p>
                       </div>
                       <ChevronRight size={16} className="text-slate-500 group-hover:text-slate-300 shrink-0" />

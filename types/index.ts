@@ -1,4 +1,4 @@
-
+// ========== Legado (Matriz 5W2H / iniciativas) – manter para compatibilidade ==========
 export enum ItemStatus {
   ACTIVE = 'PRIORIDADE ATIVA',
   EXECUTING = 'EM EXECUÇÃO',
@@ -25,8 +25,87 @@ export interface ActionItem {
   urgency: UrgencyLevel;
   notes: string;
   homologationActions?: string;
+  /** Momento em que a iniciativa foi marcada como BLOQUEADA (se aplicável) */
+  blockedAt?: number;
   createdAt: number;
   updatedAt: number;
+}
+
+// ========== Ritmo de Gestão – entidades e enums ==========
+
+export type StatusBacklog = 'aberto' | 'analisado' | 'descartado' | 'promovido';
+
+export type StatusPrioridade = 'Execucao' | 'Bloqueado' | 'Concluido';
+
+export type StatusPlano = 'Execucao' | 'Bloqueado' | 'Concluido';
+
+export type StatusTarefa = 'Pendente' | 'EmExecucao' | 'Bloqueada' | 'Concluida';
+
+/** Responsável / dono (prioridade, plano ou tarefa) */
+export interface Responsavel {
+  id: string;
+  nome: string;
+}
+
+/** Backlog: repositório de demandas potenciais. Não representa compromisso ativo. */
+export interface Backlog {
+  id: string;
+  titulo: string;
+  descricao: string;
+  origem: string; // cliente, interno, parceiro etc.
+  data_criacao: number;
+  prioridade_sugerida?: UrgencyLevel;
+  status_backlog: StatusBacklog;
+}
+
+/** Prioridade ativa (nível estratégico). Máx 3 ativas por quadro. */
+export interface Prioridade {
+  id: string;
+  titulo: string;
+  descricao: string;
+  dono_id: string;
+  data_inicio: number;
+  data_alvo: number;
+  status_prioridade: StatusPrioridade;
+  origem_backlog_id?: string;
+}
+
+/** Plano de ataque (nível gerencial). 5W2H completo. */
+export interface PlanoDeAtaque {
+  id: string;
+  prioridade_id: string;
+  titulo: string;
+  what: string;
+  why: string;
+  who_id: string;
+  where?: string;
+  when_inicio: number;
+  when_fim: number;
+  how: string;
+  how_much?: string;
+  status_plano: StatusPlano;
+}
+
+/** Tarefa (nível operacional). Materialização do plano. */
+export interface Tarefa {
+  id: string;
+  plano_id: string;
+  titulo: string;
+  descricao: string;
+  responsavel_id: string;
+  data_inicio: number;
+  data_vencimento: number;
+  status_tarefa: StatusTarefa;
+  bloqueio_motivo?: string;
+}
+
+/** Payload único do board Ritmo de Gestão (persistência) */
+export interface RitmoGestaoBoard {
+  backlog: Backlog[];
+  prioridades: Prioridade[];
+  planos: PlanoDeAtaque[];
+  tarefas: Tarefa[];
+  responsaveis: Responsavel[];
 }
 
 export interface UserSession {

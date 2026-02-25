@@ -143,9 +143,17 @@ export function useStrategicBoard(encryptionKey: CryptoKey | null) {
 
   const updateItem = async (id: string, updates: Partial<ActionItem>) => {
     if (!encryptionKey) return;
-    const updated = items.map(item =>
-      item.id === id ? { ...item, ...updates, updatedAt: Date.now() } : item
-    );
+    const now = Date.now();
+    const updated = items.map(item => {
+      if (item.id !== id) return item;
+      const next: ActionItem = { ...item, ...updates } as ActionItem;
+      // Se status mudou para BLOQUEADO, registra data do bloqueio
+      if (updates.status === ItemStatus.BLOCKED && item.status !== ItemStatus.BLOCKED) {
+        next.blockedAt = now;
+      }
+      next.updatedAt = now;
+      return next;
+    });
     setItems(updated);
     await persistItems(encryptionKey, updated);
   };

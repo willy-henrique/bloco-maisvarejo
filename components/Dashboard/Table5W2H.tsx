@@ -1,6 +1,7 @@
 
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { ActionItem, ItemStatus, UrgencyLevel } from '../../types';
+import { formatDateOnlyPtBr } from '../../utils/date';
 import { Trash2, Pencil, ShieldAlert, Calendar, User, Info, MapPin, FileText, ChevronDown, ChevronRight, CheckCircle } from 'lucide-react';
 
 interface Table5W2HProps {
@@ -8,10 +9,18 @@ interface Table5W2HProps {
   onUpdate: (id: string, data: Partial<ActionItem>) => void;
   onDelete: (id: string) => void;
   onEditItem?: (item: ActionItem) => void;
+  /** Quando true, força abrir a seção de concluidos. */
+  forceOpenConcluidos?: boolean;
 }
 
-export const Table5W2H: React.FC<Table5W2HProps> = ({ items, onUpdate, onDelete, onEditItem }) => {
+export const Table5W2H: React.FC<Table5W2HProps> = ({ items, onUpdate, onDelete, onEditItem, forceOpenConcluidos }) => {
   const [concluidosOpen, setConcluidosOpen] = useState(false);
+
+  useEffect(() => {
+    if (forceOpenConcluidos) {
+      setConcluidosOpen(true);
+    }
+  }, [forceOpenConcluidos]);
 
   const { activeItems, completedItems } = useMemo(() => {
     const completed = items.filter((i) => i.status === ItemStatus.COMPLETED);
@@ -210,7 +219,7 @@ export const Table5W2H: React.FC<Table5W2HProps> = ({ items, onUpdate, onDelete,
                         {item.what || '—'}
                       </td>
                       <td className="px-3 py-2.5 text-[11px] text-slate-500">
-                        {item.who || '—'} · {item.when ? new Date(item.when).toLocaleDateString('pt-BR') : '—'}
+                        {item.who || '—'} · {item.when ? formatDateOnlyPtBr(item.when) : '—'}
                       </td>
                       <td className="px-3 py-2.5 text-right">
                         {onEditItem && (

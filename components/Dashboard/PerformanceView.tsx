@@ -1,5 +1,6 @@
 import React from 'react';
 import { ActionItem, ItemStatus, UrgencyLevel } from '../../types';
+import { formatTimestampPtBr } from '../../utils/date';
 import { TrendingUp, CheckCircle, Clock, AlertCircle, Target, BarChart3 } from 'lucide-react';
 
 interface PerformanceViewProps {
@@ -120,6 +121,11 @@ export const PerformanceView: React.FC<PerformanceViewProps> = ({ items }) => {
               <li key={item.id} className="text-sm text-slate-300 py-2 px-3 bg-slate-800/40 rounded border border-slate-700/50">
                 <span className="font-medium text-slate-200">{item.what}</span>
                 {item.who && <span className="text-slate-500 ml-2">— {item.who}</span>}
+                {item.blockedAt && (
+                  <span className="text-slate-500 ml-2 text-xs">
+                    (bloqueado {formatTimestampPtBr(item.blockedAt)})
+                  </span>
+                )}
               </li>
             ))}
           </ul>

@@ -3,11 +3,12 @@
  * Dados sempre criptografados com AES-256-GCM antes de persistir.
  */
 
-import { ActionItem } from '../types';
+import { ActionItem, RitmoGestaoBoard } from '../types';
 import { EncryptionService } from './encryptionService';
 
 const STORAGE_KEY_ITEMS = '@Estrategico:Items_Encrypted';
 const STORAGE_KEY_NOTES = '@Estrategico:PrivateNote_Encrypted';
+const STORAGE_KEY_RITMO = '@Estrategico:RitmoGestao_Encrypted';
 
 function assertKey(key: CryptoKey | null): asserts key is CryptoKey {
   if (!key) {
@@ -48,5 +49,27 @@ export class StorageService {
     assertKey(encryptionKey);
     const encrypted = await EncryptionService.encrypt(content, encryptionKey);
     localStorage.setItem(STORAGE_KEY_NOTES, encrypted);
+  }
+
+  /** Ritmo de Gestão: board completo (backlog, prioridades, planos, tarefas, responsáveis). */
+  static async getRitmoBoard(encryptionKey: CryptoKey | null): Promise<RitmoGestaoBoard> {
+    assertKey(encryptionKey);
+    const encrypted = localStorage.getItem(STORAGE_KEY_RITMO);
+    if (!encrypted) return { backlog: [], prioridades: [], planos: [], tarefas: [], responsaveis: [] };
+    const dec = await EncryptionService.decrypt<RitmoGestaoBoard>(encrypted, encryptionKey);
+    if (!dec || typeof dec !== 'object') return { backlog: [], prioridades: [], planos: [], tarefas: [], responsaveis: [] };
+    return {
+      backlog: Array.isArray(dec.backlog) ? dec.backlog : [],
+      prioridades: Array.isArray(dec.prioridades) ? dec.prioridades : [],
+      planos: Array.isArray(dec.planos) ? dec.planos : [],
+      tarefas: Array.isArray(dec.tarefas) ? dec.tarefas : [],
+      responsaveis: Array.isArray(dec.responsaveis) ? dec.responsaveis : [],
+    };
+  }
+
+  static async saveRitmoBoard(board: RitmoGestaoBoard, encryptionKey: CryptoKey | null): Promise<void> {
+    assertKey(encryptionKey);
+    const encrypted = await EncryptionService.encrypt(board, encryptionKey);
+    localStorage.setItem(STORAGE_KEY_RITMO, encrypted);
   }
 }

@@ -3,8 +3,9 @@
  * Itens em demanda (não concluídos) em lista profissional; concluídos em seção colapsada.
  */
 
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { ActionItem, ItemStatus, UrgencyLevel } from '../../types';
+import { formatDateOnlyPtBr } from '../../utils/date';
 import { Badge } from '../Shared/Badge';
 import {
   ChevronDown,
@@ -42,6 +43,8 @@ interface BacklogViewProps {
   onStrategicNoteChange?: (value: string) => void;
   onSaveStrategicNote?: () => Promise<void>;
   noteSaving?: boolean;
+  /** Quando true, força abrir a seção de concluidos. */
+  forceOpenConcluidos?: boolean;
 }
 
 export const BacklogView: React.FC<BacklogViewProps> = ({
@@ -54,9 +57,16 @@ export const BacklogView: React.FC<BacklogViewProps> = ({
   onStrategicNoteChange,
   onSaveStrategicNote,
   noteSaving = false,
+  forceOpenConcluidos,
 }) => {
   const [concluidosOpen, setConcluidosOpen] = useState(false);
   const [decisoesOpen, setDecisoesOpen] = useState(false);
+
+  useEffect(() => {
+    if (forceOpenConcluidos) {
+      setConcluidosOpen(true);
+    }
+  }, [forceOpenConcluidos]);
 
   const { backlogItems, completedItems } = useMemo(() => {
     const completed = items.filter((i) => i.status === ItemStatus.COMPLETED);
@@ -68,7 +78,7 @@ export const BacklogView: React.FC<BacklogViewProps> = ({
       const as = STATUS_ORDER.indexOf(a.status);
       const bs = STATUS_ORDER.indexOf(b.status);
       if (as !== bs) return as - bs;
-      return new Date(b.when).getTime() - new Date(a.when).getTime();
+      return (b.when || '').localeCompare(a.when || '');
     };
     rest.sort(byUrgency);
     completed.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
@@ -164,7 +174,7 @@ export const BacklogView: React.FC<BacklogViewProps> = ({
                       </button>
                       <p className="text-[11px] text-slate-500 line-clamp-1 mt-0.5 sm:hidden">
                         {item.who && `${item.who} · `}
-                        {item.when && new Date(item.when).toLocaleDateString('pt-BR')}
+                        {item.when && formatDateOnlyPtBr(item.when)}
                       </p>
                     </td>
                     <td className="px-3 py-2.5 hidden sm:table-cell">
@@ -174,7 +184,7 @@ export const BacklogView: React.FC<BacklogViewProps> = ({
                       </div>
                       <div className="flex items-center gap-1.5 text-[11px] text-slate-500 mt-0.5">
                         <Calendar size={10} />
-                        {item.when ? new Date(item.when).toLocaleDateString('pt-BR') : '—'}
+                        {item.when ? formatDateOnlyPtBr(item.when) : '—'}
                       </div>
                     </td>
                     <td className="px-3 py-2.5">
@@ -271,7 +281,7 @@ export const BacklogView: React.FC<BacklogViewProps> = ({
                     <tr key={item.id} className="text-slate-400 hover:bg-slate-800/20">
                       <td className="px-3 py-2 text-sm">{item.what || '—'}</td>
                       <td className="px-3 py-2 text-[11px] hidden sm:table-cell">
-                        {item.who || '—'} · {item.when ? new Date(item.when).toLocaleDateString('pt-BR') : '—'}
+                        {item.who || '—'} · {item.when ? formatDateOnlyPtBr(item.when) : '—'}
                       </td>
                       <td className="px-3 py-2 text-right">
                         <button

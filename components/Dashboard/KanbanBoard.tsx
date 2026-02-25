@@ -1,5 +1,6 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { ActionItem, ItemStatus } from '../../types';
+import { formatDateOnlyPtBr } from '../../utils/date';
 import { Badge } from '../Shared/Badge';
 import { Clock, User, Plus, ChevronDown, ChevronRight, CheckCircle, Pencil, Trash2 } from 'lucide-react';
 
@@ -9,6 +10,8 @@ interface KanbanBoardProps {
   onOpenItem?: (item: ActionItem) => void;
   onAddInColumn?: (status: ItemStatus) => void;
   onDelete?: (id: string) => void;
+  /** Quando true, força abrir a seção de concluidos. */
+  forceOpenConcluidos?: boolean;
 }
 
 const BOARD_COLUMNS = [
@@ -22,8 +25,14 @@ const ALL_STATUS_OPTIONS = [
   { id: ItemStatus.COMPLETED, label: 'Concluído', color: 'bg-emerald-500' },
 ];
 
-export const KanbanBoard: React.FC<KanbanBoardProps> = ({ items, onStatusChange, onOpenItem, onAddInColumn, onDelete }) => {
+export const KanbanBoard: React.FC<KanbanBoardProps> = ({ items, onStatusChange, onOpenItem, onAddInColumn, onDelete, forceOpenConcluidos }) => {
   const [concluidosOpen, setConcluidosOpen] = useState(false);
+
+  useEffect(() => {
+    if (forceOpenConcluidos) {
+      setConcluidosOpen(true);
+    }
+  }, [forceOpenConcluidos]);
 
   const completedItems = useMemo(
     () => items.filter((i) => i.status === ItemStatus.COMPLETED).sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()),
@@ -102,7 +111,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ items, onStatusChange,
                         </div>
                         <div className="flex items-center gap-1.5 text-[10px] text-slate-500">
                           <Clock size={10} />
-                          <span>{new Date(item.when).toLocaleDateString('pt-BR')}</span>
+                          <span>{formatDateOnlyPtBr(item.when)}</span>
                         </div>
                         {item.notes && (
                           <p className="text-[10px] text-slate-500 line-clamp-2 pt-1 border-t border-slate-700/50">
@@ -161,7 +170,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ items, onStatusChange,
                     <div className="flex items-center gap-2 mb-1">
                       <Badge type="urgency" value={item.urgency} />
                       <span className="text-[10px] text-slate-500">
-                        {item.who} · {item.when ? new Date(item.when).toLocaleDateString('pt-BR') : '—'}
+                        {item.who} · {item.when ? formatDateOnlyPtBr(item.when) : '—'}
                       </span>
                     </div>
                     <h4 className="text-sm font-medium text-slate-100 line-clamp-1">{item.what}</h4>

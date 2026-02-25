@@ -10,13 +10,14 @@ import {
   getDoc,
   type Unsubscribe,
 } from 'firebase/firestore';
-import type { ActionItem } from '../types';
+import type { ActionItem, RitmoGestaoBoard } from '../types';
 import { getDb, isFirebaseConfigured, BOARD_COLLECTION, BOARD_DOC_ID } from './firebase';
 import { EncryptionService } from './encryptionService';
 
 export type BoardData = {
   itemsEncrypted?: string;
   notesEncrypted?: string;
+  ritmoEncrypted?: string;
 };
 
 function getBoardRef() {
@@ -113,6 +114,71 @@ export async function getBoardDataOnce(
   } catch {
     return null;
   }
+}
+
+const RITMO_BOARD_EMPTY: RitmoGestaoBoard = {
+  backlog: [], prioridades: [], planos: [], tarefas: [], responsaveis: [],
+};
+
+/** Carrega o board Ritmo de Gestão uma vez. */
+export async function getRitmoBoardOnce(encryptionKey: CryptoKey): Promise<RitmoGestaoBoard | null> {
+  const ref = getBoardRef();
+  if (!ref) return null;
+  try {
+    const snap = await getDoc(ref);
+    const data = snap.data() as BoardData | undefined;
+    if (!data?.ritmoEncrypted) return RITMO_BOARD_EMPTY;
+    const dec = await EncryptionService.decrypt<RitmoGestaoBoard>(data.ritmoEncrypted, encryptionKey);
+    if (!dec || typeof dec !== 'object') return RITMO_BOARD_EMPTY;
+    return {
+      backlog: Array.isArray(dec.backlog) ? dec.backlog : [],
+      prioridades: Array.isArray(dec.prioridades) ? dec.prioridades : [],
+      planos: Array.isArray(dec.planos) ? dec.planos : [],
+      tarefas: Array.isArray(dec.tarefas) ? dec.tarefas : [],
+      responsaveis: Array.isArray(dec.responsaveis) ? dec.responsaveis : [],
+    };
+  } catch {
+    return null;
+  }
+}
+
+/** Salva o board Ritmo de Gestão no Firestore. */
+export async function saveRitmoBoard(board: RitmoGestaoBoard, encryptionKey: CryptoKey): Promise<void> {
+  const ref = getBoardRef();
+  if (!ref) return;
+  const encrypted = await EncryptionService.encrypt(board, encryptionKey);
+  const snap = await getDoc(ref);
+  const existing = (snap.data() as BoardData) || {};
+  await setDoc(ref, { ...existing, ritmoEncrypted: encrypted }, { merge: true });
+}
+
+/** Inscreve em atualizações do board Ritmo (ritmoEncrypted). Chama onRitmo com board ou null. */
+export function subscribeRitmoBoard(
+  encryptionKey: CryptoKey,
+  onRitmo: (board: RitmoGestaoBoard) => void
+): Unsubscribe | null {
+  const ref = getBoardRef();
+  if (!ref) return null;
+  return onSnapshot(ref, async (snap) => {
+    const data = snap.data() as BoardData | undefined;
+    if (!data?.ritmoEncrypted) {
+      onRitmo(RITMO_BOARD_EMPTY);
+      return;
+    }
+    try {
+      const board = await EncryptionService.decrypt<RitmoGestaoBoard>(data.ritmoEncrypted, encryptionKey);
+      if (board && typeof board === 'object')
+        onRitmo({
+          backlog: Array.isArray(board.backlog) ? board.backlog : [],
+          prioridades: Array.isArray(board.prioridades) ? board.prioridades : [],
+          planos: Array.isArray(board.planos) ? board.planos : [],
+          tarefas: Array.isArray(board.tarefas) ? board.tarefas : [],
+          responsaveis: Array.isArray(board.responsaveis) ? board.responsaveis : [],
+        });
+    } catch {
+      // chave diferente
+    }
+  });
 }
 
 export { isFirebaseConfigured };
