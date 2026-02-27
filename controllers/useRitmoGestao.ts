@@ -37,6 +37,23 @@ function defaultBoard(): RitmoGestaoBoard {
       { id: 'r2', nome: 'Operação' },
       { id: 'r3', nome: 'Suporte' },
     ],
+    empresas: [],
+  };
+}
+
+function normalizeBoard(raw: RitmoGestaoBoard | undefined | null): RitmoGestaoBoard {
+  const base = defaultBoard();
+  if (!raw || typeof raw !== 'object') return base;
+  return {
+    backlog: Array.isArray(raw.backlog) ? raw.backlog : base.backlog,
+    prioridades: Array.isArray(raw.prioridades) ? raw.prioridades : base.prioridades,
+    planos: Array.isArray(raw.planos) ? raw.planos : base.planos,
+    tarefas: Array.isArray(raw.tarefas) ? raw.tarefas : base.tarefas,
+    responsaveis:
+      Array.isArray(raw.responsaveis) && raw.responsaveis.length > 0
+        ? raw.responsaveis
+        : base.responsaveis,
+    empresas: Array.isArray(raw.empresas) ? raw.empresas : [],
   };
 }
 
@@ -94,15 +111,21 @@ export function useRitmoGestao(encryptionKey: CryptoKey | null) {
     }
     try {
       setLoading(true);
-      let data = await StorageService.getRitmoBoard(encryptionKey);
+      let localData = normalizeBoard(await StorageService.getRitmoBoard(encryptionKey));
+      let data = localData;
       if (isFirebaseConfigured) {
         const remote = await getRitmoBoardOnce(encryptionKey);
-        if (remote && (remote.prioridades.length > 0 || remote.backlog.length > 0)) data = remote;
+        if (remote && (remote.prioridades.length > 0 || remote.backlog.length > 0)) {
+          const mergedEmpresas =
+            Array.isArray(remote.empresas) && remote.empresas.length > 0
+              ? remote.empresas
+              : localData.empresas;
+          data = normalizeBoard({ ...remote, empresas: mergedEmpresas });
+        }
         else if (data.backlog.length === 0 && data.prioridades.length === 0) {
           await persist(encryptionKey, data);
         }
       }
-      if (data.responsaveis.length === 0) data = { ...data, ...defaultBoard(), responsaveis: defaultBoard().responsaveis };
       setBoard(data);
     } catch (e) {
       setError('Erro ao carregar Ritmo de Gestão.');
@@ -128,9 +151,14 @@ export function useRitmoGestao(encryptionKey: CryptoKey | null) {
           const remote = await getRitmoBoardOnce(encryptionKey);
           if (cancelled) return;
           if (remote && (remote.prioridades.length > 0 || remote.backlog.length > 0)) {
-            setBoard(remote);
+            const local = normalizeBoard(await StorageService.getRitmoBoard(encryptionKey));
+            const mergedEmpresas =
+              Array.isArray(remote.empresas) && remote.empresas.length > 0
+                ? remote.empresas
+                : local.empresas;
+            setBoard(normalizeBoard({ ...remote, empresas: mergedEmpresas }));
           } else {
-            const local = await StorageService.getRitmoBoard(encryptionKey);
+            const local = normalizeBoard(await StorageService.getRitmoBoard(encryptionKey));
             if (local.prioridades.length > 0 || local.backlog.length > 0) {
               setBoard(local);
               await saveRitmoBoardFirestore(local, encryptionKey);
@@ -141,14 +169,23 @@ export function useRitmoGestao(encryptionKey: CryptoKey | null) {
             }
           }
         } catch {
-          const local = await StorageService.getRitmoBoard(encryptionKey);
+          const local = normalizeBoard(await StorageService.getRitmoBoard(encryptionKey));
           if (local.prioridades.length > 0 || local.backlog.length > 0) setBoard(local);
           else setBoard(defaultBoard());
         } finally {
           if (!cancelled) setLoading(false);
         }
       })();
-      const unsub = subscribeRitmoBoard(encryptionKey, (next) => setBoard(next));
+      const unsub = subscribeRitmoBoard(encryptionKey, (next) =>
+        setBoard((prev) =>
+          normalizeBoard({
+            ...(next as RitmoGestaoBoard),
+            empresas: Array.isArray((next as RitmoGestaoBoard).empresas)
+              ? (next as RitmoGestaoBoard).empresas
+              : prev.empresas,
+          })
+        )
+      );
       unsubRef.current = unsub ?? null;
       return () => {
         cancelled = true;
@@ -332,6 +369,22 @@ export function useRitmoGestao(encryptionKey: CryptoKey | null) {
     [board, saveBoard]
   );
 
+  // --- Empresas / Workspaces
+  const addEmpresa = useCallback(
+    (nomeBruto: string) => {
+      const nome = nomeBruto.trim();
+      if (!nome) return;
+      const existentes = new Set((board.empresas ?? []).map((e) => e.trim()).filter(Boolean));
+      if (existentes.has(nome)) return;
+      const next: RitmoGestaoBoard = {
+        ...board,
+        empresas: [...existentes, nome],
+      };
+      saveBoard(next);
+    },
+    [board, saveBoard]
+  );
+
   const ativasCount = prioridadesAtivas(board.prioridades).length;
   const podeAdicionarPrioridade = ativasCount < MAX_PRIORIDADES_ATIVAS;
 
@@ -363,6 +416,9 @@ export function useRitmoGestao(encryptionKey: CryptoKey | null) {
     // Responsáveis
     responsaveis: board.responsaveis,
     addResponsavel,
+    // Empresas / Workspaces
+    empresas: board.empresas,
+    addEmpresa,
     // Helpers
     computeStatusPlano: (planoId: string) => computeStatusPlano(planoId, board.tarefas),
     computeStatusPrioridade: (prioridadeId: string) =>

@@ -51,19 +51,24 @@ export class StorageService {
     localStorage.setItem(STORAGE_KEY_NOTES, encrypted);
   }
 
-  /** Ritmo de Gestão: board completo (backlog, prioridades, planos, tarefas, responsáveis). */
+  /** Ritmo de Gestão: board completo (backlog, prioridades, planos, tarefas, responsáveis, empresas). */
   static async getRitmoBoard(encryptionKey: CryptoKey | null): Promise<RitmoGestaoBoard> {
     assertKey(encryptionKey);
     const encrypted = localStorage.getItem(STORAGE_KEY_RITMO);
-    if (!encrypted) return { backlog: [], prioridades: [], planos: [], tarefas: [], responsaveis: [] };
+    if (!encrypted) {
+      return { backlog: [], prioridades: [], planos: [], tarefas: [], responsaveis: [], empresas: [] };
+    }
     const dec = await EncryptionService.decrypt<RitmoGestaoBoard>(encrypted, encryptionKey);
-    if (!dec || typeof dec !== 'object') return { backlog: [], prioridades: [], planos: [], tarefas: [], responsaveis: [] };
+    if (!dec || typeof dec !== 'object') {
+      return { backlog: [], prioridades: [], planos: [], tarefas: [], responsaveis: [], empresas: [] };
+    }
     return {
       backlog: Array.isArray(dec.backlog) ? dec.backlog : [],
       prioridades: Array.isArray(dec.prioridades) ? dec.prioridades : [],
       planos: Array.isArray(dec.planos) ? dec.planos : [],
       tarefas: Array.isArray(dec.tarefas) ? dec.tarefas : [],
       responsaveis: Array.isArray(dec.responsaveis) ? dec.responsaveis : [],
+      empresas: Array.isArray((dec as RitmoGestaoBoard).empresas) ? (dec as RitmoGestaoBoard).empresas : [],
     };
   }
 

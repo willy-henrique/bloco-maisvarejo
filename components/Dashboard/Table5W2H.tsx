@@ -11,9 +11,18 @@ interface Table5W2HProps {
   onEditItem?: (item: ActionItem) => void;
   /** Quando true, força abrir a seção de concluidos. */
   forceOpenConcluidos?: boolean;
+  /** Sugestões de empresas/workspaces já cadastrados */
+  empresaSuggestions?: string[];
 }
 
-export const Table5W2H: React.FC<Table5W2HProps> = ({ items, onUpdate, onDelete, onEditItem, forceOpenConcluidos }) => {
+export const Table5W2H: React.FC<Table5W2HProps> = ({
+  items,
+  onUpdate,
+  onDelete,
+  onEditItem,
+  forceOpenConcluidos,
+  empresaSuggestions,
+}) => {
   const [concluidosOpen, setConcluidosOpen] = useState(false);
 
   useEffect(() => {
@@ -38,6 +47,7 @@ export const Table5W2H: React.FC<Table5W2HProps> = ({ items, onUpdate, onDelete,
             <th className="px-4 py-3 font-semibold">O quê?</th>
             <th className="px-4 py-3 font-semibold">Por quê?</th>
             <th className="px-4 py-3 font-semibold">Onde?</th>
+            <th className="px-4 py-3 font-semibold">Empresa</th>
             <th className="px-4 py-3 font-semibold">Quem?</th>
             <th className="px-4 py-3 font-semibold">Quando?</th>
             <th className="px-4 py-3 font-semibold">Como?</th>
@@ -83,6 +93,29 @@ export const Table5W2H: React.FC<Table5W2HProps> = ({ items, onUpdate, onDelete,
                     placeholder="Onde..."
                   />
                 </div>
+              </td>
+              <td className="px-4 py-3 min-w-[160px]">
+                {(() => {
+                  const listId = `empresa-matriz-${item.id}`;
+                  return (
+                    <>
+                      <input
+                        list={listId}
+                        defaultValue={item.empresa ?? ''}
+                        onBlur={(e) => onUpdate(item.id, { empresa: e.target.value })}
+                        className="bg-slate-800/30 border border-transparent focus:border-slate-600 rounded py-2 px-3 text-xs font-medium text-slate-200 w-full outline-none transition-colors placeholder:text-slate-600"
+                        placeholder="Cliente / unidade / grupo"
+                      />
+                      {empresaSuggestions && empresaSuggestions.length > 0 && (
+                        <datalist id={listId}>
+                          {empresaSuggestions.map((nome) => (
+                            <option key={nome} value={nome} />
+                          ))}
+                        </datalist>
+                      )}
+                    </>
+                  );
+                })()}
               </td>
               <td className="px-4 py-3 min-w-[100px]">
                 <div className="relative">

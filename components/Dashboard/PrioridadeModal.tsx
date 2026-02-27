@@ -2,7 +2,7 @@
  * Modal para criar nova Prioridade (máx 3 ativas).
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import type { Prioridade, Responsavel } from '../../types';
 import { X } from 'lucide-react';
 
@@ -11,6 +11,8 @@ interface PrioridadeModalProps {
   onClose: () => void;
   responsaveis: Responsavel[];
   onSave: (item: Omit<Prioridade, 'id'>) => boolean;
+  defaultEmpresa?: string;
+  empresaSuggestions?: string[];
 }
 
 export const PrioridadeModal: React.FC<PrioridadeModalProps> = ({
@@ -18,6 +20,8 @@ export const PrioridadeModal: React.FC<PrioridadeModalProps> = ({
   onClose,
   responsaveis,
   onSave,
+  defaultEmpresa,
+  empresaSuggestions,
 }) => {
   const [titulo, setTitulo] = useState('');
   const [descricao, setDescricao] = useState('');
@@ -27,6 +31,12 @@ export const PrioridadeModal: React.FC<PrioridadeModalProps> = ({
     d.setDate(d.getDate() + 90);
     return d.toISOString().slice(0, 10);
   });
+  const [empresa, setEmpresa] = useState<string>(defaultEmpresa ?? '');
+
+  useEffect(() => {
+    if (!isOpen) return;
+    setEmpresa(defaultEmpresa ?? '');
+  }, [defaultEmpresa, isOpen]);
 
   if (!isOpen) return null;
 
@@ -40,6 +50,7 @@ export const PrioridadeModal: React.FC<PrioridadeModalProps> = ({
       data_inicio: Date.now(),
       data_alvo: new Date(data_alvo).getTime(),
       status_prioridade: 'Execucao',
+      empresa: empresa.trim() || undefined,
     });
     if (ok) {
       setTitulo('');
@@ -97,6 +108,43 @@ export const PrioridadeModal: React.FC<PrioridadeModalProps> = ({
               placeholder="Ex.: Gustavo"
               required
             />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-400 mb-1">Empresa / Workspace</label>
+            <div className="relative">
+              <input
+                type="text"
+                value={empresa}
+                onChange={(e) => setEmpresa(e.target.value)}
+                className="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100 outline-none focus:border-blue-500"
+                placeholder="Ex.: Cliente X, Unidade Y"
+                autoComplete="off"
+              />
+              {empresa &&
+                (empresaSuggestions ?? [])
+                  .filter((nome) =>
+                    nome.toLowerCase().startsWith(empresa.toLowerCase())
+                  )
+                  .slice(0, 6).length > 0 && (
+                  <div className="absolute z-20 mt-1 w-full bg-slate-900 border border-slate-700 rounded-lg shadow-lg max-h-40 overflow-auto">
+                    {(empresaSuggestions ?? [])
+                      .filter((nome) =>
+                        nome.toLowerCase().startsWith(empresa.toLowerCase()
+                      ))
+                      .slice(0, 6)
+                      .map((nome) => (
+                        <button
+                          key={nome}
+                          type="button"
+                          onClick={() => setEmpresa(nome)}
+                          className="w-full text-left px-3 py-1.5 text-[12px] text-slate-100 hover:bg-slate-800"
+                        >
+                          {nome}
+                        </button>
+                      ))}
+                  </div>
+                )}
+            </div>
           </div>
           <div>
             <label className="block text-xs font-medium text-slate-400 mb-1">Data alvo *</label>

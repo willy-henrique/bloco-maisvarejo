@@ -15,7 +15,7 @@ import { useStrategicBoard } from './controllers/useStrategicBoard';
 import { useRitmoGestao } from './controllers/useRitmoGestao';
 import { StorageService } from './services/storageService';
 import { isFirebaseConfigured, subscribeBoard, saveBoardNotes } from './services/firestoreSync';
-import { Plus, Search, Activity, Target, Zap, Menu, ListTodo, AlertCircle, PieChart, Briefcase, Bot } from 'lucide-react';
+import { Plus, Search, Activity, Target, Zap, Menu, ListTodo, AlertCircle, PieChart, Briefcase, Bot, ShieldCheck } from 'lucide-react';
 import { ActionItem, ItemStatus, UrgencyLevel } from './types';
 import type { Prioridade } from './types';
 import { Toast, type ToastType } from './components/Shared/Toast';
@@ -41,6 +41,43 @@ function AppContent() {
   const [quadroVerConcluidas, setQuadroVerConcluidas] = useState(false);
   const { items, loading, addItem, updateItem, deleteItem, updateStatus } = useStrategicBoard(encryptionKey ?? null);
   const ritmo = useRitmoGestao(encryptionKey ?? null);
+  const [workspaceAtivo, setWorkspaceAtivo] = useState<'all' | string>('all');
+  const [empresasLocais, setEmpresasLocais] = useState<string[]>([]);
+  const [empresasBloqueadas, setEmpresasBloqueadas] = useState<string[]>([]);
+
+  const matchWorkspace = useCallback(
+    (empresa?: string) => {
+      if (workspaceAtivo === 'all') return true;
+      return (empresa ?? '') === workspaceAtivo;
+    },
+    [workspaceAtivo]
+  );
+
+  // Mantém uma lista local de empresas, sempre sincronizada com o controller.
+  useEffect(() => {
+    const fromController = Array.isArray(ritmo.empresas) ? ritmo.empresas : [];
+    setEmpresasLocais((prev) => {
+      const merged = new Set<string>([...prev, ...fromController]);
+      return Array.from(merged);
+    });
+  }, [ritmo.empresas]);
+
+  const empresasDisponiveis = useMemo(() => empresasLocais, [empresasLocais]);
+
+  const empresasAtivas = useMemo(
+    () => empresasDisponiveis.filter((nome) => !empresasBloqueadas.includes(nome)),
+    [empresasDisponiveis, empresasBloqueadas]
+  );
+
+  const empresasInativas = useMemo(
+    () => empresasDisponiveis.filter((nome) => empresasBloqueadas.includes(nome)),
+    [empresasDisponiveis, empresasBloqueadas]
+  );
+
+  const itemsFiltrados = useMemo(
+    () => items.filter((i) => matchWorkspace(i.empresa)),
+    [items, matchWorkspace]
+  );
 
   // Prioridades exibidas no Quadro Estratégico:
   // - Prioridades estruturadas do Ritmo de Gestão
@@ -67,9 +104,11 @@ function AppContent() {
             : item.status === ItemStatus.COMPLETED
             ? 'Concluido'
             : 'Execucao',
+        empresa: item.empresa,
       }));
-    return [...ritmo.board.prioridades, ...sinteticas];
-  }, [ritmo.board.prioridades, ritmo.board.prioridades.length, items]);
+    const todas = [...ritmo.board.prioridades, ...sinteticas];
+    return todas.filter((p) => matchWorkspace(p.empresa));
+  }, [ritmo.board.prioridades, ritmo.board.prioridades.length, items, matchWorkspace]);
 
   const openItemModal = useCallback((item: ActionItem | null, statusForNew?: ItemStatus) => {
     setSelectedItem(item);
@@ -165,6 +204,18 @@ function AppContent() {
         onLogout={logout}
         isOpen={isSidebarOpen}
         onClose={() => setIsSidebarOpen(false)}
+        workspaceAtivo={workspaceAtivo}
+        empresas={empresasAtivas}
+        onChangeWorkspace={(ws) => setWorkspaceAtivo(ws)}
+        onCreateWorkspace={(nome) => {
+          const trimmed = nome.trim();
+          if (!trimmed) return;
+          setEmpresasLocais((prev) =>
+            prev.includes(trimmed) ? prev : [...prev, trimmed]
+          );
+          ritmo.addEmpresa(trimmed);
+          setWorkspaceAtivo(trimmed);
+        }}
       />
 
       <main className="flex-1 flex flex-col overflow-hidden relative min-h-0">
@@ -184,7 +235,9 @@ function AppContent() {
               {activeView === 'performance' && <PieChart size={18} className="text-violet-500 shrink-0" />}
               {activeView === 'roadmap' && <Briefcase size={18} className="text-cyan-500 shrink-0" />}
               {activeView === 'ia' && <Bot size={18} className="text-blue-400 shrink-0" />}
+              {activeView === 'workspace' && <ShieldCheck size={18} className="text-blue-400 shrink-0" />}
               <h2 className="text-base font-semibold text-slate-100 tracking-tight">
+                {activeView === 'workspace' && 'Workspaces'}
                 {activeView === 'dashboard' && 'Dashboard'}
                 {activeView === 'table' && 'Matriz 5W2H'}
                 {activeView === 'backlog' && 'Back Log'}
@@ -227,10 +280,36 @@ function AppContent() {
           {activeView === 'quadro' && (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-4 sm:mb-6">
               {[
-                { label: 'Prioridades ativas', val: ritmo.prioridadesAtivas.length, color: 'blue', icon: Target },
-                { label: 'Em execução', val: ritmo.board.prioridades.filter(p => p.status_prioridade === 'Execucao').length, color: 'amber', icon: Activity },
-                { label: 'Bloqueadas', val: ritmo.board.prioridades.filter(p => p.status_prioridade === 'Bloqueado').length, color: 'red', icon: AlertCircle },
-                { label: 'Concluídas', val: ritmo.board.prioridades.filter(p => p.status_prioridade === 'Concluido').length, color: 'emerald', icon: Target },
+                {
+                  label: 'Prioridades ativas',
+                  val: ritmo.prioridadesAtivas.filter((p) => matchWorkspace(p.empresa)).length,
+                  color: 'blue',
+                  icon: Target,
+                },
+                {
+                  label: 'Em execução',
+                  val: ritmo.board.prioridades.filter(
+                    (p) => p.status_prioridade === 'Execucao' && matchWorkspace(p.empresa)
+                  ).length,
+                  color: 'amber',
+                  icon: Activity,
+                },
+                {
+                  label: 'Bloqueadas',
+                  val: ritmo.board.prioridades.filter(
+                    (p) => p.status_prioridade === 'Bloqueado' && matchWorkspace(p.empresa)
+                  ).length,
+                  color: 'red',
+                  icon: AlertCircle,
+                },
+                {
+                  label: 'Concluídas',
+                  val: ritmo.board.prioridades.filter(
+                    (p) => p.status_prioridade === 'Concluido' && matchWorkspace(p.empresa)
+                  ).length,
+                  color: 'emerald',
+                  icon: Target,
+                },
               ].map((stat, i) => (
                 <div
                   key={i}
@@ -253,10 +332,25 @@ function AppContent() {
           {(activeView === 'dashboard' || activeView === 'table' || activeView === 'backlog') && (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-4 sm:mb-6">
               {[
-                { label: 'Ações Totais', val: items.length, color: 'blue', icon: Zap },
-                { label: 'Em Execução', val: items.filter(i => i.status === ItemStatus.EXECUTING).length, color: 'amber', icon: Activity },
-                { label: 'Bloqueios', val: items.filter(i => i.status === ItemStatus.BLOCKED).length, color: 'red', icon: AlertCircle },
-                { label: 'Concluídas', val: items.filter(i => i.status === ItemStatus.COMPLETED).length, color: 'emerald', icon: Target },
+                { label: 'Ações Totais', val: itemsFiltrados.length, color: 'blue', icon: Zap },
+                {
+                  label: 'Em Execução',
+                  val: itemsFiltrados.filter((i) => i.status === ItemStatus.EXECUTING).length,
+                  color: 'amber',
+                  icon: Activity,
+                },
+                {
+                  label: 'Bloqueios',
+                  val: itemsFiltrados.filter((i) => i.status === ItemStatus.BLOCKED).length,
+                  color: 'red',
+                  icon: AlertCircle,
+                },
+                {
+                  label: 'Concluídas',
+                  val: itemsFiltrados.filter((i) => i.status === ItemStatus.COMPLETED).length,
+                  color: 'emerald',
+                  icon: Target,
+                },
               ].map((stat, i) => (
                 <div
                   key={i}
@@ -289,6 +383,129 @@ function AppContent() {
             <div className="pb-8 h-full min-h-0 flex flex-col">
               <ChatView />
             </div>
+          ) : activeView === 'workspace' ? (
+            <div className="pb-8 max-w-xl">
+              <div className="bg-slate-900/70 border border-slate-800 rounded-xl p-4 space-y-4">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-lg bg-blue-600/20 text-blue-400 flex items-center justify-center">
+                    <ShieldCheck size={18} />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-semibold text-slate-100">Workspaces por empresa</h3>
+                    <p className="text-[11px] text-slate-500">
+                      Crie e gerencie empresas para separar backlog, prioridades e planos por contexto.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="block text-[10px] font-medium text-slate-500 uppercase tracking-wider">
+                    Empresas ativas
+                  </label>
+                  {empresasAtivas.length === 0 ? (
+                    <p className="text-xs text-slate-500">
+                      Nenhuma empresa ainda. Crie a primeira abaixo.
+                    </p>
+                  ) : (
+                    <ul className="space-y-2">
+                      {empresasAtivas.map((nome) => (
+                        <li
+                          key={nome}
+                          className="flex items-center justify-between gap-2 bg-slate-900/60 border border-slate-800 rounded-lg px-3 py-2"
+                        >
+                          <button
+                            type="button"
+                            onClick={() => setWorkspaceAtivo(nome)}
+                            className={`text-xs font-medium px-2 py-1 rounded-full border ${
+                              workspaceAtivo === nome
+                                ? 'bg-blue-600 border-blue-500 text-white'
+                                : 'bg-slate-900 border-slate-700 text-slate-200 hover:border-slate-500'
+                            }`}
+                          >
+                            {nome}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEmpresasBloqueadas((prev) =>
+                                prev.includes(nome) ? prev : [...prev, nome]
+                              );
+                              if (workspaceAtivo === nome) setWorkspaceAtivo('all');
+                            }}
+                            className="text-[11px] px-2 py-1 rounded-lg border border-red-500/60 text-red-400 hover:bg-red-500/10"
+                          >
+                            Bloquear
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+
+                {empresasInativas.length > 0 && (
+                  <div className="space-y-2">
+                    <label className="block text-[10px] font-medium text-slate-500 uppercase tracking-wider">
+                      Empresas bloqueadas
+                    </label>
+                    <ul className="space-y-2">
+                      {empresasInativas.map((nome) => (
+                        <li
+                          key={nome}
+                          className="flex items-center justify-between gap-2 bg-slate-900/40 border border-slate-800 rounded-lg px-3 py-2"
+                        >
+                          <span className="text-xs text-slate-400 line-through">{nome}</span>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setEmpresasBloqueadas((prev) => prev.filter((n) => n !== nome))
+                            }
+                            className="text-[11px] px-2 py-1 rounded-lg border border-emerald-500/60 text-emerald-400 hover:bg-emerald-500/10"
+                          >
+                            Reativar
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )
+                }
+
+                <div className="space-y-2 pt-2 border-t border-slate-800">
+                  <label className="block text-[10px] font-medium text-slate-500 uppercase tracking-wider">
+                    Nova empresa
+                  </label>
+                  <form
+                    className="flex flex-col sm:flex-row gap-2"
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      const form = e.target as HTMLFormElement;
+                      const input = form.elements.namedItem('novaEmpresa') as HTMLInputElement | null;
+                      const nome = input?.value.trim() ?? '';
+                      if (!nome) return;
+                      setEmpresasLocais((prev) =>
+                        prev.includes(nome) ? prev : [...prev, nome]
+                      );
+                      ritmo.addEmpresa(nome);
+                      setWorkspaceAtivo(nome);
+                      if (input) input.value = '';
+                    }}
+                  >
+                    <input
+                      name="novaEmpresa"
+                      type="text"
+                      placeholder="Ex.: Cliente XPTO · Unidade 01"
+                      className="flex-1 bg-slate-950/60 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 placeholder:text-slate-600 outline-none focus:border-blue-500"
+                    />
+                    <button
+                      type="submit"
+                      className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-sm font-medium text-white shrink-0"
+                    >
+                      Criar workspace
+                    </button>
+                  </form>
+                </div>
+              </div>
+            </div>
           ) : loadingAny ? (
             <div className="flex flex-col items-center justify-center h-64 gap-4">
               <div className="w-8 h-8 border-2 border-slate-700 border-t-blue-500 rounded-full animate-spin" />
@@ -298,7 +515,7 @@ function AppContent() {
             <div className="pb-8">
               {activeView === 'dashboard' && (
                 <KanbanBoard
-                  items={items}
+                  items={itemsFiltrados}
                   onStatusChange={updateStatus}
                   onOpenItem={openItemModal}
                   onAddInColumn={(status) => openItemModal(null, status)}
@@ -308,16 +525,17 @@ function AppContent() {
               )}
               {activeView === 'table' && (
                 <Table5W2H
-                  items={items}
+                  items={itemsFiltrados}
                   onUpdate={updateItem}
                   onDelete={deleteItem}
                   onEditItem={openItemModal}
                   forceOpenConcluidos={tableOpenConcluidas}
+                  empresaSuggestions={empresasAtivas}
                 />
               )}
               {activeView === 'backlog' && (
                 <BacklogView
-                  items={items}
+                  items={itemsFiltrados}
                   onUpdate={updateItem}
                   onDelete={deleteItem}
                   onEditItem={openItemModal}
@@ -329,13 +547,13 @@ function AppContent() {
                   forceOpenConcluidos={backlogOpenConcluidas}
                 />
               )}
-              {activeView === 'performance' && <PerformanceView items={items} />}
-              {activeView === 'roadmap' && <RoadmapView items={items} onOpenItem={openItemModal} />}
+              {activeView === 'performance' && <PerformanceView items={itemsFiltrados} />}
+              {activeView === 'roadmap' && <RoadmapView items={itemsFiltrados} onOpenItem={openItemModal} />}
               {activeView === 'quadro' && (
                 <QuadroEstrategico
                   prioridades={quadroPrioridades}
-                  planos={ritmo.board.planos}
-                  tarefas={ritmo.board.tarefas}
+                  planos={ritmo.board.planos.filter((pl) => matchWorkspace(pl.empresa))}
+                  tarefas={ritmo.board.tarefas.filter((t) => matchWorkspace(t.empresa))}
                   responsaveis={ritmo.responsaveis}
                   computeStatusPlano={ritmo.computeStatusPlano}
                   onStatusChange={(id, status) => ritmo.updatePrioridade(id, { status_prioridade: status })}
@@ -432,7 +650,12 @@ function AppContent() {
           isOpen={prioridadeModalOpen}
           onClose={() => setPrioridadeModalOpen(false)}
           responsaveis={ritmo.responsaveis}
+          defaultEmpresa={workspaceAtivo === 'all' ? '' : workspaceAtivo}
+          empresaSuggestions={empresasAtivas}
           onSave={(item) => {
+            if (item.empresa && !empresasDisponiveis.includes(item.empresa)) {
+              ritmo.addEmpresa(item.empresa);
+            }
             const ok = ritmo.addPrioridade(item);
             if (!ok) {
               setToast({
@@ -454,6 +677,7 @@ function AppContent() {
               status: ItemStatus.ACTIVE,
               urgency: UrgencyLevel.MEDIUM,
               notes: '',
+              empresa: item.empresa,
             });
             return true;
           }}
@@ -466,6 +690,8 @@ function AppContent() {
           initialStatus={selectedItem === null ? defaultStatusForNew ?? undefined : undefined}
           onSave={addItem}
           onUpdate={updateItem}
+          defaultEmpresa={workspaceAtivo === 'all' ? '' : workspaceAtivo}
+          empresaSuggestions={empresasAtivas}
         />
 
         <footer className="h-8 min-h-[32px] bg-slate-900/95 border-t border-slate-800 px-3 sm:px-4 flex items-center justify-between text-[10px] text-slate-500 uppercase tracking-wider z-30 shrink-0">

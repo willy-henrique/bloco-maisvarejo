@@ -10,6 +10,8 @@ interface ActionItemModalProps {
   initialStatus?: ItemStatus;
   onSave: (data: Omit<ActionItem, 'id' | 'createdAt' | 'updatedAt'>) => void;
   onUpdate: (id: string, data: Partial<ActionItem>) => void;
+  defaultEmpresa?: string;
+  empresaSuggestions?: string[];
 }
 
 const emptyForm = (): Omit<ActionItem, 'id' | 'createdAt' | 'updatedAt'> => ({
@@ -22,6 +24,7 @@ const emptyForm = (): Omit<ActionItem, 'id' | 'createdAt' | 'updatedAt'> => ({
   status: ItemStatus.ACTIVE,
   urgency: UrgencyLevel.MEDIUM,
   notes: '',
+  empresa: '',
 });
 
 export const ActionItemModal: React.FC<ActionItemModalProps> = ({
@@ -31,6 +34,8 @@ export const ActionItemModal: React.FC<ActionItemModalProps> = ({
   initialStatus,
   onSave,
   onUpdate,
+  defaultEmpresa,
+  empresaSuggestions,
 }) => {
   const isEdit = item !== null;
   const [form, setForm] = useState(emptyForm());
@@ -47,11 +52,16 @@ export const ActionItemModal: React.FC<ActionItemModalProps> = ({
         status: item.status,
         urgency: item.urgency,
         notes: item.notes ?? '',
+        empresa: item.empresa ?? '',
       });
     } else {
-      setForm({ ...emptyForm(), status: initialStatus ?? ItemStatus.ACTIVE });
+      setForm({
+        ...emptyForm(),
+        status: initialStatus ?? ItemStatus.ACTIVE,
+        empresa: defaultEmpresa ?? '',
+      });
     }
-  }, [item, initialStatus, isOpen]);
+  }, [item, initialStatus, isOpen, defaultEmpresa]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -114,6 +124,45 @@ export const ActionItemModal: React.FC<ActionItemModalProps> = ({
                 placeholder="Setor / local"
                 className="w-full bg-slate-800/50 border border-slate-700 rounded-lg pl-9 pr-3 py-2.5 text-sm text-slate-200 placeholder:text-slate-500 outline-none focus:border-slate-600"
               />
+            </div>
+          </div>
+          <div className="md:col-span-2">
+            <label className="block text-[10px] font-medium text-slate-500 uppercase tracking-wider mb-1.5">
+              Empresa / Workspace
+            </label>
+            <div className="relative">
+              <input
+                type="text"
+                value={form.empresa ?? ''}
+                onChange={(e) => update('empresa', e.target.value)}
+                placeholder="Cliente / unidade / grupo"
+                className="w-full bg-slate-800/50 border border-slate-700 rounded-lg px-3 py-2.5 text-sm text-slate-200 placeholder:text-slate-500 outline-none focus:border-slate-600"
+                autoComplete="off"
+              />
+              {form.empresa &&
+                (empresaSuggestions ?? [])
+                  .filter((nome) =>
+                    nome.toLowerCase().startsWith(form.empresa!.toLowerCase())
+                  )
+                  .slice(0, 6).length > 0 && (
+                  <div className="absolute z-20 mt-1 w-full bg-slate-900 border border-slate-700 rounded-lg shadow-lg max-h-40 overflow-auto">
+                    {(empresaSuggestions ?? [])
+                      .filter((nome) =>
+                        nome.toLowerCase().startsWith(form.empresa!.toLowerCase())
+                      )
+                      .slice(0, 6)
+                      .map((nome) => (
+                        <button
+                          key={nome}
+                          type="button"
+                          onClick={() => update('empresa', nome)}
+                          className="w-full text-left px-3 py-1.5 text-[12px] text-slate-100 hover:bg-slate-800"
+                        >
+                          {nome}
+                        </button>
+                      ))}
+                  </div>
+                )}
             </div>
           </div>
           <div>

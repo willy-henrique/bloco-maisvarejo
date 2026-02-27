@@ -29,6 +29,8 @@ export interface ActionItem {
   blockedAt?: number;
   createdAt: number;
   updatedAt: number;
+  /** Empresa / workspace ao qual esta iniciativa pertence (opcional para compatibilidade legada) */
+  empresa?: string;
 }
 
 // ========== Ritmo de Gestão – entidades e enums ==========
@@ -56,6 +58,8 @@ export interface Backlog {
   data_criacao: number;
   prioridade_sugerida?: UrgencyLevel;
   status_backlog: StatusBacklog;
+  /** Empresa / workspace à qual esta dor pertence (opcional) */
+  empresa?: string;
 }
 
 /** Prioridade ativa (nível estratégico). Máx 3 ativas por quadro. */
@@ -68,6 +72,8 @@ export interface Prioridade {
   data_alvo: number;
   status_prioridade: StatusPrioridade;
   origem_backlog_id?: string;
+  /** Empresa / workspace dono desta prioridade (opcional) */
+  empresa?: string;
 }
 
 /** Plano de ataque (nível gerencial). 5W2H completo. */
@@ -84,6 +90,8 @@ export interface PlanoDeAtaque {
   how: string;
   how_much?: string;
   status_plano: StatusPlano;
+  /** Empresa / workspace associada a este plano (opcional) */
+  empresa?: string;
 }
 
 /** Tarefa (nível operacional). Materialização do plano. */
@@ -97,6 +105,8 @@ export interface Tarefa {
   data_vencimento: number;
   status_tarefa: StatusTarefa;
   bloqueio_motivo?: string;
+  /** Empresa / workspace associada a esta tarefa (opcional) */
+  empresa?: string;
 }
 
 /** Payload único do board Ritmo de Gestão (persistência) */
@@ -106,6 +116,8 @@ export interface RitmoGestaoBoard {
   planos: PlanoDeAtaque[];
   tarefas: Tarefa[];
   responsaveis: Responsavel[];
+  /** Empresas / workspaces cadastrados no board */
+  empresas: string[];
 }
 
 export interface UserSession {
