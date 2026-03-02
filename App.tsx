@@ -53,14 +53,33 @@ function AppContent() {
     [workspaceAtivo]
   );
 
-  // Mantém uma lista local de empresas, sempre sincronizada com o controller.
+  // Mantém uma lista local de empresas, sempre sincronizada com o controller
+  // e também derivada dos dados já existentes (itens, prioridades, planos, tarefas, backlog).
   useEffect(() => {
     const fromController = Array.isArray(ritmo.empresas) ? ritmo.empresas : [];
+
+    const fromData = new Set<string>();
+    items.forEach((i) => {
+      if (i.empresa) fromData.add(i.empresa);
+    });
+    ritmo.board.backlog.forEach((b) => {
+      if (b.empresa) fromData.add(b.empresa);
+    });
+    ritmo.board.prioridades.forEach((p) => {
+      if (p.empresa) fromData.add(p.empresa);
+    });
+    ritmo.board.planos.forEach((p) => {
+      if (p.empresa) fromData.add(p.empresa);
+    });
+    ritmo.board.tarefas.forEach((t) => {
+      if (t.empresa) fromData.add(t.empresa);
+    });
+
     setEmpresasLocais((prev) => {
-      const merged = new Set<string>([...prev, ...fromController]);
+      const merged = new Set<string>([...prev, ...fromController, ...fromData]);
       return Array.from(merged);
     });
-  }, [ritmo.empresas]);
+  }, [ritmo.empresas, ritmo.board.backlog, ritmo.board.prioridades, ritmo.board.planos, ritmo.board.tarefas, items]);
 
   const empresasDisponiveis = useMemo(() => empresasLocais, [empresasLocais]);
 
