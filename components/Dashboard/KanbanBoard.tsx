@@ -245,10 +245,31 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
                       <p className="text-[11px] text-slate-500 line-clamp-1 mt-0.5">{item.why}</p>
                     )}
                   </div>
-                  <span className="shrink-0 inline-flex items-center gap-1 text-[11px] font-medium text-slate-400 group-hover:text-emerald-400 transition-colors">
-                    <Pencil size={12} />
-                    Abrir detalhes
-                  </span>
+                  <div className="shrink-0 flex flex-col items-end gap-1 text-[11px]">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onStatusChange(item.id, ItemStatus.ACTIVE);
+                      }}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full border border-blue-400/70 bg-blue-500/10 text-blue-300 hover:bg-blue-500/20 hover:border-blue-300 transition-colors"
+                      title="Reabrir como Prioridade Ativa"
+                    >
+                      <CornerDownLeft size={12} />
+                      <span>Prioridade Ativa</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onOpenItem?.(item);
+                      }}
+                      className="inline-flex items-center gap-1 text-slate-400 hover:text-emerald-400 transition-colors"
+                    >
+                      <Pencil size={12} />
+                      Abrir detalhes
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>

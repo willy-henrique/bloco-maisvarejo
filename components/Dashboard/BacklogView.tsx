@@ -24,6 +24,7 @@ interface BacklogViewProps {
   onDelete: (id: string) => void;
   onEditItem: (item: ActionItem) => void;
   onStatusChange: (id: string, status: ItemStatus) => void;
+  onAddNew?: () => void;
 }
 
 export const BacklogView: React.FC<BacklogViewProps> = ({
@@ -32,6 +33,7 @@ export const BacklogView: React.FC<BacklogViewProps> = ({
   onDelete,
   onEditItem,
   onStatusChange,
+  onAddNew,
 }) => {
   const { backlogItems } = useMemo(() => {
     // Apenas itens com status BACKLOG (EM DEMANDA) — itens promovidos saem daqui
@@ -57,8 +59,21 @@ export const BacklogView: React.FC<BacklogViewProps> = ({
         </div>
         <div className="overflow-x-auto overflow-touch">
           {backlogItems.length === 0 ? (
-            <div className="py-12 text-center text-slate-500 text-sm">
-              Nenhum item em demanda. Use &quot;Nova Iniciativa&quot; ou mova itens do Kanban para cá.
+            <div className="py-10 px-4 flex flex-col sm:flex-row items-center justify-between gap-4 text-sm">
+              <p className="text-slate-500 text-center sm:text-left">
+                Nenhum item em demanda. Use &quot;Nova Iniciativa&quot; para registrar uma nova ideia
+                ou mova itens do Kanban de volta para o BackLog.
+              </p>
+              {onAddNew && (
+                <button
+                  type="button"
+                  onClick={onAddNew}
+                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-xs font-medium text-white shadow-sm transition-colors"
+                >
+                  <PlayCircle size={14} />
+                  Nova iniciativa
+                </button>
+              )}
             </div>
           ) : (
             <table className="w-full text-left border-collapse min-w-[640px]">

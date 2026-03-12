@@ -570,6 +570,7 @@ function AppContent() {
                   onDelete={deleteItem}
                   onEditItem={(item) => openItemModal(item, undefined, 'backlog')}
                   onStatusChange={updateStatus}
+                  onAddNew={() => openItemModal(null, ItemStatus.BACKLOG, 'backlog')}
                 />
               )}
               {activeView === 'performance' && <PerformanceView items={itemsFiltrados} />}
