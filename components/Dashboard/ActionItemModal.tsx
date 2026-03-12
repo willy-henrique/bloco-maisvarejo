@@ -44,6 +44,7 @@ export const ActionItemModal: React.FC<ActionItemModalProps> = ({
   hideStatusUrgency = false,
 }) => {
   const isEdit = item !== null;
+  const isBacklogLike = hideWhereEmpresa && hideStatusUrgency;
   const [form, setForm] = useState(emptyForm());
 
   useEffect(() => {
@@ -200,7 +201,8 @@ export const ActionItemModal: React.FC<ActionItemModalProps> = ({
                 type="date"
                 value={form.when}
                 onChange={(e) => update('when', e.target.value)}
-                className="w-full bg-slate-800/50 border border-slate-700 rounded-lg pl-9 pr-3 py-2.5 text-sm text-slate-200 outline-none focus:border-slate-600"
+                disabled={isBacklogLike && !isEdit}
+                className="w-full bg-slate-800/50 border border-slate-700 rounded-lg pl-9 pr-3 py-2.5 text-sm text-slate-200 outline-none focus:border-slate-600 disabled:opacity-70 disabled:cursor-not-allowed"
               />
             </div>
           </div>
@@ -240,33 +242,37 @@ export const ActionItemModal: React.FC<ActionItemModalProps> = ({
               </div>
             </>
           )}
-          <div className="md:col-span-2">
-            <label className="block text-[10px] font-medium text-slate-500 uppercase tracking-wider mb-1.5">
-              Como?
-            </label>
-            <textarea
-              value={form.how}
-              onChange={(e) => update('how', e.target.value)}
-              placeholder="Plano de execução"
-              rows={3}
-              className="w-full bg-slate-800/50 border border-slate-700 rounded-lg px-3 py-2.5 text-sm text-slate-300 placeholder:text-slate-500 outline-none focus:border-slate-600 resize-none"
-            />
-          </div>
-          <div className="md:col-span-2">
-            <label className="block text-[10px] font-medium text-slate-500 uppercase tracking-wider mb-1.5">
-              Notas
-            </label>
-            <div className="relative">
-              <FileText size={14} className="absolute left-3 top-3 text-slate-500" />
-              <textarea
-                value={form.notes}
-                onChange={(e) => update('notes', e.target.value)}
-                placeholder="Observações adicionais"
-                rows={2}
-                className="w-full bg-slate-800/50 border border-slate-700 rounded-lg pl-9 pr-3 py-2.5 text-sm text-slate-400 placeholder:text-slate-500 outline-none focus:border-slate-600 resize-none"
-              />
-            </div>
-          </div>
+          {(!isBacklogLike || isEdit) && (
+            <>
+              <div className="md:col-span-2">
+                <label className="block text-[10px] font-medium text-slate-500 uppercase tracking-wider mb-1.5">
+                  Como?
+                </label>
+                <textarea
+                  value={form.how}
+                  onChange={(e) => update('how', e.target.value)}
+                  placeholder="Plano de execução"
+                  rows={3}
+                  className="w-full bg-slate-800/50 border border-slate-700 rounded-lg px-3 py-2.5 text-sm text-slate-300 placeholder:text-slate-500 outline-none focus:border-slate-600 resize-none"
+                />
+              </div>
+              <div className="md:col-span-2">
+                <label className="block text-[10px] font-medium text-slate-500 uppercase tracking-wider mb-1.5">
+                  Notas
+                </label>
+                <div className="relative">
+                  <FileText size={14} className="absolute left-3 top-3 text-slate-500" />
+                  <textarea
+                    value={form.notes}
+                    onChange={(e) => update('notes', e.target.value)}
+                    placeholder="Observações adicionais"
+                    rows={2}
+                    className="w-full bg-slate-800/50 border border-slate-700 rounded-lg pl-9 pr-3 py-2.5 text-sm text-slate-400 placeholder:text-slate-500 outline-none focus:border-slate-600 resize-none"
+                  />
+                </div>
+              </div>
+            </>
+          )}
         </div>
 
         <div className="flex justify-end gap-2 pt-2 border-t border-slate-800">

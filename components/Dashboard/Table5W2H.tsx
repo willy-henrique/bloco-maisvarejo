@@ -47,13 +47,13 @@ export const Table5W2H: React.FC<Table5W2HProps> = ({
       <table className="w-full text-left border-collapse min-w-[1400px]">
         <thead>
           <tr className="bg-slate-900/80 text-slate-400 text-[10px] uppercase tracking-wider border-b border-slate-800">
-            <th className="px-4 py-3 font-semibold">O quê?</th>
-            <th className="px-4 py-3 font-semibold">Por quê?</th>
-            <th className="px-4 py-3 font-semibold">Onde?</th>
+            <th className="px-4 py-3 font-semibold">What · O quê?</th>
+            <th className="px-4 py-3 font-semibold">Why · Por quê?</th>
+            <th className="px-4 py-3 font-semibold">Where · Onde?</th>
+            <th className="px-4 py-3 font-semibold">When · Quando?</th>
+            <th className="px-4 py-3 font-semibold">Who · Quem?</th>
+            <th className="px-4 py-3 font-semibold">How · Como?</th>
             <th className="px-4 py-3 font-semibold">Empresa</th>
-            <th className="px-4 py-3 font-semibold">Quem?</th>
-            <th className="px-4 py-3 font-semibold">Quando?</th>
-            <th className="px-4 py-3 font-semibold">Como?</th>
             <th className="px-4 py-3 font-semibold">Urgência</th>
             <th className="px-4 py-3 font-semibold">Status</th>
             <th className="px-4 py-3 font-semibold">Notas</th>
@@ -97,8 +97,39 @@ export const Table5W2H: React.FC<Table5W2HProps> = ({
                   />
                 </div>
               </td>
-              <td className="px-4 py-3 min-w-[160px]">
-                {(() => {
+              <td className="px-4 py-3 min-w-[110px]">
+                <div className="relative">
+                  <Calendar size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500" />
+                  <input 
+                    type="date"
+                    defaultValue={item.when}
+                    onChange={(e) => onUpdate(item.id, { when: e.target.value })}
+                    className="bg-slate-800/30 border border-transparent focus:border-slate-600 rounded py-2 pl-8 pr-2 text-xs font-medium text-slate-200 w-full outline-none transition-colors appearance-none cursor-pointer"
+                  />
+                </div>
+              </td>
+              <td className="px-4 py-3 min-w-[100px]">
+                <div className="relative">
+                  <User size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500" />
+                  <input 
+                    defaultValue={item.who}
+                    onBlur={(e) => onUpdate(item.id, { who: e.target.value })}
+                    className="bg-slate-800/30 border border-transparent focus:border-slate-600 rounded py-2 pl-8 pr-2 text-xs font-medium text-slate-200 w-full outline-none transition-colors"
+                    placeholder="Responsável"
+                  />
+                </div>
+              </td>
+              <td className="px-4 py-3 min-w-[180px]">
+                <textarea 
+                  defaultValue={item.how}
+                  onBlur={(e) => onUpdate(item.id, { how: e.target.value })}
+                  rows={2}
+                  className="bg-slate-800/30 border border-transparent focus:border-slate-600 focus:bg-slate-800/50 rounded p-2 text-xs text-slate-400 w-full outline-none resize-none transition-colors placeholder:text-slate-600"
+                  placeholder="Plano de execução..."
+                />
+              </td>
+              <td className="px-4 py-3 min-w-[100px]">
+              {(() => {
                   const listId = `empresa-matriz-${item.id}`;
                   return (
                     <>
@@ -119,37 +150,6 @@ export const Table5W2H: React.FC<Table5W2HProps> = ({
                     </>
                   );
                 })()}
-              </td>
-              <td className="px-4 py-3 min-w-[100px]">
-                <div className="relative">
-                  <User size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500" />
-                  <input 
-                    defaultValue={item.who}
-                    onBlur={(e) => onUpdate(item.id, { who: e.target.value })}
-                    className="bg-slate-800/30 border border-transparent focus:border-slate-600 rounded py-2 pl-8 pr-2 text-xs font-medium text-slate-200 w-full outline-none transition-colors"
-                    placeholder="Responsável"
-                  />
-                </div>
-              </td>
-              <td className="px-4 py-3 min-w-[110px]">
-                <div className="relative">
-                  <Calendar size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500" />
-                  <input 
-                    type="date"
-                    defaultValue={item.when}
-                    onChange={(e) => onUpdate(item.id, { when: e.target.value })}
-                    className="bg-slate-800/30 border border-transparent focus:border-slate-600 rounded py-2 pl-8 pr-2 text-xs font-medium text-slate-200 w-full outline-none transition-colors appearance-none cursor-pointer"
-                  />
-                </div>
-              </td>
-              <td className="px-4 py-3 min-w-[180px]">
-                <textarea 
-                  defaultValue={item.how}
-                  onBlur={(e) => onUpdate(item.id, { how: e.target.value })}
-                  rows={2}
-                  className="bg-slate-800/30 border border-transparent focus:border-slate-600 focus:bg-slate-800/50 rounded p-2 text-xs text-slate-400 w-full outline-none resize-none transition-colors placeholder:text-slate-600"
-                  placeholder="Plano de execução..."
-                />
               </td>
               <td className="px-4 py-3 min-w-[100px]">
                 <select
