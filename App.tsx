@@ -575,6 +575,10 @@ function AppContent() {
                       prev.includes(item.id) ? prev : [...prev, item.id]
                     )
                   }
+                  isInOperacional={(id) => operacionalIds.includes(id)}
+                  onRemoveFromOperacional={(id) =>
+                    setOperacionalIds((prev) => prev.filter((x) => x !== id))
+                  }
                 />
               )}
               {activeView === 'backlog' && (

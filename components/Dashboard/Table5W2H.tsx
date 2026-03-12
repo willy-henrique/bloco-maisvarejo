@@ -15,6 +15,10 @@ interface Table5W2HProps {
   empresaSuggestions?: string[];
   /** Enviar item para visão Operacional */
   onSendToOperacional?: (item: ActionItem) => void;
+  /** Indica se o item já foi enviado para o Operacional */
+  isInOperacional?: (id: string) => boolean;
+  /** Remover item da visão Operacional (voltar para Tático visualmente) */
+  onRemoveFromOperacional?: (id: string) => void;
 }
 
 export const Table5W2H: React.FC<Table5W2HProps> = ({
@@ -25,6 +29,8 @@ export const Table5W2H: React.FC<Table5W2HProps> = ({
   forceOpenConcluidos,
   empresaSuggestions,
   onSendToOperacional,
+  isInOperacional,
+  onRemoveFromOperacional,
 }) => {
   const [concluidosOpen, setConcluidosOpen] = useState(false);
 
@@ -184,13 +190,33 @@ export const Table5W2H: React.FC<Table5W2HProps> = ({
               <td className="px-4 py-3">
                 <div className="flex justify-center gap-1.5">
                   {onSendToOperacional && (
+                    // Botão para enviar / indicar envio ao Operacional
                     <button
                       type="button"
-                      onClick={() => onSendToOperacional(item)}
-                      className="p-2 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10 rounded-full transition-colors"
-                      title="Enviar esta iniciativa para o Operacional"
+                      onClick={() => {
+                        const jaEnviado = isInOperacional?.(item.id) ?? false;
+                        if (jaEnviado) {
+                          onRemoveFromOperacional?.(item.id);
+                        } else {
+                          onSendToOperacional(item);
+                        }
+                      }}
+                      className={`p-2 rounded-full transition-colors ${
+                        (isInOperacional?.(item.id) ?? false)
+                          ? 'bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30'
+                          : 'text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10'
+                      }`}
+                      title={
+                        (isInOperacional?.(item.id) ?? false)
+                          ? 'Remover do Operacional'
+                          : 'Enviar esta iniciativa para o Operacional'
+                      }
                     >
-                      <Activity size={14} />
+                      {(isInOperacional?.(item.id) ?? false) ? (
+                        <CheckCircle size={14} />
+                      ) : (
+                        <Activity size={14} />
+                      )}
                     </button>
                   )}
                   {onEditItem && (
