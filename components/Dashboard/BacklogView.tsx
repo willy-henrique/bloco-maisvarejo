@@ -3,10 +3,9 @@
  * Itens em demanda (não concluídos) em lista profissional; concluídos em seção colapsada.
  */
 
-import React, { useMemo, useState, useEffect } from 'react';
-import { ActionItem, ItemStatus, UrgencyLevel } from '../../types';
+import React, { useMemo } from 'react';
+import { ActionItem, ItemStatus } from '../../types';
 import { formatDateOnlyPtBr } from '../../utils/date';
-import { Badge } from '../Shared/Badge';
 import {
   ChevronDown,
   ChevronRight,
@@ -19,32 +18,12 @@ import {
   FileText,
 } from 'lucide-react';
 
-const URGENCY_ORDER: UrgencyLevel[] = [
-  UrgencyLevel.CRITICAL,
-  UrgencyLevel.HIGH,
-  UrgencyLevel.MEDIUM,
-  UrgencyLevel.LOW,
-];
-
-const STATUS_ORDER: ItemStatus[] = [
-  ItemStatus.ACTIVE,
-  ItemStatus.EXECUTING,
-  ItemStatus.BLOCKED,
-];
-
 interface BacklogViewProps {
   items: ActionItem[];
   onUpdate: (id: string, data: Partial<ActionItem>) => void;
   onDelete: (id: string) => void;
   onEditItem: (item: ActionItem) => void;
   onStatusChange: (id: string, status: ItemStatus) => void;
-  /** Opcional: bloco de decisões estratégicas (notas criptografadas) */
-  strategicNote?: string;
-  onStrategicNoteChange?: (value: string) => void;
-  onSaveStrategicNote?: () => Promise<void>;
-  noteSaving?: boolean;
-  /** Quando true, força abrir a seção de concluidos. */
-  forceOpenConcluidos?: boolean;
 }
 
 export const BacklogView: React.FC<BacklogViewProps> = ({
@@ -53,90 +32,24 @@ export const BacklogView: React.FC<BacklogViewProps> = ({
   onDelete,
   onEditItem,
   onStatusChange,
-  strategicNote = '',
-  onStrategicNoteChange,
-  onSaveStrategicNote,
-  noteSaving = false,
-  forceOpenConcluidos,
 }) => {
-  const [concluidosOpen, setConcluidosOpen] = useState(false);
-  const [decisoesOpen, setDecisoesOpen] = useState(false);
-
-  useEffect(() => {
-    if (forceOpenConcluidos) {
-      setConcluidosOpen(true);
-    }
-  }, [forceOpenConcluidos]);
-
-  const { backlogItems, completedItems } = useMemo(() => {
-    const completed = items.filter((i) => i.status === ItemStatus.COMPLETED);
-    const rest = items.filter((i) => i.status !== ItemStatus.COMPLETED);
-    const byUrgency = (a: ActionItem, b: ActionItem) => {
-      const ai = URGENCY_ORDER.indexOf(a.urgency);
-      const bi = URGENCY_ORDER.indexOf(b.urgency);
-      if (ai !== bi) return ai - bi;
-      const as = STATUS_ORDER.indexOf(a.status);
-      const bs = STATUS_ORDER.indexOf(b.status);
-      if (as !== bs) return as - bs;
-      return (b.when || '').localeCompare(a.when || '');
-    };
-    rest.sort(byUrgency);
-    completed.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
-    return { backlogItems: rest, completedItems: completed };
+  const { backlogItems } = useMemo(() => {
+    // Apenas itens com status BACKLOG (EM DEMANDA) — itens promovidos saem daqui
+    const rest = items
+      .filter((i) => i.status === ItemStatus.BACKLOG)
+      .sort((a, b) => (a.createdAt ?? 0) - (b.createdAt ?? 0));
+    return { backlogItems: rest };
   }, [items]);
 
   const moveToPrioridade = (id: string) => onStatusChange(id, ItemStatus.ACTIVE);
 
   return (
     <div className="max-w-5xl mx-auto space-y-6 w-full min-w-0">
-      {/* Decisões da diretoria (opcional, colapsável) */}
-      {onStrategicNoteChange != null && onSaveStrategicNote != null && (
-        <section className="bg-slate-900/60 border border-slate-800 rounded-lg overflow-hidden">
-          <button
-            type="button"
-            onClick={() => setDecisoesOpen((o) => !o)}
-            className="w-full px-4 py-3 flex items-center justify-between text-left hover:bg-slate-800/40 transition-colors"
-          >
-            <div className="flex items-center gap-2 text-slate-400">
-              <FileText size={16} />
-              <span className="text-sm font-medium text-slate-200">Decisões da diretoria</span>
-            </div>
-            {decisoesOpen ? (
-              <ChevronDown size={18} className="text-slate-500" />
-            ) : (
-              <ChevronRight size={18} className="text-slate-500" />
-            )}
-          </button>
-          {decisoesOpen && (
-            <div className="px-4 pb-4 pt-0 border-t border-slate-800/80 space-y-3">
-              <div className="flex items-center gap-2 text-slate-500 text-xs">
-                <Lock size={12} />
-                Criptografia ativa antes de salvar.
-              </div>
-              <textarea
-                value={strategicNote}
-                onChange={(e) => onStrategicNoteChange(e.target.value)}
-                placeholder="Decisões da reunião de diretoria..."
-                className="w-full min-h-[120px] bg-slate-900/40 border border-slate-800 rounded-lg p-3 text-sm text-slate-300 outline-none focus:border-slate-600 transition-colors resize-y"
-              />
-              <button
-                type="button"
-                onClick={onSaveStrategicNote}
-                disabled={noteSaving}
-                className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
-              >
-                {noteSaving ? 'Salvando…' : 'Salvar decisões'}
-              </button>
-            </div>
-          )}
-        </section>
-      )}
-
-      {/* Fila de demanda (não concluídos) */}
+      {/* BackLog (não concluídos) */}
       <section className="bg-slate-900/50 border border-slate-800 rounded-lg overflow-hidden">
         <div className="px-4 py-3 border-b border-slate-800 flex items-center justify-between bg-slate-900/80">
           <h3 className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
-            Em demanda — Prioridade e Matriz
+            BackLog
           </h3>
           <span className="text-[10px] text-slate-500 bg-slate-800 px-2 py-1 rounded tabular-nums">
             {backlogItems.length} {backlogItems.length === 1 ? 'item' : 'itens'}
@@ -153,9 +66,7 @@ export const BacklogView: React.FC<BacklogViewProps> = ({
                 <tr className="text-slate-500 text-[10px] uppercase tracking-wider border-b border-slate-800 bg-slate-900/60">
                   <th className="px-3 py-2.5 font-semibold">O quê?</th>
                   <th className="px-3 py-2.5 font-semibold hidden sm:table-cell">Quem / Quando</th>
-                  <th className="px-3 py-2.5 font-semibold w-24">Urgência</th>
-                  <th className="px-3 py-2.5 font-semibold w-36">Status</th>
-                  <th className="px-3 py-2.5 font-semibold text-right w-28">Ações</th>
+                  <th className="px-3 py-2.5 font-semibold text-right w-32">Ações</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/80">
@@ -187,50 +98,22 @@ export const BacklogView: React.FC<BacklogViewProps> = ({
                         {item.when ? formatDateOnlyPtBr(item.when) : '—'}
                       </div>
                     </td>
-                    <td className="px-3 py-2.5">
-                      <Badge type="urgency" value={item.urgency} />
-                    </td>
-                    <td className="px-3 py-2.5">
-                      <select
-                        value={item.status}
-                        onChange={(e) => onStatusChange(item.id, e.target.value as ItemStatus)}
-                        className="bg-slate-800/50 border border-slate-700 text-[11px] font-medium rounded py-1.5 px-2 outline-none text-slate-200 focus:border-slate-500 w-full max-w-[140px] cursor-pointer"
-                      >
-                        {STATUS_ORDER.map((s) => (
-                          <option key={s} value={s} className="bg-slate-900">
-                            {s}
-                          </option>
-                        ))}
-                        <option value={ItemStatus.COMPLETED} className="bg-slate-900">
-                          {ItemStatus.COMPLETED}
-                        </option>
-                      </select>
-                    </td>
                     <td className="px-3 py-2.5 text-right">
-                      <div className="flex items-center justify-end gap-0.5">
-                        {item.status !== ItemStatus.ACTIVE && (
-                          <button
-                            type="button"
-                            onClick={() => moveToPrioridade(item.id)}
-                            className="p-2 text-slate-500 hover:text-blue-400 hover:bg-blue-500/10 rounded transition-colors"
-                            title="Mover para Prioridade Ativa (Kanban)"
-                          >
-                            <PlayCircle size={14} />
-                          </button>
-                        )}
+                      <div className="inline-flex items-center gap-1.5 justify-end">
                         <button
                           type="button"
-                          onClick={() => onEditItem(item)}
-                          className="p-2 text-slate-500 hover:text-blue-400 hover:bg-blue-500/10 rounded transition-colors"
-                          title="Editar"
+                          onClick={() => moveToPrioridade(item.id)}
+                          className="inline-flex items-center justify-center px-3 py-1.5 text-[11px] font-medium rounded-full bg-blue-600/90 hover:bg-blue-500 text-white transition-colors shadow-sm"
+                          title="Mover para Prioridade Ativa (Kanban)"
                         >
-                          <Pencil size={14} />
+                          <PlayCircle size={14} className="mr-1" />
+                          Prioridade Ativa
                         </button>
                         <button
                           type="button"
                           onClick={() => onDelete(item.id)}
-                          className="p-2 text-slate-500 hover:text-red-400 hover:bg-red-500/10 rounded transition-colors"
-                          title="Excluir"
+                          className="inline-flex items-center justify-center p-2 rounded-full text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                          title="Excluir iniciativa do BackLog"
                         >
                           <Trash2 size={14} />
                         </button>
@@ -243,80 +126,6 @@ export const BacklogView: React.FC<BacklogViewProps> = ({
           )}
         </div>
       </section>
-
-      {/* Concluídos (colapsado por padrão — "sumir" do fluxo principal) */}
-      {completedItems.length > 0 && (
-        <section className="bg-slate-900/30 border border-slate-800/80 rounded-lg overflow-hidden">
-          <button
-            type="button"
-            onClick={() => setConcluidosOpen((o) => !o)}
-            className="w-full px-4 py-3 flex items-center justify-between text-left hover:bg-slate-800/30 transition-colors"
-          >
-            <div className="flex items-center gap-2 text-slate-500">
-              {concluidosOpen ? (
-                <ChevronDown size={16} />
-              ) : (
-                <ChevronRight size={16} />
-              )}
-              <span className="text-xs font-medium text-slate-400 uppercase tracking-wider">
-                Concluídos (arquivo)
-              </span>
-            </div>
-            <span className="text-[10px] text-slate-600 bg-slate-800 px-2 py-0.5 rounded tabular-nums">
-              {completedItems.length}
-            </span>
-          </button>
-          {concluidosOpen && (
-            <div className="border-t border-slate-800/80">
-              <table className="w-full text-left border-collapse min-w-[520px]">
-                <thead>
-                  <tr className="text-slate-600 text-[10px] uppercase tracking-wider border-b border-slate-800/80 bg-slate-900/60">
-                    <th className="px-3 py-2 font-semibold">O quê?</th>
-                    <th className="px-3 py-2 font-semibold hidden sm:table-cell">Quem / Quando</th>
-                    <th className="px-3 py-2 font-semibold text-right w-24">Ações</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-800/60">
-                  {completedItems.map((item) => (
-                    <tr key={item.id} className="text-slate-400 hover:bg-slate-800/20">
-                      <td className="px-3 py-2 text-sm">{item.what || '—'}</td>
-                      <td className="px-3 py-2 text-[11px] hidden sm:table-cell">
-                        {item.who || '—'} · {item.when ? formatDateOnlyPtBr(item.when) : '—'}
-                      </td>
-                      <td className="px-3 py-2 text-right">
-                        <button
-                          type="button"
-                          onClick={() => onEditItem(item)}
-                          className="p-1.5 text-slate-500 hover:text-blue-400 rounded"
-                          title="Editar"
-                        >
-                          <Pencil size={12} />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => onStatusChange(item.id, ItemStatus.ACTIVE)}
-                          className="p-1.5 text-slate-500 hover:text-amber-400 rounded ml-0.5"
-                          title="Reabrir (Prioridade Ativa)"
-                        >
-                          <PlayCircle size={12} />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => onDelete(item.id)}
-                          className="p-1.5 text-slate-500 hover:text-red-400 rounded ml-0.5"
-                          title="Excluir"
-                        >
-                          <Trash2 size={12} />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </section>
-      )}
     </div>
   );
 };

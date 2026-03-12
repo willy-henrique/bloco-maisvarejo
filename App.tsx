@@ -31,6 +31,7 @@ function AppContent() {
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState<ActionItem | null>(null);
   const [defaultStatusForNew, setDefaultStatusForNew] = useState<ItemStatus | null>(null);
+  const [modalContext, setModalContext] = useState<'default' | 'backlog'>('default');
   const [toast, setToast] = useState<{ message: string; type: ToastType } | null>(null);
   const [selectedPrioridade, setSelectedPrioridade] = useState<Prioridade | null>(null);
   const [prioridadeModalOpen, setPrioridadeModalOpen] = useState(false);
@@ -129,16 +130,21 @@ function AppContent() {
     return todas.filter((p) => matchWorkspace(p.empresa));
   }, [ritmo.board.prioridades, ritmo.board.prioridades.length, items, matchWorkspace]);
 
-  const openItemModal = useCallback((item: ActionItem | null, statusForNew?: ItemStatus) => {
-    setSelectedItem(item);
-    setDefaultStatusForNew(item === null && statusForNew ? statusForNew : null);
-    setModalOpen(true);
-  }, []);
+  const openItemModal = useCallback(
+    (item: ActionItem | null, statusForNew?: ItemStatus, context: 'default' | 'backlog' = 'default') => {
+      setSelectedItem(item);
+      setDefaultStatusForNew(item === null && statusForNew ? statusForNew : null);
+      setModalContext(context);
+      setModalOpen(true);
+    },
+    []
+  );
 
   const closeItemModal = useCallback(() => {
     setModalOpen(false);
     setSelectedItem(null);
     setDefaultStatusForNew(null);
+    setModalContext('default');
   }, []);
 
   const notesUnsubRef = useRef<(() => void) | null>(null);
@@ -170,7 +176,12 @@ function AppContent() {
     }
   }, [encryptionKey, strategicNote]);
 
-  const handleAddNew = () => openItemModal(null);
+  const handleAddNew = () =>
+    openItemModal(
+      null,
+      activeView === 'backlog' ? ItemStatus.BACKLOG : undefined,
+      activeView === 'backlog' ? 'backlog' : 'default'
+    );
   const handleAddPrioridade = () => setPrioridadeModalOpen(true);
   const loadingAny = loading || ritmo.loading;
 
@@ -557,13 +568,8 @@ function AppContent() {
                   items={itemsFiltrados}
                   onUpdate={updateItem}
                   onDelete={deleteItem}
-                  onEditItem={openItemModal}
+                  onEditItem={(item) => openItemModal(item, undefined, 'backlog')}
                   onStatusChange={updateStatus}
-                  strategicNote={strategicNote}
-                  onStrategicNoteChange={setStrategicNote}
-                  onSaveStrategicNote={saveNote}
-                  noteSaving={noteSaving}
-                  forceOpenConcluidos={backlogOpenConcluidas}
                 />
               )}
               {activeView === 'performance' && <PerformanceView items={itemsFiltrados} />}
@@ -711,6 +717,8 @@ function AppContent() {
           onUpdate={updateItem}
           defaultEmpresa={workspaceAtivo === 'all' ? '' : workspaceAtivo}
           empresaSuggestions={empresasAtivas}
+          hideWhereEmpresa={modalContext === 'backlog'}
+          hideStatusUrgency={modalContext === 'backlog'}
         />
 
         <footer className="h-8 min-h-[32px] bg-slate-900/95 border-t border-slate-800 px-3 sm:px-4 flex items-center justify-between text-[10px] text-slate-500 uppercase tracking-wider z-30 shrink-0">
@@ -718,7 +726,7 @@ function AppContent() {
             <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
             Conectado
           </div>
-          <span>WillTech v5</span>
+          <span>WillTech v6</span>
         </footer>
       </main>
     </div>

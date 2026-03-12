@@ -1,5 +1,6 @@
 // ========== Legado (Matriz 5W2H / iniciativas) – manter para compatibilidade ==========
 export enum ItemStatus {
+  BACKLOG = 'EM DEMANDA',
   ACTIVE = 'PRIORIDADE ATIVA',
   EXECUTING = 'EM EXECUÇÃO',
   BLOCKED = 'BLOQUEADO',

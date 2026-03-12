@@ -28,8 +28,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
 }) => {
   const menuItems = [
     { id: 'backlog', icon: ListTodo, label: 'Back Log' },
-    { id: 'quadro', icon: Target, label: 'Quadro Estratégico' },
     { id: 'dashboard', icon: LayoutDashboard, label: 'Prioridades' },
+    { id: 'quadro', icon: Target, label: 'Quadro Estratégico' },
     { id: 'table', icon: Table, label: 'Matriz 5W2H' },
   ];
 

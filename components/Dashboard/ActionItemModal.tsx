@@ -12,6 +12,10 @@ interface ActionItemModalProps {
   onUpdate: (id: string, data: Partial<ActionItem>) => void;
   defaultEmpresa?: string;
   empresaSuggestions?: string[];
+  /** Quando true, esconde campos de local/empresa (modo BackLog) */
+  hideWhereEmpresa?: boolean;
+  /** Quando true, esconde Status/Urgência (ex.: BackLog simplificado) */
+  hideStatusUrgency?: boolean;
 }
 
 const emptyForm = (): Omit<ActionItem, 'id' | 'createdAt' | 'updatedAt'> => ({
@@ -36,6 +40,8 @@ export const ActionItemModal: React.FC<ActionItemModalProps> = ({
   onUpdate,
   defaultEmpresa,
   empresaSuggestions,
+  hideWhereEmpresa = false,
+  hideStatusUrgency = false,
 }) => {
   const isEdit = item !== null;
   const [form, setForm] = useState(emptyForm());
@@ -88,7 +94,7 @@ export const ActionItemModal: React.FC<ActionItemModalProps> = ({
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="md:col-span-2">
             <label className="block text-[10px] font-medium text-slate-500 uppercase tracking-wider mb-1.5">
-              O quê?
+              Descrição
             </label>
             <input
               type="text"
@@ -111,60 +117,64 @@ export const ActionItemModal: React.FC<ActionItemModalProps> = ({
               className="w-full bg-slate-800/50 border border-slate-700 rounded-lg px-3 py-2.5 text-sm text-slate-300 placeholder:text-slate-500 outline-none focus:border-slate-600 resize-none"
             />
           </div>
-          <div>
-            <label className="block text-[10px] font-medium text-slate-500 uppercase tracking-wider mb-1.5">
-              Onde?
-            </label>
-            <div className="relative">
-              <MapPin size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-              <input
-                type="text"
-                value={form.where}
-                onChange={(e) => update('where', e.target.value)}
-                placeholder="Setor / local"
-                className="w-full bg-slate-800/50 border border-slate-700 rounded-lg pl-9 pr-3 py-2.5 text-sm text-slate-200 placeholder:text-slate-500 outline-none focus:border-slate-600"
-              />
-            </div>
-          </div>
-          <div className="md:col-span-2">
-            <label className="block text-[10px] font-medium text-slate-500 uppercase tracking-wider mb-1.5">
-              Empresa / Workspace
-            </label>
-            <div className="relative">
-              <input
-                type="text"
-                value={form.empresa ?? ''}
-                onChange={(e) => update('empresa', e.target.value)}
-                placeholder="Cliente / unidade / grupo"
-                className="w-full bg-slate-800/50 border border-slate-700 rounded-lg px-3 py-2.5 text-sm text-slate-200 placeholder:text-slate-500 outline-none focus:border-slate-600"
-                autoComplete="off"
-              />
-              {form.empresa &&
-                (empresaSuggestions ?? [])
-                  .filter((nome) =>
-                    nome.toLowerCase().startsWith(form.empresa!.toLowerCase())
-                  )
-                  .slice(0, 6).length > 0 && (
-                  <div className="absolute z-20 mt-1 w-full bg-slate-900 border border-slate-700 rounded-lg shadow-lg max-h-40 overflow-auto">
-                    {(empresaSuggestions ?? [])
+          {!hideWhereEmpresa && (
+            <>
+              <div>
+                <label className="block text-[10px] font-medium text-slate-500 uppercase tracking-wider mb-1.5">
+                  Onde?
+                </label>
+                <div className="relative">
+                  <MapPin size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                  <input
+                    type="text"
+                    value={form.where}
+                    onChange={(e) => update('where', e.target.value)}
+                    placeholder="Setor / local"
+                    className="w-full bg-slate-800/50 border border-slate-700 rounded-lg pl-9 pr-3 py-2.5 text-sm text-slate-200 placeholder:text-slate-500 outline-none focus:border-slate-600"
+                  />
+                </div>
+              </div>
+              <div className="md:col-span-2">
+                <label className="block text-[10px] font-medium text-slate-500 uppercase tracking-wider mb-1.5">
+                  Empresa / Workspace
+                </label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={form.empresa ?? ''}
+                    onChange={(e) => update('empresa', e.target.value)}
+                    placeholder="Cliente / unidade / grupo"
+                    className="w-full bg-slate-800/50 border border-slate-700 rounded-lg px-3 py-2.5 text-sm text-slate-200 placeholder:text-slate-500 outline-none focus:border-slate-600"
+                    autoComplete="off"
+                  />
+                  {form.empresa &&
+                    (empresaSuggestions ?? [])
                       .filter((nome) =>
                         nome.toLowerCase().startsWith(form.empresa!.toLowerCase())
                       )
-                      .slice(0, 6)
-                      .map((nome) => (
-                        <button
-                          key={nome}
-                          type="button"
-                          onClick={() => update('empresa', nome)}
-                          className="w-full text-left px-3 py-1.5 text-[12px] text-slate-100 hover:bg-slate-800"
-                        >
-                          {nome}
-                        </button>
-                      ))}
-                  </div>
-                )}
-            </div>
-          </div>
+                      .slice(0, 6).length > 0 && (
+                      <div className="absolute z-20 mt-1 w-full bg-slate-900 border border-slate-700 rounded-lg shadow-lg max-h-40 overflow-auto">
+                        {(empresaSuggestions ?? [])
+                          .filter((nome) =>
+                            nome.toLowerCase().startsWith(form.empresa!.toLowerCase())
+                          )
+                          .slice(0, 6)
+                          .map((nome) => (
+                            <button
+                              key={nome}
+                              type="button"
+                              onClick={() => update('empresa', nome)}
+                              className="w-full text-left px-3 py-1.5 text-[12px] text-slate-100 hover:bg-slate-800"
+                            >
+                              {nome}
+                            </button>
+                          ))}
+                      </div>
+                    )}
+                </div>
+              </div>
+            </>
+          )}
           <div>
             <label className="block text-[10px] font-medium text-slate-500 uppercase tracking-wider mb-1.5">
               Quem?
@@ -194,38 +204,42 @@ export const ActionItemModal: React.FC<ActionItemModalProps> = ({
               />
             </div>
           </div>
-          <div>
-            <label className="block text-[10px] font-medium text-slate-500 uppercase tracking-wider mb-1.5">
-              Status
-            </label>
-            <select
-              value={form.status}
-              onChange={(e) => update('status', e.target.value as ItemStatus)}
-              className="w-full bg-slate-800/50 border border-slate-700 rounded-lg px-3 py-2.5 text-sm text-slate-200 outline-none focus:border-slate-600 cursor-pointer"
-            >
-              {Object.values(ItemStatus).map((s) => (
-                <option key={s} value={s} className="bg-slate-900">
-                  {s}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-[10px] font-medium text-slate-500 uppercase tracking-wider mb-1.5">
-              Urgência
-            </label>
-            <select
-              value={form.urgency}
-              onChange={(e) => update('urgency', e.target.value as UrgencyLevel)}
-              className="w-full bg-slate-800/50 border border-slate-700 rounded-lg px-3 py-2.5 text-sm text-slate-200 outline-none focus:border-slate-600 cursor-pointer"
-            >
-              {Object.values(UrgencyLevel).map((u) => (
-                <option key={u} value={u} className="bg-slate-900">
-                  {u}
-                </option>
-              ))}
-            </select>
-          </div>
+          {!hideStatusUrgency && (
+            <>
+              <div>
+                <label className="block text-[10px] font-medium text-slate-500 uppercase tracking-wider mb-1.5">
+                  Status
+                </label>
+                <select
+                  value={form.status}
+                  onChange={(e) => update('status', e.target.value as ItemStatus)}
+                  className="w-full bg-slate-800/50 border border-slate-700 rounded-lg px-3 py-2.5 text-sm text-slate-200 outline-none focus:border-slate-600 cursor-pointer"
+                >
+                  {Object.values(ItemStatus).map((s) => (
+                    <option key={s} value={s} className="bg-slate-900">
+                      {s}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-[10px] font-medium text-slate-500 uppercase tracking-wider mb-1.5">
+                  Urgência
+                </label>
+                <select
+                  value={form.urgency}
+                  onChange={(e) => update('urgency', e.target.value as UrgencyLevel)}
+                  className="w-full bg-slate-800/50 border border-slate-700 rounded-lg px-3 py-2.5 text-sm text-slate-200 outline-none focus:border-slate-600 cursor-pointer"
+                >
+                  {Object.values(UrgencyLevel).map((u) => (
+                    <option key={u} value={u} className="bg-slate-900">
+                      {u}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </>
+          )}
           <div className="md:col-span-2">
             <label className="block text-[10px] font-medium text-slate-500 uppercase tracking-wider mb-1.5">
               Como?
