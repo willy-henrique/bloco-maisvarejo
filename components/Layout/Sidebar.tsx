@@ -1,7 +1,7 @@
 import React from 'react';
 import { LayoutDashboard, Table, LogOut, ShieldCheck, PieChart, Briefcase, X, ListTodo, Bot, Target } from 'lucide-react';
 
-export type ViewId = 'workspace' | 'dashboard' | 'table' | 'backlog' | 'quadro' | 'performance' | 'roadmap' | 'ia';
+export type ViewId = 'workspace' | 'dashboard' | 'table' | 'backlog' | 'performance' | 'roadmap' | 'ia' | 'operacional';
 
 interface SidebarProps {
   activeView: ViewId;
@@ -27,10 +27,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onCreateWorkspace,
 }) => {
   const menuItems = [
-    { id: 'backlog', icon: ListTodo, label: 'Back Log' },
-    { id: 'dashboard', icon: LayoutDashboard, label: 'Prioridades' },
-    { id: 'quadro', icon: Target, label: 'Quadro Estratégico' },
-    { id: 'table', icon: Table, label: 'Matriz 5W2H' },
+    { id: 'backlog', icon: ListTodo, label: 'BackLog' },
+    { id: 'dashboard', icon: LayoutDashboard, label: 'Estratégico' },
+    { id: 'table', icon: Table, label: 'Tático' },
+    { id: 'operacional', icon: Target, label: 'Operacional' },
   ];
 
   const handleNavClick = (view: ViewId) => {

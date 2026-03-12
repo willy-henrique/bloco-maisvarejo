@@ -2,7 +2,7 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { ActionItem, ItemStatus, UrgencyLevel } from '../../types';
 import { formatDateOnlyPtBr } from '../../utils/date';
-import { Trash2, Pencil, ShieldAlert, Calendar, User, Info, MapPin, FileText, ChevronDown, ChevronRight, CheckCircle } from 'lucide-react';
+import { Trash2, Pencil, ShieldAlert, Calendar, User, Info, MapPin, FileText, ChevronDown, ChevronRight, CheckCircle, Activity } from 'lucide-react';
 
 interface Table5W2HProps {
   items: ActionItem[];
@@ -13,6 +13,8 @@ interface Table5W2HProps {
   forceOpenConcluidos?: boolean;
   /** Sugestões de empresas/workspaces já cadastrados */
   empresaSuggestions?: string[];
+  /** Enviar item para visão Operacional */
+  onSendToOperacional?: (item: ActionItem) => void;
 }
 
 export const Table5W2H: React.FC<Table5W2HProps> = ({
@@ -22,6 +24,7 @@ export const Table5W2H: React.FC<Table5W2HProps> = ({
   onEditItem,
   forceOpenConcluidos,
   empresaSuggestions,
+  onSendToOperacional,
 }) => {
   const [concluidosOpen, setConcluidosOpen] = useState(false);
 
@@ -179,7 +182,17 @@ export const Table5W2H: React.FC<Table5W2HProps> = ({
                 </div>
               </td>
               <td className="px-4 py-3">
-                <div className="flex justify-center gap-1">
+                <div className="flex justify-center gap-1.5">
+                  {onSendToOperacional && (
+                    <button
+                      type="button"
+                      onClick={() => onSendToOperacional(item)}
+                      className="p-2 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10 rounded-full transition-colors"
+                      title="Enviar esta iniciativa para o Operacional"
+                    >
+                      <Activity size={14} />
+                    </button>
+                  )}
                   {onEditItem && (
                     <button
                       type="button"

@@ -77,13 +77,6 @@ export const BacklogView: React.FC<BacklogViewProps> = ({
             </div>
           ) : (
             <table className="w-full text-left border-collapse min-w-[640px]">
-              <thead>
-                <tr className="text-slate-500 text-[10px] uppercase tracking-wider border-b border-slate-800 bg-slate-900/60">
-                  <th className="px-3 py-2.5 font-semibold">O quê?</th>
-                  <th className="px-3 py-2.5 font-semibold hidden sm:table-cell">Quem / Quando</th>
-                  <th className="px-3 py-2.5 font-semibold text-right w-32">Ações</th>
-                </tr>
-              </thead>
               <tbody className="divide-y divide-slate-800/80">
                 {backlogItems.map((item) => (
                   <tr

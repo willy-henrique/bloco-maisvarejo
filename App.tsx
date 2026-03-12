@@ -7,6 +7,7 @@ import { Table5W2H } from './components/Dashboard/Table5W2H';
 import { BacklogView } from './components/Dashboard/BacklogView';
 import { QuadroEstrategico, DetalhePrioridadeModal } from './components/Dashboard/QuadroEstrategico';
 import { PrioridadeModal } from './components/Dashboard/PrioridadeModal';
+import { OperacionalView } from './components/Dashboard/OperacionalView';
 import { ActionItemModal } from './components/Dashboard/ActionItemModal';
 import { PerformanceView } from './components/Dashboard/PerformanceView';
 import { RoadmapView } from './components/Dashboard/RoadmapView';
@@ -45,6 +46,7 @@ function AppContent() {
   const [workspaceAtivo, setWorkspaceAtivo] = useState<'all' | string>('all');
   const [empresasLocais, setEmpresasLocais] = useState<string[]>([]);
   const [empresasBloqueadas, setEmpresasBloqueadas] = useState<string[]>([]);
+  const [operacionalIds, setOperacionalIds] = useState<string[]>([]);
 
   const matchWorkspace = useCallback(
     (empresa?: string) => {
@@ -97,6 +99,11 @@ function AppContent() {
   const itemsFiltrados = useMemo(
     () => items.filter((i) => matchWorkspace(i.empresa)),
     [items, matchWorkspace]
+  );
+
+  const itensOperacionais = useMemo(
+    () => itemsFiltrados.filter((i) => operacionalIds.includes(i.id)),
+    [itemsFiltrados, operacionalIds]
   );
 
   // Prioridades exibidas no Quadro Estratégico:
@@ -176,12 +183,14 @@ function AppContent() {
     }
   }, [encryptionKey, strategicNote]);
 
-  const handleAddNew = () =>
+  const handleAddNew = () => {
+    const isBacklogLike = activeView === 'backlog' || activeView === 'dashboard';
     openItemModal(
       null,
       activeView === 'backlog' ? ItemStatus.BACKLOG : undefined,
-      activeView === 'backlog' ? 'backlog' : 'default'
+      isBacklogLike ? 'backlog' : 'default'
     );
+  };
   const handleAddPrioridade = () => setPrioridadeModalOpen(true);
   const loadingAny = loading || ritmo.loading;
 
@@ -261,20 +270,20 @@ function AppContent() {
               {activeView === 'dashboard' && <Zap size={18} className="text-amber-500 shrink-0" />}
               {activeView === 'table' && <Target size={18} className="text-blue-500 shrink-0" />}
               {activeView === 'backlog' && <ListTodo size={18} className="text-emerald-500 shrink-0" />}
-              {activeView === 'quadro' && <Target size={18} className="text-blue-500 shrink-0" />}
+              {activeView === 'operacional' && <Activity size={18} className="text-emerald-400 shrink-0" />}
               {activeView === 'performance' && <PieChart size={18} className="text-violet-500 shrink-0" />}
               {activeView === 'roadmap' && <Briefcase size={18} className="text-cyan-500 shrink-0" />}
               {activeView === 'ia' && <Bot size={18} className="text-blue-400 shrink-0" />}
               {activeView === 'workspace' && <ShieldCheck size={18} className="text-blue-400 shrink-0" />}
               <h2 className="text-base font-semibold text-slate-100 tracking-tight">
                 {activeView === 'workspace' && 'Workspaces'}
-                {activeView === 'dashboard' && 'Dashboard'}
-                {activeView === 'table' && 'Matriz 5W2H'}
-                {activeView === 'backlog' && 'Back Log'}
-                {activeView === 'quadro' && 'Quadro Estratégico'}
+                {activeView === 'dashboard' && 'Estratégico'}
+                {activeView === 'table' && 'Tático'}
+                {activeView === 'backlog' && 'BackLog'}
                 {activeView === 'performance' && 'Desempenho'}
                 {activeView === 'roadmap' && 'Roadmap 2026'}
                 {activeView === 'ia' && '5W2H CHAT'}
+                {activeView === 'operacional' && 'Operacional'}
               </h2>
             </div>
           </div>
@@ -359,7 +368,7 @@ function AppContent() {
               ))}
             </div>
           )}
-          {(activeView === 'dashboard' || activeView === 'table' || activeView === 'backlog') && (
+          {(activeView === 'dashboard' || activeView === 'table' || activeView === 'backlog' || activeView === 'operacional') && (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-4 sm:mb-6">
               {[
                 { label: 'Ações Totais', val: itemsFiltrados.length, color: 'blue', icon: Zap },
@@ -561,6 +570,11 @@ function AppContent() {
                   onEditItem={openItemModal}
                   forceOpenConcluidos={tableOpenConcluidas}
                   empresaSuggestions={empresasAtivas}
+                  onSendToOperacional={(item) =>
+                    setOperacionalIds((prev) =>
+                      prev.includes(item.id) ? prev : [...prev, item.id]
+                    )
+                  }
                 />
               )}
               {activeView === 'backlog' && (
@@ -575,6 +589,9 @@ function AppContent() {
               )}
               {activeView === 'performance' && <PerformanceView items={itemsFiltrados} />}
               {activeView === 'roadmap' && <RoadmapView items={itemsFiltrados} onOpenItem={openItemModal} />}
+              {activeView === 'operacional' && (
+                <OperacionalView items={itensOperacionais} onUpdate={updateItem} />
+              )}
               {activeView === 'quadro' && (
                 <QuadroEstrategico
                   prioridades={quadroPrioridades}
@@ -727,7 +744,7 @@ function AppContent() {
             <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
             Conectado
           </div>
-          <span>WillTech v6</span>
+          <span>WillTech v7</span>
         </footer>
       </main>
     </div>
