@@ -3,11 +3,10 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { Login } from './components/Auth/Login';
 import { Sidebar } from './components/Layout/Sidebar';
 import { KanbanBoard } from './components/Dashboard/KanbanBoard';
-import { Table5W2H } from './components/Dashboard/Table5W2H';
 import { BacklogView } from './components/Dashboard/BacklogView';
+import { EstrategicoView } from './components/Dashboard/EstrategicoView';
 import { QuadroEstrategico, DetalhePrioridadeModal } from './components/Dashboard/QuadroEstrategico';
 import { PrioridadeModal } from './components/Dashboard/PrioridadeModal';
-import { OperacionalView } from './components/Dashboard/OperacionalView';
 import { ActionItemModal } from './components/Dashboard/ActionItemModal';
 import { PerformanceView } from './components/Dashboard/PerformanceView';
 import { RoadmapView } from './components/Dashboard/RoadmapView';
@@ -46,7 +45,6 @@ function AppContent() {
   const [workspaceAtivo, setWorkspaceAtivo] = useState<'all' | string>('all');
   const [empresasLocais, setEmpresasLocais] = useState<string[]>([]);
   const [empresasBloqueadas, setEmpresasBloqueadas] = useState<string[]>([]);
-  const [operacionalIds, setOperacionalIds] = useState<string[]>([]);
 
   const matchWorkspace = useCallback(
     (empresa?: string) => {
@@ -101,19 +99,12 @@ function AppContent() {
     [items, matchWorkspace]
   );
 
-  const itensOperacionais = useMemo(
-    () => itemsFiltrados.filter((i) => operacionalIds.includes(i.id)),
-    [itemsFiltrados, operacionalIds]
-  );
 
-  // Prioridades exibidas no Quadro Estratégico:
-  // - Prioridades estruturadas do Ritmo de Gestão
-  // - + iniciativas existentes do dashboard (itens) mapeadas como prioridades estratégicas
-  const quadroPrioridades = useMemo<Prioridade[]>(() => {
-    const sinteticas: Prioridade[] = items
-      // Evita duplicar prioridades que já existem no Ritmo (mesmo título e dono)
+  const sinteticasFromItems = useMemo<Prioridade[]>(() => {
+    return items
       .filter(
         (item) =>
+          item.status !== ItemStatus.BACKLOG &&
           !ritmo.board.prioridades.some(
             (p) => p.titulo === item.what && p.dono_id === item.who
           )
@@ -133,9 +124,17 @@ function AppContent() {
             : 'Execucao',
         empresa: item.empresa,
       }));
-    const todas = [...ritmo.board.prioridades, ...sinteticas];
+  }, [items, ritmo.board.prioridades]);
+
+  const quadroPrioridades = useMemo<Prioridade[]>(() => {
+    const todas = [...ritmo.board.prioridades, ...sinteticasFromItems];
     return todas.filter((p) => matchWorkspace(p.empresa));
-  }, [ritmo.board.prioridades, ritmo.board.prioridades.length, items, matchWorkspace]);
+  }, [ritmo.board.prioridades, sinteticasFromItems, matchWorkspace]);
+
+  const taticoPrioridades = useMemo<Prioridade[]>(() => {
+    const todas = [...ritmo.board.prioridades, ...sinteticasFromItems];
+    return todas.filter((p) => matchWorkspace(p.empresa));
+  }, [ritmo.board.prioridades, sinteticasFromItems, matchWorkspace]);
 
   const openItemModal = useCallback(
     (item: ActionItem | null, statusForNew?: ItemStatus, context: 'default' | 'backlog' = 'default') => {
@@ -209,6 +208,27 @@ function AppContent() {
     [items, openItemModal]
   );
 
+  const handleUpdatePrioridadeTatico = useCallback(
+    (id: string, updates: Partial<Prioridade>) => {
+      if (id.startsWith('legacy-')) {
+        const legacyId = id.replace('legacy-', '');
+        const status = updates.status_prioridade;
+        if (status) {
+          let itemStatus: ItemStatus | null = null;
+          if (status === 'Execucao') itemStatus = ItemStatus.EXECUTING;
+          else if (status === 'Bloqueado') itemStatus = ItemStatus.BLOCKED;
+          else if (status === 'Concluido') itemStatus = ItemStatus.COMPLETED;
+          if (itemStatus) {
+            updateStatus(legacyId, itemStatus);
+          }
+        }
+        return;
+      }
+      ritmo.updatePrioridade(id, updates);
+    },
+    [ritmo, updateStatus]
+  );
+
   const performDeletePrioridade = useCallback(
     (p: Prioridade) => {
       if (p.id.startsWith('legacy-')) {
@@ -270,7 +290,6 @@ function AppContent() {
               {activeView === 'dashboard' && <Zap size={18} className="text-amber-500 shrink-0" />}
               {activeView === 'table' && <Target size={18} className="text-blue-500 shrink-0" />}
               {activeView === 'backlog' && <ListTodo size={18} className="text-emerald-500 shrink-0" />}
-              {activeView === 'operacional' && <Activity size={18} className="text-emerald-400 shrink-0" />}
               {activeView === 'performance' && <PieChart size={18} className="text-violet-500 shrink-0" />}
               {activeView === 'roadmap' && <Briefcase size={18} className="text-cyan-500 shrink-0" />}
               {activeView === 'ia' && <Bot size={18} className="text-blue-400 shrink-0" />}
@@ -283,7 +302,6 @@ function AppContent() {
                 {activeView === 'performance' && 'Desempenho'}
                 {activeView === 'roadmap' && 'Roadmap 2026'}
                 {activeView === 'ia' && '5W2H CHAT'}
-                {activeView === 'operacional' && 'Operacional'}
               </h2>
             </div>
           </div>
@@ -368,7 +386,7 @@ function AppContent() {
               ))}
             </div>
           )}
-          {(activeView === 'dashboard' || activeView === 'table' || activeView === 'backlog' || activeView === 'operacional') && (
+          {(activeView === 'dashboard' || activeView === 'backlog') && (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-4 sm:mb-6">
               {[
                 { label: 'Ações Totais', val: itemsFiltrados.length, color: 'blue', icon: Zap },
@@ -563,22 +581,22 @@ function AppContent() {
                 />
               )}
               {activeView === 'table' && (
-                <Table5W2H
-                  items={itemsFiltrados}
-                  onUpdate={updateItem}
-                  onDelete={deleteItem}
-                  onEditItem={openItemModal}
-                  forceOpenConcluidos={tableOpenConcluidas}
-                  empresaSuggestions={empresasAtivas}
-                  onSendToOperacional={(item) =>
-                    setOperacionalIds((prev) =>
-                      prev.includes(item.id) ? prev : [...prev, item.id]
-                    )
-                  }
-                  isInOperacional={(id) => operacionalIds.includes(id)}
-                  onRemoveFromOperacional={(id) =>
-                    setOperacionalIds((prev) => prev.filter((x) => x !== id))
-                  }
+                <EstrategicoView
+                  prioridades={taticoPrioridades}
+                  planos={ritmo.board.planos.filter((pl) => matchWorkspace(pl.empresa))}
+                  tarefas={ritmo.board.tarefas.filter((t) => matchWorkspace(t.empresa))}
+                  responsaveis={ritmo.responsaveis}
+                  computeStatusPlano={ritmo.computeStatusPlano}
+                  onAddPrioridade={handleAddPrioridade}
+                  onUpdatePrioridade={handleUpdatePrioridadeTatico}
+                  onDeletePrioridade={handleDeletePrioridade}
+                  podeAdicionarPrioridade={ritmo.podeAdicionarPrioridade}
+                  onAddPlano={ritmo.addPlano}
+                  onUpdatePlano={ritmo.updatePlano}
+                  onDeletePlano={ritmo.deletePlano}
+                  onAddTarefa={ritmo.addTarefa}
+                  onUpdateTarefa={ritmo.updateTarefa}
+                  onDeleteTarefa={ritmo.deleteTarefa}
                 />
               )}
               {activeView === 'backlog' && (
@@ -593,9 +611,6 @@ function AppContent() {
               )}
               {activeView === 'performance' && <PerformanceView items={itemsFiltrados} />}
               {activeView === 'roadmap' && <RoadmapView items={itemsFiltrados} onOpenItem={openItemModal} />}
-              {activeView === 'operacional' && (
-                <OperacionalView items={itensOperacionais} onUpdate={updateItem} />
-              )}
               {activeView === 'quadro' && (
                 <QuadroEstrategico
                   prioridades={quadroPrioridades}

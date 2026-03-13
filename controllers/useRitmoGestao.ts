@@ -385,6 +385,38 @@ export function useRitmoGestao(encryptionKey: CryptoKey | null) {
     [board, saveBoard]
   );
 
+  // Regra 8: Propagação de bloqueios (tarefa → plano)
+  useEffect(() => {
+    if (loading) return;
+    let changed = false;
+    const nextPlanos = board.planos.map((plano) => {
+      const computed = computeStatusPlano(plano.id, board.tarefas);
+      if (computed !== null && computed !== plano.status_plano) {
+        changed = true;
+        return { ...plano, status_plano: computed };
+      }
+      return plano;
+    });
+    if (changed) saveBoard({ ...board, planos: nextPlanos });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [board.tarefas, loading]);
+
+  // Regra 8: Propagação de bloqueios (plano → prioridade)
+  useEffect(() => {
+    if (loading) return;
+    let changed = false;
+    const nextPrioridades = board.prioridades.map((p) => {
+      const computed = computeStatusPrioridade(p.id, board.planos, board.tarefas);
+      if (computed !== null && computed !== p.status_prioridade) {
+        changed = true;
+        return { ...p, status_prioridade: computed };
+      }
+      return p;
+    });
+    if (changed) saveBoard({ ...board, prioridades: nextPrioridades });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [board.planos, loading]);
+
   const ativasCount = prioridadesAtivas(board.prioridades).length;
   const podeAdicionarPrioridade = ativasCount < MAX_PRIORIDADES_ATIVAS;
 
