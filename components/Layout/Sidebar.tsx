@@ -1,5 +1,6 @@
 import React from 'react';
 import { LayoutDashboard, LogOut, ShieldCheck, PieChart, Briefcase, X, ListTodo, Bot, Target } from 'lucide-react';
+import type { UserRole } from '../../types/user';
 
 export type ViewId = 'workspace' | 'dashboard' | 'table' | 'backlog' | 'performance' | 'roadmap' | 'ia';
 
@@ -13,6 +14,9 @@ interface SidebarProps {
   empresas: string[];
   onChangeWorkspace: (workspace: 'all' | string) => void;
   onCreateWorkspace: (nome: string) => void;
+  userRole?: UserRole | null;
+  allowedViews?: ViewId[];
+  userName?: string;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -25,12 +29,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
   empresas,
   onChangeWorkspace,
   onCreateWorkspace,
+  userRole,
+  allowedViews,
+  userName,
 }) => {
-  const menuItems = [
+  const isFullAccess = !userRole || userRole === 'administrador' || userRole === 'gerente';
+  const canAccessView = (view: ViewId) => isFullAccess || (allowedViews?.includes(view) ?? false);
+
+  const allMenuItems = [
     { id: 'backlog', icon: ListTodo, label: 'BackLog' },
     { id: 'dashboard', icon: LayoutDashboard, label: 'Estratégico' },
     { id: 'table', icon: Target, label: 'Tático' },
   ];
+  const menuItems = allMenuItems.filter((item) => canAccessView(item.id as ViewId));
 
   const handleNavClick = (view: ViewId) => {
     setView(view);
@@ -68,7 +79,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   onChange={(e) => onChangeWorkspace(e.target.value as 'all' | string)}
                   className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-[11px] text-slate-100 outline-none focus:border-blue-500 cursor-pointer"
                 >
-                  <option value="all">Todas as empresas</option>
+                  {(userRole === 'administrador') && (
+                    <option value="all">Todas as empresas</option>
+                  )}
                   {empresas.map((nome) => (
                     <option key={nome} value={nome}>
                       {nome}
@@ -101,59 +114,72 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
           <div className="mt-4 pt-4 border-t border-slate-800 flex flex-col gap-0.5">
             <p className="px-3 py-1.5 text-[10px] text-slate-500 uppercase tracking-wider font-medium">Relatórios</p>
-            <button
-              type="button"
-              onClick={() => handleNavClick('performance')}
-              className={`flex items-center gap-2.5 px-3 py-2.5 min-h-[44px] rounded-lg text-sm font-medium transition-all text-left w-full touch-manipulation ${
-                activeView === 'performance'
-                  ? 'bg-blue-600 text-white'
-                  : 'text-slate-400 hover:bg-slate-800/60 hover:text-slate-100'
-              }`}
-            >
-              <PieChart size={18} /> Desempenho
-            </button>
-            <button
-              type="button"
-              onClick={() => handleNavClick('roadmap')}
-              className={`flex items-center gap-2.5 px-3 py-2.5 min-h-[44px] rounded-lg text-sm font-medium transition-all text-left w-full touch-manipulation ${
-                activeView === 'roadmap'
-                  ? 'bg-blue-600 text-white'
-                  : 'text-slate-400 hover:bg-slate-800/60 hover:text-slate-100'
-              }`}
-            >
-              <Briefcase size={18} /> Roadmap 2026
-            </button>
+            {canAccessView('performance') && (
+              <button
+                type="button"
+                onClick={() => handleNavClick('performance')}
+                className={`flex items-center gap-2.5 px-3 py-2.5 min-h-[44px] rounded-lg text-sm font-medium transition-all text-left w-full touch-manipulation ${
+                  activeView === 'performance'
+                    ? 'bg-blue-600 text-white'
+                    : 'text-slate-400 hover:bg-slate-800/60 hover:text-slate-100'
+                }`}
+              >
+                <PieChart size={18} /> Desempenho
+              </button>
+            )}
+            {canAccessView('roadmap') && (
+              <button
+                type="button"
+                onClick={() => handleNavClick('roadmap')}
+                className={`flex items-center gap-2.5 px-3 py-2.5 min-h-[44px] rounded-lg text-sm font-medium transition-all text-left w-full touch-manipulation ${
+                  activeView === 'roadmap'
+                    ? 'bg-blue-600 text-white'
+                    : 'text-slate-400 hover:bg-slate-800/60 hover:text-slate-100'
+                }`}
+              >
+                <Briefcase size={18} /> Roadmap 2026
+              </button>
+            )}
 
-            <button
-              type="button"
-              onClick={() => handleNavClick('workspace')}
-              className={`flex items-center gap-2.5 px-3 py-2.5 min-h-[44px] rounded-lg text-sm font-medium transition-all text-left w-full touch-manipulation ${
-                activeView === 'workspace'
-                  ? 'bg-blue-600 text-white'
-                  : 'text-slate-400 hover:bg-slate-800/60 hover:text-slate-100'
-              }`}
-            >
-              <ShieldCheck size={18} /> Workspace
-            </button>
+            {userRole === 'administrador' && (
+              <button
+                type="button"
+                onClick={() => handleNavClick('workspace')}
+                className={`flex items-center gap-2.5 px-3 py-2.5 min-h-[44px] rounded-lg text-sm font-medium transition-all text-left w-full touch-manipulation ${
+                  activeView === 'workspace'
+                    ? 'bg-blue-600 text-white'
+                    : 'text-slate-400 hover:bg-slate-800/60 hover:text-slate-100'
+                }`}
+              >
+                <ShieldCheck size={18} /> Workspace
+              </button>
+            )}
           </div>
 
-          <div className="mt-4 pt-4 border-t border-slate-800 flex flex-col gap-0.5">
-            <p className="px-3 py-1.5 text-[10px] text-slate-500 uppercase tracking-wider font-medium">IA</p>
-            <button
-              type="button"
-              onClick={() => handleNavClick('ia')}
-              className={`flex items-center gap-2.5 px-3 py-2.5 min-h-[44px] rounded-lg text-sm font-medium transition-all text-left w-full touch-manipulation ${
-                activeView === 'ia'
-                  ? 'bg-blue-600 text-white'
-                  : 'text-slate-400 hover:bg-slate-800/60 hover:text-slate-100'
-              }`}
-            >
-              <Bot size={18} /> 5W2H CHAT
-            </button>
-          </div>
+          {canAccessView('ia') && (
+            <div className="mt-4 pt-4 border-t border-slate-800 flex flex-col gap-0.5">
+              <p className="px-3 py-1.5 text-[10px] text-slate-500 uppercase tracking-wider font-medium">IA</p>
+              <button
+                type="button"
+                onClick={() => handleNavClick('ia')}
+                className={`flex items-center gap-2.5 px-3 py-2.5 min-h-[44px] rounded-lg text-sm font-medium transition-all text-left w-full touch-manipulation ${
+                  activeView === 'ia'
+                    ? 'bg-blue-600 text-white'
+                    : 'text-slate-400 hover:bg-slate-800/60 hover:text-slate-100'
+                }`}
+              >
+                <Bot size={18} /> 5W2H CHAT
+              </button>
+            </div>
+          )}
         </nav>
 
-        <div className="p-2 border-t border-slate-800">
+        <div className="p-2 border-t border-slate-800 space-y-1">
+          {userName && (
+            <div className="px-3 py-1.5 text-[10px] text-slate-500 truncate">
+              {userName}
+            </div>
+          )}
           <button 
             onClick={onLogout}
             className="flex items-center gap-2.5 px-3 py-2.5 min-h-[44px] rounded-lg text-red-400/90 hover:bg-red-500/10 hover:text-red-400 w-full transition-all text-sm font-medium touch-manipulation"

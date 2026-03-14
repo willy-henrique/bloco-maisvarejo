@@ -117,7 +117,12 @@ export async function getBoardDataOnce(
 }
 
 const RITMO_BOARD_EMPTY: RitmoGestaoBoard = {
-  backlog: [], prioridades: [], planos: [], tarefas: [], responsaveis: [],
+  backlog: [],
+  prioridades: [],
+  planos: [],
+  tarefas: [],
+  responsaveis: [],
+  empresas: [],
 };
 
 /** Carrega o board Ritmo de Gestão uma vez. */
@@ -136,6 +141,7 @@ export async function getRitmoBoardOnce(encryptionKey: CryptoKey): Promise<Ritmo
       planos: Array.isArray(dec.planos) ? dec.planos : [],
       tarefas: Array.isArray(dec.tarefas) ? dec.tarefas : [],
       responsaveis: Array.isArray(dec.responsaveis) ? dec.responsaveis : [],
+      empresas: Array.isArray(dec.empresas) ? dec.empresas : [],
     };
   } catch {
     return null;
@@ -174,6 +180,7 @@ export function subscribeRitmoBoard(
           planos: Array.isArray(board.planos) ? board.planos : [],
           tarefas: Array.isArray(board.tarefas) ? board.tarefas : [],
           responsaveis: Array.isArray(board.responsaveis) ? board.responsaveis : [],
+          empresas: Array.isArray(board.empresas) ? board.empresas : [],
         });
     } catch {
       // chave diferente

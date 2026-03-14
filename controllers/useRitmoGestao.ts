@@ -115,14 +115,18 @@ export function useRitmoGestao(encryptionKey: CryptoKey | null) {
       let data = localData;
       if (isFirebaseConfigured) {
         const remote = await getRitmoBoardOnce(encryptionKey);
-        if (remote && (remote.prioridades.length > 0 || remote.backlog.length > 0)) {
+        const remoteHasData = remote && (
+          remote.prioridades.length > 0 || remote.backlog.length > 0 ||
+          (Array.isArray(remote.empresas) && remote.empresas.length > 0)
+        );
+        if (remoteHasData) {
           const mergedEmpresas =
             Array.isArray(remote.empresas) && remote.empresas.length > 0
               ? remote.empresas
               : localData.empresas;
           data = normalizeBoard({ ...remote, empresas: mergedEmpresas });
         }
-        else if (data.backlog.length === 0 && data.prioridades.length === 0) {
+        else if (data.backlog.length === 0 && data.prioridades.length === 0 && data.empresas.length === 0) {
           await persist(encryptionKey, data);
         }
       }
@@ -150,7 +154,11 @@ export function useRitmoGestao(encryptionKey: CryptoKey | null) {
         try {
           const remote = await getRitmoBoardOnce(encryptionKey);
           if (cancelled) return;
-          if (remote && (remote.prioridades.length > 0 || remote.backlog.length > 0)) {
+          const remoteHasData = remote && (
+            remote.prioridades.length > 0 || remote.backlog.length > 0 ||
+            (Array.isArray(remote.empresas) && remote.empresas.length > 0)
+          );
+          if (remoteHasData) {
             const local = normalizeBoard(await StorageService.getRitmoBoard(encryptionKey));
             const mergedEmpresas =
               Array.isArray(remote.empresas) && remote.empresas.length > 0
@@ -159,7 +167,8 @@ export function useRitmoGestao(encryptionKey: CryptoKey | null) {
             setBoard(normalizeBoard({ ...remote, empresas: mergedEmpresas }));
           } else {
             const local = normalizeBoard(await StorageService.getRitmoBoard(encryptionKey));
-            if (local.prioridades.length > 0 || local.backlog.length > 0) {
+            const localHasData = local.prioridades.length > 0 || local.backlog.length > 0 || local.empresas.length > 0;
+            if (localHasData) {
               setBoard(local);
               await saveRitmoBoardFirestore(local, encryptionKey);
             } else {
@@ -170,7 +179,8 @@ export function useRitmoGestao(encryptionKey: CryptoKey | null) {
           }
         } catch {
           const local = normalizeBoard(await StorageService.getRitmoBoard(encryptionKey));
-          if (local.prioridades.length > 0 || local.backlog.length > 0) setBoard(local);
+          const localHasData = local.prioridades.length > 0 || local.backlog.length > 0 || local.empresas.length > 0;
+          if (localHasData) setBoard(local);
           else setBoard(defaultBoard());
         } finally {
           if (!cancelled) setLoading(false);

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { AuthProvider, useAuth } from './contexts/AuthContext';
-import { Login } from './components/Auth/Login';
+import { useUser } from './contexts/UserContext';
+import { UserLogin } from './components/Auth/UserLogin';
 import { Sidebar } from './components/Layout/Sidebar';
 import { KanbanBoard } from './components/Dashboard/KanbanBoard';
 import { BacklogView } from './components/Dashboard/BacklogView';
@@ -23,7 +23,7 @@ import { ChatView } from './components/Chat/ChatView';
 import { Modal } from './components/Shared/Modal';
 
 function AppContent() {
-  const { isAuthenticated, encryptionKey, logout } = useAuth();
+  const { isAuthenticated, encryptionKey, logout, profile } = useUser();
   const [activeView, setActiveView] = useState<ViewId>('backlog');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [strategicNote, setStrategicNote] = useState('');
@@ -46,12 +46,29 @@ function AppContent() {
   const [empresasLocais, setEmpresasLocais] = useState<string[]>([]);
   const [empresasBloqueadas, setEmpresasBloqueadas] = useState<string[]>([]);
 
+  const canSeeEmpresa = useCallback(
+    (empresa?: string) => {
+      if (!profile) return true;
+      if (profile.role === 'administrador') return true;
+      const empresasUser = Array.isArray(profile.empresas) ? profile.empresas : [];
+      const hasAllFlag = empresasUser.some(
+        (e) => e === '*' || e.toLowerCase() === 'todas'
+      );
+      if (hasAllFlag) return true;
+      const nome = (empresa ?? '').trim();
+      if (!nome) return false;
+      return empresasUser.includes(nome);
+    },
+    [profile]
+  );
+
   const matchWorkspace = useCallback(
     (empresa?: string) => {
+      if (!canSeeEmpresa(empresa)) return false;
       if (workspaceAtivo === 'all') return true;
       return (empresa ?? '') === workspaceAtivo;
     },
-    [workspaceAtivo]
+    [workspaceAtivo, canSeeEmpresa]
   );
 
   // Mantém uma lista local de empresas, sempre sincronizada com o controller
@@ -84,10 +101,33 @@ function AppContent() {
 
   const empresasDisponiveis = useMemo(() => empresasLocais, [empresasLocais]);
 
-  const empresasAtivas = useMemo(
-    () => empresasDisponiveis.filter((nome) => !empresasBloqueadas.includes(nome)),
-    [empresasDisponiveis, empresasBloqueadas]
-  );
+  const empresasAtivas = useMemo(() => {
+    let filtered = empresasDisponiveis.filter((nome) => !empresasBloqueadas.includes(nome));
+    if (profile && profile.role !== 'administrador') {
+      const empresasUser = Array.isArray(profile.empresas) ? profile.empresas : [];
+      const hasAllFlag = empresasUser.some(
+        (e) => e === '*' || e.toLowerCase() === 'todas'
+      );
+      if (!hasAllFlag) {
+        const permitidas = new Set(empresasUser.map((e) => e.trim()).filter(Boolean));
+        filtered = filtered.filter((nome) => permitidas.has(nome));
+      }
+    }
+    return filtered;
+  }, [empresasDisponiveis, empresasBloqueadas, profile]);
+
+  // Garante que usuário restrito não fique em \"Todas as empresas\"
+  useEffect(() => {
+    if (!profile || profile.role === 'administrador') return;
+    const empresasUser = Array.isArray(profile.empresas) ? profile.empresas : [];
+    const hasAllFlag = empresasUser.some(
+      (e) => e === '*' || e.toLowerCase() === 'todas'
+    );
+    if (hasAllFlag) return;
+    if (workspaceAtivo === 'all' && empresasAtivas.length > 0) {
+      setWorkspaceAtivo(empresasAtivas[0]);
+    }
+  }, [profile, workspaceAtivo, empresasAtivas]);
 
   const empresasInativas = useMemo(
     () => empresasDisponiveis.filter((nome) => empresasBloqueadas.includes(nome)),
@@ -247,7 +287,7 @@ function AppContent() {
     setPrioridadeToDelete(p);
   }, []);
 
-  if (!isAuthenticated) return <Login />;
+  if (!isAuthenticated) return <UserLogin />;
 
   return (
     <div className="flex h-screen min-h-[100dvh] bg-slate-950 overflow-hidden text-slate-100">
@@ -275,6 +315,9 @@ function AppContent() {
           ritmo.addEmpresa(trimmed);
           setWorkspaceAtivo(trimmed);
         }}
+        userRole={profile?.role}
+        allowedViews={profile?.views}
+        userName={profile?.nome}
       />
 
       <main className="flex-1 flex flex-col overflow-hidden relative min-h-0">
@@ -763,17 +806,13 @@ function AppContent() {
             <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
             Conectado
           </div>
-          <span>WillTech v7</span>
+          <span>WillTech v8</span>
         </footer>
       </main>
     </div>
   );
 }
 
-const App: React.FC = () => (
-  <AuthProvider>
-    <AppContent />
-  </AuthProvider>
-);
+const App: React.FC = () => <AppContent />;
 
 export default App;

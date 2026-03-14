@@ -8,6 +8,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "generate-password": "node scripts/generate-password-hash.js",
+    "create-admin": "node scripts/create-admin-user.cjs",
     "auto-commit": "node scripts/auto-commit.cjs",
     "auto-commit:push": "node scripts/auto-commit.cjs --push",
     "build:auto-commit": "pkg scripts/auto-commit.cjs --targets node18-win-x64 --output dist/auto-commit.exe"
@@ -17,13 +18,15 @@
     "firebase": "^11.0.2",
     "lucide-react": "^0.563.0",
     "react": "^19.2.4",
-    "react-dom": "^19.2.4"
+    "react-dom": "^19.2.4",
+    "react-router-dom": "^7.13.1"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.18",
     "@types/node": "^22.14.0",
     "@vitejs/plugin-react": "^5.0.0",
     "autoprefixer": "^10.4.24",
+    "firebase-admin": "^13.7.0",
     "pkg": "^5.8.1",
     "postcss": "^8.5.6",
     "tailwindcss": "^4.1.18",

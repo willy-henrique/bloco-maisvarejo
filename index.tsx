@@ -1,7 +1,10 @@
 import './index.css';
 import React from 'react';
 import ReactDOM from 'react-dom/client';
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { UserProvider } from './contexts/UserContext';
 import App from './App';
+import { AdminRoute } from './routes/AdminRoute';
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {
@@ -11,6 +14,13 @@ if (!rootElement) {
 const root = ReactDOM.createRoot(rootElement);
 root.render(
   <React.StrictMode>
-    <App />
+    <BrowserRouter>
+      <UserProvider>
+        <Routes>
+          <Route path="/admin/*" element={<AdminRoute />} />
+          <Route path="/*" element={<App />} />
+        </Routes>
+      </UserProvider>
+    </BrowserRouter>
   </React.StrictMode>
 );

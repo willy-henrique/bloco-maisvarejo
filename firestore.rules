@@ -1,23 +1,38 @@
 rules_version = '2';
-// RLS (Row Level Security): só usuários autenticados acessam dados.
-// Ajuste as condições conforme seu Firebase Auth (ex.: request.auth != null).
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Sincronização em tempo real (estilo Excel): dados criptografados no cliente
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    function isAdmin() {
+      return isAuthenticated() &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'administrador';
+    }
+    function isGerente() {
+      return isAuthenticated() &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['administrador', 'gerente'];
+    }
+
     match /board/{docId} {
-      allow read, write: if true;
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
     }
-    // Exemplo: coleção de itens estratégicos — apenas leitura/escrita autenticada
+
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow create, update, delete: if isAdmin();
+    }
+
     match /strategic_items/{itemId} {
-      allow read, write: if request.auth != null;
+      allow read, write: if isAuthenticated();
     }
-    // Exemplo: notas de diretoria — apenas o dono (uid) pode ler/escrever
+
     match /director_notes/{noteId} {
-      allow read, update, delete: if request.auth != null && resource.data.userId == request.auth.uid;
-      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
+      allow read, update, delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
     }
-    // Bloqueia todo o resto por padrão
+
     match /{document=**} {
       allow read, write: if false;
     }

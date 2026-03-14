@@ -895,8 +895,8 @@ export const EstrategicoView: React.FC<EstrategicoViewProps> = (props) => {
   return (
     <div className="space-y-6">
       <div className="space-y-0.5">
-        <p className="text-[10px] font-semibold text-emerald-500 uppercase tracking-widest flex items-center gap-1.5">
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" /> VISÃO EXECUTIVA
+        <p className="text-[10px] font-semibold text-emerald-500 uppercase tracking-widest">
+          VISÃO EXECUTIVA
         </p>
         <h2 className="text-2xl font-bold text-slate-100">Prioridades Estratégicas</h2>
       </div>
@@ -1002,7 +1002,7 @@ export const EstrategicoView: React.FC<EstrategicoViewProps> = (props) => {
                           onClick={() =>
                             onUpdatePrioridade(p.id, { status_prioridade: 'Concluido' })
                           }
-                          className="flex items-center gap-1 text-[11px] font-medium text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10 px-2 py-1 rounded transition-colors"
+                          className="flex items-center gap-1 text-[11px] font-medium text-slate-300 hover:text-slate-100 hover:bg-slate-700 px-2 py-1 rounded transition-colors"
                         >
                           <Check size={11} /> Arquivar
                         </button>
@@ -1045,41 +1045,61 @@ export const EstrategicoView: React.FC<EstrategicoViewProps> = (props) => {
         )}
       </div>
 
-      {concluidas.length > 0 && (
-        <section className="bg-slate-900/30 border border-slate-800/60 rounded-xl overflow-hidden">
-          <button
-            type="button"
-            onClick={() => setConcluidosOpen((o) => !o)}
-            className="w-full px-5 py-3 flex items-center justify-between hover:bg-slate-800/30 transition-colors"
-          >
-            <div className="flex items-center gap-2 text-slate-400">
-              {concluidosOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-              <CheckCircle size={14} className="text-emerald-500/70" />
-              <span className="text-sm font-medium text-slate-300">Arquivados</span>
-            </div>
-            <span className="text-[10px] text-slate-600 bg-slate-800 px-2 py-0.5 rounded tabular-nums">
-              {concluidas.length}
-            </span>
-          </button>
-          {concluidosOpen && (
-            <div className="border-t border-slate-800/60 divide-y divide-slate-800/60">
-              {concluidas.map((p) => {
+      <section className="bg-slate-900/30 border border-slate-800/60 rounded-xl overflow-hidden">
+        <button
+          type="button"
+          onClick={() => setConcluidosOpen((o) => !o)}
+          className="w-full px-5 py-3 flex items-center justify-between hover:bg-slate-800/30 transition-colors"
+        >
+          <div className="flex items-center gap-2 text-slate-400">
+            {concluidosOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+            <CheckCircle size={14} className="text-emerald-500/70" />
+            <span className="text-sm font-medium text-slate-300">Arquivados</span>
+          </div>
+          <span className="text-[10px] text-slate-600 bg-slate-800 px-2 py-0.5 rounded tabular-nums">
+            {concluidas.length}
+          </span>
+        </button>
+        {concluidosOpen && (
+          <div className="border-t border-slate-800/60 divide-y divide-slate-800/60">
+            {concluidas.length === 0 ? (
+              <div className="px-5 py-4 text-sm text-slate-500">
+                Nenhuma prioridade arquivada ainda.
+              </div>
+            ) : (
+              concluidas.map((p) => {
                 const d = responsaveis.find((r) => r.id === p.dono_id);
                 return (
                   <div key={p.id} className="px-5 py-3 flex items-center justify-between gap-3">
-                    <div><p className="text-sm text-slate-400 line-through">{p.titulo}</p>{d && <p className="text-[11px] text-slate-600">{d.nome}</p>}</div>
+                    <div>
+                      <p className="text-sm text-slate-400 line-through">{p.titulo}</p>
+                      {d && <p className="text-[11px] text-slate-600">{d.nome}</p>}
+                    </div>
                     <div className="flex items-center gap-2">
-                      <button type="button" onClick={() => onUpdatePrioridade(p.id, { status_prioridade: 'Execucao' })}
-                        className="flex items-center gap-1 text-[11px] text-slate-500 hover:text-slate-300 hover:bg-slate-700 px-2 py-1 rounded transition-colors"><RotateCcw size={11} /> Reativar</button>
-                      <button type="button" onClick={() => onDeletePrioridade(p)} className="p-1.5 text-slate-600 hover:text-red-400 hover:bg-red-500/10 rounded transition-colors"><Trash2 size={13} /></button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          onUpdatePrioridade(p.id, { status_prioridade: 'Execucao' })
+                        }
+                        className="flex items-center gap-1 text-[11px] text-slate-500 hover:text-slate-300 hover:bg-slate-700 px-2 py-1 rounded transition-colors"
+                      >
+                        <RotateCcw size={11} /> Reativar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onDeletePrioridade(p)}
+                        className="p-1.5 text-slate-600 hover:text-red-400 hover:bg-red-500/10 rounded transition-colors"
+                      >
+                        <Trash2 size={13} />
+                      </button>
                     </div>
                   </div>
                 );
-              })}
-            </div>
-          )}
-        </section>
-      )}
+              })
+            )}
+          </div>
+        )}
+      </section>
 
       <div className="flex items-center gap-5 text-[11px] text-slate-500">
         <p>Clique no título para ver os planos de ataque</p>

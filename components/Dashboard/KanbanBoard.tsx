@@ -22,7 +22,7 @@ const WORKFLOW_COLUMNS = [
 
 const ALL_STATUS_OPTIONS = [
   ...WORKFLOW_COLUMNS,
-  { id: ItemStatus.COMPLETED, label: 'Concluído', color: 'bg-emerald-500' },
+  { id: ItemStatus.COMPLETED, label: 'Arquivar prioridade', color: 'bg-emerald-500' },
 ];
 
 export const KanbanBoard: React.FC<KanbanBoardProps> = ({
