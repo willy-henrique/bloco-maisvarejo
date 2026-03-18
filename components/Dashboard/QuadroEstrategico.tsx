@@ -8,7 +8,7 @@ import React, { useMemo, useState, useEffect } from 'react';
 import type { Prioridade, PlanoDeAtaque, Tarefa, Responsavel, StatusPrioridade } from '../../types';
 import { Target, ChevronDown, ChevronRight, AlertCircle, ListTodo, X, Trash2 } from 'lucide-react';
 
-const HEADERS = ['PRIORIDADE ATIVA', 'DONO', 'EM EXECUÇÃO', 'BLOQUEADOS', 'CONCLUIDAS', ''] as const;
+const HEADERS = ['PRIORIZAR', 'DONO', 'EM EXECUÇÃO', 'BLOQUEADOS', 'CONCLUIDAS', ''] as const;
 
 function nomeResponsavel(id: string, responsaveis: Responsavel[]): string {
   return responsaveis.find((r) => r.id === id)?.nome ?? id;
@@ -340,7 +340,7 @@ export const DetalhePrioridadeModal: React.FC<DetalhePrioridadeModalProps> = ({
         <div className="p-4 overflow-y-auto flex-1 space-y-4">
           <div className="space-y-3">
             <div>
-              <label className="block text-xs font-medium text-slate-400 mb-1">Prioridade ativa</label>
+              <label className="block text-xs font-medium text-slate-400 mb-1">Priorizar</label>
               <input
                 type="text"
                 value={titulo}

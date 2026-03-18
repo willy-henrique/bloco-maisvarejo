@@ -2,7 +2,7 @@ import React, { useMemo, useState, useEffect } from 'react';
 import { ActionItem, ItemStatus } from '../../types';
 import { formatDateOnlyPtBr } from '../../utils/date';
 import { Badge } from '../Shared/Badge';
-import { Clock, User, Plus, ChevronDown, ChevronRight, CheckCircle, Pencil, Trash2, CornerDownLeft } from 'lucide-react';
+import { Clock, User, Plus, ChevronDown, ChevronRight, CheckCircle, Pencil, Trash2, CornerDownLeft, Target } from 'lucide-react';
 
 interface KanbanBoardProps {
   items: ActionItem[];
@@ -11,11 +11,12 @@ interface KanbanBoardProps {
   onAddInColumn?: (status: ItemStatus) => void;
   onDelete?: (id: string) => void;
   forceOpenConcluidos?: boolean;
+  onGoToTatico?: (item: ActionItem) => void;
 }
 
 // Ordem fixa do workflow — NUNCA reordenar
 const WORKFLOW_COLUMNS = [
-  { id: ItemStatus.ACTIVE,    label: 'Prioridade Ativa', color: 'bg-blue-500' },
+  { id: ItemStatus.ACTIVE,    label: 'Priorizar', color: 'bg-blue-500' },
   { id: ItemStatus.EXECUTING, label: 'Em Execução',      color: 'bg-amber-500' },
   { id: ItemStatus.BLOCKED,   label: 'Bloqueado',        color: 'bg-red-500' },
 ];
@@ -32,6 +33,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
   onAddInColumn,
   onDelete,
   forceOpenConcluidos,
+  onGoToTatico,
 }) => {
   const [concluidosOpen, setConcluidosOpen] = useState(false);
 
@@ -107,8 +109,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
                   >
                     {/* Urgência + controles */}
                     <div className="flex justify-between items-start gap-1.5 mb-1.5">
-                      <Badge type="urgency" value={item.urgency} />
-                      {/* Botão destacado para voltar ao BackLog */}
+                      {/* Botão destacado para voltar ao Backlog */}
                       <button
                         type="button"
                         onClick={(e) => {
@@ -116,11 +117,25 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
                           onStatusChange(item.id, ItemStatus.BACKLOG);
                         }}
                         className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full border border-amber-400/70 bg-amber-500/10 text-[10px] font-medium text-amber-300 hover:bg-amber-500/20 hover:border-amber-300 transition-colors"
-                        title="Voltar esta prioridade para o BackLog"
+                        title="Voltar esta prioridade para o Backlog"
                       >
                         <CornerDownLeft size={12} />
-                        <span>BackLog</span>
+                        <span>Backlog</span>
                       </button>
+                      {onGoToTatico && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onGoToTatico(item);
+                          }}
+                          className="inline-flex items-center justify-center p-1.5 rounded-full border border-blue-400/40 bg-blue-500/10 text-blue-300 hover:bg-blue-500/20 hover:border-blue-300 transition-colors"
+                          title="Ir para Tático"
+                          aria-label="Ir para Tático"
+                        >
+                          <Target size={12} />
+                        </button>
+                      )}
                       <select
                         value={item.status}
                         onChange={(e) => onStatusChange(item.id, e.target.value as ItemStatus)}
@@ -235,7 +250,6 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
                 >
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
-                      <Badge type="urgency" value={item.urgency} />
                       <span className="text-[10px] text-slate-500">
                         {item.who} · {item.when ? formatDateOnlyPtBr(item.when) : '—'}
                       </span>
@@ -253,10 +267,10 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
                         onStatusChange(item.id, ItemStatus.ACTIVE);
                       }}
                       className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full border border-blue-400/70 bg-blue-500/10 text-blue-300 hover:bg-blue-500/20 hover:border-blue-300 transition-colors"
-                      title="Reabrir como Prioridade Ativa"
+                      title="Reabrir como Priorizar"
                     >
                       <CornerDownLeft size={12} />
-                      <span>Prioridade Ativa</span>
+                      <span>Priorizar</span>
                     </button>
                     <button
                       type="button"

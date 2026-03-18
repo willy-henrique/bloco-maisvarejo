@@ -10,12 +10,13 @@ import { PrioridadeModal } from './components/Dashboard/PrioridadeModal';
 import { ActionItemModal } from './components/Dashboard/ActionItemModal';
 import { PerformanceView } from './components/Dashboard/PerformanceView';
 import { RoadmapView } from './components/Dashboard/RoadmapView';
+import { OperacionalView } from './components/Dashboard/OperacionalView';
 import type { ViewId } from './components/Layout/Sidebar';
 import { useStrategicBoard } from './controllers/useStrategicBoard';
 import { useRitmoGestao } from './controllers/useRitmoGestao';
 import { StorageService } from './services/storageService';
 import { isFirebaseConfigured, subscribeBoard, saveBoardNotes } from './services/firestoreSync';
-import { Plus, Search, Activity, Target, Zap, Menu, ListTodo, AlertCircle, PieChart, Briefcase, Bot, ShieldCheck } from 'lucide-react';
+import { Plus, Search, Activity, Target, Zap, Menu, ListTodo, AlertCircle, PieChart, Briefcase, Bot, ShieldCheck, FileText } from 'lucide-react';
 import { ActionItem, ItemStatus, UrgencyLevel } from './types';
 import type { Prioridade } from './types';
 import { Toast, type ToastType } from './components/Shared/Toast';
@@ -40,6 +41,7 @@ function AppContent() {
   const [tableOpenConcluidas, setTableOpenConcluidas] = useState(false);
   const [backlogOpenConcluidas, setBacklogOpenConcluidas] = useState(false);
   const [quadroVerConcluidas, setQuadroVerConcluidas] = useState(false);
+  const [focusPrioridadeId, setFocusPrioridadeId] = useState<string | null>(null);
   const { items, loading, addItem, updateItem, deleteItem, updateStatus } = useStrategicBoard(encryptionKey ?? null);
   const ritmo = useRitmoGestao(encryptionKey ?? null);
   const [workspaceAtivo, setWorkspaceAtivo] = useState<'all' | string>('all');
@@ -176,6 +178,19 @@ function AppContent() {
     return todas.filter((p) => matchWorkspace(p.empresa));
   }, [ritmo.board.prioridades, sinteticasFromItems, matchWorkspace]);
 
+  const handleGoToTaticoPriority = useCallback(
+    (item: ActionItem) => {
+      const match =
+        taticoPrioridades.find((p) => p.titulo === item.what && p.dono_id === item.who) ?? null;
+
+      // Garante que o focus mude mesmo se clicar duas vezes na mesma prioridade.
+      setFocusPrioridadeId(null);
+      requestAnimationFrame(() => setFocusPrioridadeId(match?.id ?? null));
+      setActiveView('table');
+    },
+    [taticoPrioridades]
+  );
+
   const openItemModal = useCallback(
     (item: ActionItem | null, statusForNew?: ItemStatus, context: 'default' | 'backlog' = 'default') => {
       setSelectedItem(item);
@@ -290,7 +305,7 @@ function AppContent() {
   if (!isAuthenticated) return <UserLogin />;
 
   return (
-    <div className="flex h-screen min-h-[100dvh] bg-slate-950 overflow-hidden text-slate-100">
+    <div className="flex h-screen min-h-dvh bg-slate-950 overflow-hidden text-slate-100">
       <Toast
         message={toast?.message ?? ''}
         type={toast?.type ?? 'success'}
@@ -337,14 +352,16 @@ function AppContent() {
               {activeView === 'roadmap' && <Briefcase size={18} className="text-cyan-500 shrink-0" />}
               {activeView === 'ia' && <Bot size={18} className="text-blue-400 shrink-0" />}
               {activeView === 'workspace' && <ShieldCheck size={18} className="text-blue-400 shrink-0" />}
+              {activeView === 'operacional' && <FileText size={18} className="text-emerald-400 shrink-0" />}
               <h2 className="text-base font-semibold text-slate-100 tracking-tight">
                 {activeView === 'workspace' && 'Workspaces'}
                 {activeView === 'dashboard' && 'Estratégico'}
                 {activeView === 'table' && 'Tático'}
-                {activeView === 'backlog' && 'BackLog'}
+                {activeView === 'backlog' && 'Backlog'}
                 {activeView === 'performance' && 'Desempenho'}
                 {activeView === 'roadmap' && 'Roadmap 2026'}
                 {activeView === 'ia' && '5W2H CHAT'}
+                {activeView === 'operacional' && 'Operacional'}
               </h2>
             </div>
           </div>
@@ -365,12 +382,12 @@ function AppContent() {
                 <Plus size={16} /> <span className="hidden sm:inline">Nova prioridade</span>
               </button>
             )}
-            {activeView !== 'ia' && activeView !== 'quadro' && (
+            {activeView !== 'ia' && activeView !== 'quadro' && activeView !== 'table' && activeView !== 'operacional' && (
               <button
                 onClick={handleAddNew}
                 className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2.5 min-h-[44px] rounded-lg flex items-center gap-2 transition-colors shrink-0 touch-manipulation"
               >
-                <Plus size={16} /> <span className="hidden sm:inline">Nova Iniciativa</span>
+                <Plus size={16} /> <span className="hidden sm:inline">Novo</span>
               </button>
             )}
           </div>
@@ -621,6 +638,7 @@ function AppContent() {
                   onAddInColumn={(status) => openItemModal(null, status)}
                   onDelete={deleteItem}
                   forceOpenConcluidos={dashboardOpenConcluidas}
+                  onGoToTatico={handleGoToTaticoPriority}
                 />
               )}
               {activeView === 'table' && (
@@ -634,7 +652,28 @@ function AppContent() {
                   onUpdatePrioridade={handleUpdatePrioridadeTatico}
                   onDeletePrioridade={handleDeletePrioridade}
                   podeAdicionarPrioridade={ritmo.podeAdicionarPrioridade}
+                  loggedUserUid={profile?.uid}
+                  loggedUserRole={profile?.role}
+                  loggedUserName={profile?.nome}
+                  focusPrioridadeId={focusPrioridadeId}
                   onAddPlano={ritmo.addPlano}
+                  onUpdatePlano={ritmo.updatePlano}
+                  onDeletePlano={ritmo.deletePlano}
+                  onAddTarefa={ritmo.addTarefa}
+                  onUpdateTarefa={ritmo.updateTarefa}
+                  onDeleteTarefa={ritmo.deleteTarefa}
+                />
+              )}
+              {activeView === 'operacional' && (
+                <OperacionalView
+                  prioridades={taticoPrioridades}
+                  planos={ritmo.board.planos.filter((pl) => matchWorkspace(pl.empresa))}
+                  tarefas={ritmo.board.tarefas.filter((t) => matchWorkspace(t.empresa))}
+                  responsaveis={ritmo.responsaveis}
+                  computeStatusPlano={ritmo.computeStatusPlano}
+                  loggedUserUid={profile?.uid}
+                  loggedUserName={profile?.nome}
+                  loggedUserRole={profile?.role}
                   onUpdatePlano={ritmo.updatePlano}
                   onDeletePlano={ritmo.deletePlano}
                   onAddTarefa={ritmo.addTarefa}
@@ -797,6 +836,8 @@ function AppContent() {
           onUpdate={updateItem}
           defaultEmpresa={workspaceAtivo === 'all' ? '' : workspaceAtivo}
           empresaSuggestions={empresasAtivas}
+          loggedUserName={profile?.nome}
+          lockWhoToLoggedUser={true}
           hideWhereEmpresa={modalContext === 'backlog'}
           hideStatusUrgency={modalContext === 'backlog'}
         />

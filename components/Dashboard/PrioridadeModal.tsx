@@ -77,7 +77,7 @@ export const PrioridadeModal: React.FC<PrioridadeModalProps> = ({
         </p>
         <form onSubmit={handleSubmit} className="space-y-3">
           <div>
-            <label className="block text-xs font-medium text-slate-400 mb-1">Prioridade ativa *</label>
+            <label className="block text-xs font-medium text-slate-400 mb-1">Priorizar *</label>
             <input
               type="text"
               value={titulo}

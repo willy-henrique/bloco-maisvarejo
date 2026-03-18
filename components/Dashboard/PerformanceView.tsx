@@ -23,7 +23,7 @@ export const PerformanceView: React.FC<PerformanceViewProps> = ({ items }) => {
   ];
 
   const statusData = [
-    { status: ItemStatus.ACTIVE, count: active, label: 'Prioridade Ativa', color: 'bg-blue-500' },
+    { status: ItemStatus.ACTIVE, count: active, label: 'Priorizar', color: 'bg-blue-500' },
     { status: ItemStatus.EXECUTING, count: executing, label: 'Em Execução', color: 'bg-amber-500' },
     { status: ItemStatus.BLOCKED, count: blocked, label: 'Bloqueado', color: 'bg-red-500' },
     { status: ItemStatus.COMPLETED, count: completed, label: 'Concluído', color: 'bg-emerald-500' },

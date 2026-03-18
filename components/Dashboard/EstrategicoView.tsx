@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type {
   Prioridade,
   PlanoDeAtaque,
@@ -51,6 +51,33 @@ function dateInputValue(ts: number): string {
   return new Date(ts).toISOString().slice(0, 10);
 }
 
+function formatDateBR(ts: number): string {
+  // “Data do Brasil” (pt-BR) com timezone explícita para evitar troca de dia.
+  return new Date(ts).toLocaleDateString('pt-BR', {
+    timeZone: 'America/Sao_Paulo',
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  });
+}
+
+function parseDateBR(v: string): number | null {
+  // Espera dd/mm/yyyy
+  const m = v.trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (!m) return null;
+  const day = Number(m[1]);
+  const month = Number(m[2]);
+  const year = Number(m[3]);
+  if (!Number.isFinite(day) || !Number.isFinite(month) || !Number.isFinite(year)) return null;
+  if (month < 1 || month > 12) return null;
+  if (day < 1 || day > 31) return null;
+  return new Date(year, month - 1, day, 12, 0, 0).getTime();
+}
+
+function normStr(v: string | null | undefined): string {
+  return (v ?? '').trim().toLowerCase();
+}
+
 const STATUS_CFG: Record<StatusPlano, { label: string; cls: string }> = {
   Execucao: { label: 'Em Execução', cls: 'text-blue-400 bg-blue-500/10 border border-blue-500/30' },
   Bloqueado: { label: 'Bloqueado', cls: 'text-red-400 bg-red-500/10 border border-red-500/30' },
@@ -82,6 +109,11 @@ interface EstrategicoViewProps {
   onAddTarefa: (t: Omit<Tarefa, 'id'>) => void;
   onUpdateTarefa: (id: string, u: Partial<Tarefa>) => void;
   onDeleteTarefa: (id: string) => void;
+  loggedUserUid?: string;
+  loggedUserRole?: 'administrador' | 'gerente' | 'usuario' | null;
+  loggedUserName?: string | null;
+  /** Quando definido, faz scroll até o bloco da prioridade no Tático */
+  focusPrioridadeId?: string | null;
 }
 
 // ── TarefaRow ────────────────────────────────────────────────────────────────
@@ -219,32 +251,93 @@ const PlanoCard: React.FC<{
   onAddTarefa: (t: Omit<Tarefa, 'id'>) => void;
   onUpdateTarefa: (id: string, u: Partial<Tarefa>) => void;
   onDeleteTarefa: (id: string) => void;
-}> = ({ plano, tarefas, responsaveis, computeStatusPlano, onUpdate, onDelete, onAddTarefa, onUpdateTarefa, onDeleteTarefa }) => {
+  /** Override para renderização do "WHO" (quem) no modo não-admin */
+  whoOverrideName?: string;
+  /** Se true, trava renderização do WHO para whoOverrideName (não deixa revelar/editar who_id do plano) */
+  lockWhoToOverrideName?: boolean;
+  /** Responsável padrão (quem está logado) para criar tarefas */
+  loggedUserResponsavelId?: string;
+  /** Nome exibido do responsável (quem está logado) */
+  loggedUserResponsavelNomeDisplay?: string;
+  /** Se true, permite editar o responsável (admin/gerente) */
+  canEditResponsavel?: boolean;
+}> = ({
+  plano,
+  tarefas,
+  responsaveis,
+  computeStatusPlano,
+  onUpdate,
+  onDelete,
+  onAddTarefa,
+  onUpdateTarefa,
+  onDeleteTarefa,
+  whoOverrideName,
+  lockWhoToOverrideName = false,
+  loggedUserResponsavelId,
+  loggedUserResponsavelNomeDisplay,
+  canEditResponsavel = false,
+}) => {
   const [expanded, setExpanded] = useState(false);
   const [showAddTarefa, setShowAddTarefa] = useState(false);
-  const [novaTarefa, setNovaTarefa] = useState({ titulo: '', responsavel_id: '', data_vencimento: '', descricao: '' });
+  const [novaTarefa, setNovaTarefa] = useState({
+    titulo: '',
+    responsavel_id: loggedUserResponsavelId ?? '',
+    data_vencimento: '',
+    descricao: '',
+  });
 
   const computed = computeStatusPlano(plano.id);
   const status = (computed || plano.status_plano) as StatusPlano;
   const statusCfg = STATUS_CFG[status] || STATUS_CFG.Execucao;
-  const resp = responsaveis.find((r) => r.id === plano.who_id);
-  const displayWho = resp?.nome || plano.who_id || '';
+  const resp = responsaveis.find((r) => normStr(r.id) === normStr(plano.who_id));
+  const displayWho = whoOverrideName || resp?.nome || plano.who_id || '—';
+  const novaTarefaResponsavelNome =
+    loggedUserResponsavelNomeDisplay ??
+    responsaveis.find((r) => normStr(r.id) === normStr(novaTarefa.responsavel_id))?.nome ??
+    novaTarefa.responsavel_id;
+
+  const [respQuery, setRespQuery] = useState(novaTarefaResponsavelNome);
+  const [showRespDropdown, setShowRespDropdown] = useState(false);
+
+  // Atualiza o texto do input quando o estado base muda (ex: ao abrir "Nova Tarefa").
+  useEffect(() => {
+    if (!canEditResponsavel) return;
+    setRespQuery(novaTarefaResponsavelNome);
+  }, [canEditResponsavel, novaTarefaResponsavelNome]);
+
+  const respOptions = useMemo(() => {
+    if (!canEditResponsavel) return [];
+    const q = normStr(respQuery);
+    if (!q) return [];
+    return responsaveis
+      .filter((r) => normStr(r.nome).startsWith(q))
+      .slice(0, 6);
+  }, [canEditResponsavel, respQuery, responsaveis]);
   const concluidas = tarefas.filter((t) => t.status_tarefa === 'Concluida').length;
   const totalTarefas = tarefas.length;
   const progresso = totalTarefas > 0 ? (concluidas / totalTarefas) * 100 : 0;
 
   const handleAddTarefa = () => {
     if (!novaTarefa.titulo.trim()) return;
+    const parsedVenc = parseDateBR(novaTarefa.data_vencimento);
+    if (!parsedVenc) return;
+    if (canEditResponsavel && !novaTarefa.responsavel_id.trim()) return;
     onAddTarefa({
       plano_id: plano.id,
       titulo: novaTarefa.titulo.trim(),
       descricao: novaTarefa.descricao.trim(),
       responsavel_id: novaTarefa.responsavel_id.trim(),
       data_inicio: Date.now(),
-      data_vencimento: novaTarefa.data_vencimento ? tsFromDateInput(novaTarefa.data_vencimento) : Date.now() + 7 * 86400000,
+      data_vencimento: parsedVenc,
       status_tarefa: 'Pendente',
     });
-    setNovaTarefa({ titulo: '', responsavel_id: '', data_vencimento: '', descricao: '' });
+    setNovaTarefa({
+      titulo: '',
+      responsavel_id: loggedUserResponsavelId ?? '',
+      data_vencimento: '',
+      descricao: '',
+    });
+    setRespQuery(loggedUserResponsavelNomeDisplay ?? '');
     setShowAddTarefa(false);
   };
 
@@ -345,21 +438,29 @@ const PlanoCard: React.FC<{
                     />
                   ) : type === 'date' ? (
                     <input
-                      type="date"
-                      defaultValue={dateInputValue(plano.when_fim)}
-                      onChange={(e) =>
-                        onUpdate({ when_fim: tsFromDateInput(e.target.value) })
-                      }
-                      className="bg-transparent text-sm text-slate-200 outline-none border-b border-transparent focus:border-slate-600 transition-colors py-0.5 cursor-pointer appearance-none"
+                      type="text"
+                      defaultValue={formatDateBR(plano.when_fim)}
+                      onBlur={(e) => {
+                        const parsed = parseDateBR(e.target.value);
+                        if (parsed) onUpdate({ when_fim: parsed });
+                      }}
+                      placeholder="dd/mm/yyyy"
+                      className="bg-transparent text-sm text-slate-200 outline-none border-b border-transparent focus:border-slate-600 transition-colors py-0.5 placeholder:text-slate-700"
                     />
                   ) : (
-                    <input
-                      key={`${plano.id}-${key}`}
-                      defaultValue={displayWho}
-                      onBlur={(e) => onUpdate({ who_id: e.target.value })}
-                      className="w-full bg-transparent text-sm text-slate-200 outline-none border-b border-transparent focus:border-slate-600 transition-colors py-0.5 placeholder:text-slate-700"
-                      placeholder={`${sub}...`}
-                    />
+                    key === 'who_id' ? (
+                      <div className="w-full bg-transparent text-sm text-slate-200 outline-none border-b border-transparent py-0.5">
+                        {displayWho || '—'}
+                      </div>
+                    ) : (
+                      <input
+                        key={`${plano.id}-${key}`}
+                        defaultValue={displayWho}
+                        onBlur={(e) => onUpdate({ who_id: e.target.value })}
+                        className="w-full bg-transparent text-sm text-slate-200 outline-none border-b border-transparent focus:border-slate-600 transition-colors py-0.5 placeholder:text-slate-700"
+                        placeholder={`${sub}...`}
+                      />
+                    )
                   )}
                 </div>
               </React.Fragment>
@@ -390,7 +491,26 @@ const PlanoCard: React.FC<{
                   </>
                 )}
               </div>
-              <button type="button" onClick={() => setShowAddTarefa((v) => !v)}
+              <button
+                type="button"
+                onClick={() => {
+                  setShowAddTarefa((v) => {
+                    const next = !v;
+                    if (next) {
+                      setNovaTarefa({
+                        titulo: '',
+                        responsavel_id: loggedUserResponsavelId ?? '',
+                        data_vencimento: '',
+                        descricao: '',
+                      });
+                      if (canEditResponsavel) {
+                        setRespQuery(loggedUserResponsavelNomeDisplay ?? '');
+                        setShowRespDropdown(false);
+                      }
+                    }
+                    return next;
+                  });
+                }}
                 className="flex items-center gap-1 text-[11px] font-medium text-emerald-400 hover:text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 px-2.5 py-1.5 rounded-lg transition-colors">
                 <Plus size={12} /> Nova Tarefa
               </button>
@@ -435,22 +555,65 @@ const PlanoCard: React.FC<{
                   <label className="text-[10px] text-slate-500 uppercase tracking-wider mb-1 block">
                     Responsável
                   </label>
-                  <input
-                    value={novaTarefa.responsavel_id}
-                    onChange={(e) =>
-                      setNovaTarefa((v) => ({ ...v, responsavel_id: e.target.value }))
-                    }
-                    placeholder="Nome do responsável"
-                    className="w-full bg-slate-800 border border-slate-700 rounded-lg px-2 py-1.5 text-sm text-slate-200 outline-none focus:border-slate-600 placeholder:text-slate-600"
-                  />
+                  <div className="relative">
+                    <input
+                      value={canEditResponsavel ? respQuery : novaTarefaResponsavelNome}
+                      readOnly={!canEditResponsavel}
+                      placeholder="Nome do responsável"
+                      onChange={(e) => {
+                        if (!canEditResponsavel) return;
+                        const v = e.target.value;
+                        setRespQuery(v);
+                        // Só garante "responsavel_id" quando o usuário selecionar um item da lista.
+                        setNovaTarefa((prev) => ({ ...prev, responsavel_id: '' }));
+                        setShowRespDropdown(true);
+                      }}
+                      onBlur={() => {
+                        if (!canEditResponsavel) return;
+                        window.setTimeout(() => setShowRespDropdown(false), 150);
+                      }}
+                      className="w-full bg-slate-800 border border-slate-700 rounded-lg px-2 py-1.5 text-sm text-slate-200 outline-none focus:border-slate-600 placeholder:text-slate-600"
+                    />
+                    {canEditResponsavel && showRespDropdown && respOptions.length > 0 && (
+                      <div className="absolute left-0 right-0 z-20 mt-1 bg-slate-900 border border-slate-700 rounded-lg shadow-lg max-h-40 overflow-auto">
+                        {respOptions.map((r) => (
+                          <button
+                            key={r.id}
+                            type="button"
+                            className="w-full text-left px-3 py-2 text-[13px] text-slate-100 hover:bg-slate-800 transition-colors"
+                            onMouseDown={(e) => {
+                              // evita o blur antes do clique.
+                              e.preventDefault();
+                              setNovaTarefa((prev) => ({ ...prev, responsavel_id: r.id }));
+                              setRespQuery(r.nome);
+                              setShowRespDropdown(false);
+                            }}
+                          >
+                            {r.nome}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
                 <div className="min-w-[130px]">
                   <label className="text-[10px] text-slate-500 uppercase tracking-wider mb-1 block">Prazo</label>
-                  <input type="date" value={novaTarefa.data_vencimento} onChange={(e) => setNovaTarefa((v) => ({ ...v, data_vencimento: e.target.value }))}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-lg px-2 py-1.5 text-sm text-slate-200 outline-none focus:border-slate-600 cursor-pointer appearance-none" />
+                  <input
+                    value={novaTarefa.data_vencimento}
+                    onChange={(e) => setNovaTarefa((v) => ({ ...v, data_vencimento: e.target.value }))}
+                    placeholder="dd/mm/yyyy"
+                    className="w-full bg-slate-800 border border-slate-700 rounded-lg px-2 py-1.5 text-sm text-slate-200 outline-none focus:border-slate-600 placeholder:text-slate-600"
+                  />
                 </div>
                 <div className="flex gap-2 items-end">
-                  <button type="button" onClick={handleAddTarefa} disabled={!novaTarefa.titulo.trim()}
+                  <button
+                    type="button"
+                    onClick={handleAddTarefa}
+                    disabled={
+                      !novaTarefa.titulo.trim() ||
+                      !parseDateBR(novaTarefa.data_vencimento) ||
+                      (canEditResponsavel && !novaTarefa.responsavel_id.trim())
+                    }
                     className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-medium rounded-lg transition-colors">Adicionar</button>
                   <button type="button" onClick={() => setShowAddTarefa(false)} className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-300 text-xs font-medium rounded-lg transition-colors">Cancelar</button>
                 </div>
@@ -587,7 +750,8 @@ const DetalhePrioridade: React.FC<{
         {planos.map((plano) => (
           <PlanoCard key={plano.id} plano={plano} tarefas={todasTarefas.filter((t) => t.plano_id === plano.id)} responsaveis={responsaveis}
             computeStatusPlano={computeStatusPlano} onUpdate={(u) => onUpdatePlano(plano.id, u)} onDelete={() => onDeletePlano(plano.id)}
-            onAddTarefa={onAddTarefa} onUpdateTarefa={onUpdateTarefa} onDeleteTarefa={onDeleteTarefa} />
+            onAddTarefa={onAddTarefa} onUpdateTarefa={onUpdateTarefa} onDeleteTarefa={onDeleteTarefa}
+            whoOverrideName={planoWhoOverrideName} lockWhoToOverrideName={lockPlanoWhoToPriorityDono} />
         ))}
       </div>
     </div>
@@ -604,6 +768,16 @@ const PrioridadeCard: React.FC<{
   computeStatusPlano: (id: string) => StatusPlano | null;
   expanded: boolean;
   onToggle: () => void;
+  showDonoName?: boolean;
+  /** Nome a ser usado para renderizar o WHO do plano (prioridade criadora) */
+  priorityOwnerNameOverride?: string;
+  lockPlanoWhoToPriorityDono?: boolean;
+  /** Responsável padrão (quem está logado) ao criar planos */
+  loggedUserResponsavelId?: string;
+  /** Nome exibido do responsável (quem está logado) */
+  loggedUserResponsavelNomeDisplay?: string;
+  /** Se true, permite editar o responsável (admin/gerente) */
+  canEditResponsavel?: boolean;
   onAddPlano: (p: Omit<PlanoDeAtaque, 'id' | 'prioridade_id'>) => void;
   onUpdatePlano: (id: string, u: Partial<PlanoDeAtaque>) => void;
   onDeletePlano: (id: string) => void;
@@ -618,6 +792,12 @@ const PrioridadeCard: React.FC<{
   computeStatusPlano,
   expanded,
   onToggle,
+  showDonoName = false,
+  priorityOwnerNameOverride,
+  lockPlanoWhoToPriorityDono = false,
+  loggedUserResponsavelId,
+  loggedUserResponsavelNomeDisplay,
+  canEditResponsavel = false,
   onAddPlano,
   onUpdatePlano,
   onDeletePlano,
@@ -626,35 +806,51 @@ const PrioridadeCard: React.FC<{
   onDeleteTarefa,
 }) => {
   const [showAddPlano, setShowAddPlano] = useState(false);
-  const [novoPlano, setNovoPlano] = useState({ titulo: '', who_id: '', when_fim: '' });
+  const [novoPlano, setNovoPlano] = useState({
+    titulo: '',
+    who_id: loggedUserResponsavelId ?? '',
+    when_fim: '',
+  });
 
-  const dono = responsaveis.find((r) => r.id === prioridade.dono_id);
-  const tarefasDoPrio = todasTarefas.filter((t) =>
-    planos.some((p) => p.id === t.plano_id),
-  );
-  const tarefasConc = tarefasDoPrio.filter((t) => t.status_tarefa === 'Concluida');
+  const dono = responsaveis.find((r) => normStr(r.id) === normStr(prioridade.dono_id));
   const statusCfg =
     STATUS_CFG[prioridade.status_prioridade as StatusPlano] || STATUS_CFG.Execucao;
+  const planoWhoOverrideName = priorityOwnerNameOverride ?? (dono?.nome ?? prioridade.dono_id);
+  const loggedUserResponsavelNome =
+    loggedUserResponsavelNomeDisplay ??
+    responsaveis.find((r) => normStr(r.id) === normStr(loggedUserResponsavelId ?? ''))?.nome ??
+    loggedUserResponsavelId ??
+    '';
 
-  const totalTarefas = tarefasDoPrio.length;
-  const concluidas = tarefasConc.length;
-  const progresso = totalTarefas > 0 ? (concluidas / totalTarefas) * 100 : 0;
+  const [respQueryPlano, setRespQueryPlano] = useState(loggedUserResponsavelNome);
+  const [showRespPlanoDropdown, setShowRespPlanoDropdown] = useState(false);
+
+  const respPlanoOptions = useMemo(() => {
+    if (!canEditResponsavel) return [];
+    const q = normStr(respQueryPlano);
+    if (!q) return [];
+    return responsaveis.filter((r) => normStr(r.nome).startsWith(q)).slice(0, 6);
+  }, [canEditResponsavel, respQueryPlano, responsaveis]);
 
   const handleAddPlano = () => {
     if (!novoPlano.titulo.trim()) return;
+    const parsedWhenFim = parseDateBR(novoPlano.when_fim);
+    if (!parsedWhenFim) return;
     onAddPlano({
       titulo: novoPlano.titulo.trim(),
       what: '',
       why: '',
-      who_id: novoPlano.who_id || responsaveis[0]?.id || '',
+      who_id: novoPlano.who_id,
       when_inicio: Date.now(),
-      when_fim: novoPlano.when_fim
-        ? tsFromDateInput(novoPlano.when_fim)
-        : Date.now() + 30 * 86400000,
+      when_fim: parsedWhenFim,
       how: '',
       status_plano: 'Execucao',
     });
-    setNovoPlano({ titulo: '', who_id: '', when_fim: '' });
+    setNovoPlano({
+      titulo: '',
+      who_id: loggedUserResponsavelId ?? '',
+      when_fim: '',
+    });
     setShowAddPlano(false);
   };
 
@@ -676,7 +872,7 @@ const PrioridadeCard: React.FC<{
               </p>
               <h3 className="text-lg font-bold text-slate-100">{prioridade.titulo}</h3>
               <div className="flex items-center gap-3 mt-1.5 text-[12px] text-slate-400 flex-wrap">
-                {dono && (
+                {dono && showDonoName && (
                   <span className="flex items-center gap-1.5">
                     <span className="w-5 h-5 rounded-full bg-slate-700 text-slate-300 text-[9px] font-bold flex items-center justify-center">
                       {initials(dono.nome)}
@@ -699,30 +895,7 @@ const PrioridadeCard: React.FC<{
                 </p>
                 <p className="text-[11px] text-slate-500">planos de ataque</p>
               </div>
-              <div className="text-center">
-                <p className="text-2xl font-bold text-emerald-400 tabular-nums">
-                  {concluidas}/{totalTarefas || 0}
-                </p>
-                <p className="text-[11px] text-slate-500">tarefas concluídas</p>
-              </div>
             </div>
-          </div>
-          <div className="mt-3 flex items-center gap-2">
-            <div className="w-full max-w-xs h-1.5 bg-slate-800 rounded-full overflow-hidden">
-              <div
-                className={`h-full rounded-full transition-all duration-500 ${
-                  prioridade.status_prioridade === 'Concluido'
-                    ? 'bg-emerald-500'
-                    : prioridade.status_prioridade === 'Bloqueado'
-                    ? 'bg-red-500'
-                    : 'bg-blue-500'
-                }`}
-                style={{ width: `${progresso}%` }}
-              />
-            </div>
-            <span className="text-[10px] text-slate-500 tabular-nums">
-              {concluidas}/{totalTarefas || 0} tarefas concluídas
-            </span>
           </div>
         </div>
       </button>
@@ -735,7 +908,21 @@ const PrioridadeCard: React.FC<{
             </p>
             <button
               type="button"
-              onClick={() => setShowAddPlano((v) => !v)}
+              onClick={() => {
+                setShowAddPlano((v) => {
+                  const next = !v;
+                  if (next) {
+                    setNovoPlano({
+                      titulo: '',
+                      who_id: loggedUserResponsavelId ?? '',
+                      when_fim: '',
+                    });
+                    setRespQueryPlano(loggedUserResponsavelNome);
+                    setShowRespPlanoDropdown(false);
+                  }
+                  return next;
+                });
+              }}
               className="flex items-center gap-1.5 text-xs font-medium text-white bg-emerald-600 hover:bg-emerald-700 px-3 py-1.5 rounded-lg transition-colors"
             >
               <Plus size={13} /> Novo Plano
@@ -766,33 +953,62 @@ const PrioridadeCard: React.FC<{
                 <label className="text-[10px] text-slate-500 uppercase tracking-wider mb-1 block">
                   Responsável
                 </label>
+              <div className="relative">
                 <input
-                  value={novoPlano.who_id}
-                  onChange={(e) =>
-                    setNovoPlano((v) => ({ ...v, who_id: e.target.value }))
-                  }
+                  value={canEditResponsavel ? respQueryPlano : loggedUserResponsavelNome}
+                  readOnly={!canEditResponsavel}
                   placeholder="Nome do responsável"
+                  onChange={(e) => {
+                    if (!canEditResponsavel) return;
+                    const v = e.target.value;
+                    setRespQueryPlano(v);
+                    setShowRespPlanoDropdown(true);
+                    const exact = responsaveis.find((r) => normStr(r.nome) === normStr(v));
+                    setNovoPlano((prev) => ({ ...prev, who_id: exact?.id ?? '' }));
+                  }}
+                  onBlur={() => {
+                    if (!canEditResponsavel) return;
+                    window.setTimeout(() => setShowRespPlanoDropdown(false), 150);
+                  }}
                   className="w-full bg-slate-800 border border-slate-700 rounded-lg px-2 py-2 text-sm text-slate-200 outline-none focus:border-slate-600 placeholder:text-slate-600"
                 />
+                {canEditResponsavel && showRespPlanoDropdown && respPlanoOptions.length > 0 && (
+                  <div className="absolute left-0 right-0 z-20 mt-1 bg-slate-900 border border-slate-700 rounded-lg shadow-lg max-h-40 overflow-auto">
+                    {respPlanoOptions.map((r) => (
+                      <button
+                        key={r.id}
+                        type="button"
+                        className="w-full text-left px-3 py-2 text-[13px] text-slate-100 hover:bg-slate-800 transition-colors"
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          setRespQueryPlano(r.nome);
+                          setNovoPlano((prev) => ({ ...prev, who_id: r.id }));
+                          setShowRespPlanoDropdown(false);
+                        }}
+                      >
+                        {r.nome}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
               </div>
               <div className="min-w-[130px]">
                 <label className="text-[10px] text-slate-500 uppercase tracking-wider mb-1 block">
                   Prazo
                 </label>
                 <input
-                  type="date"
                   value={novoPlano.when_fim}
-                  onChange={(e) =>
-                    setNovoPlano((v) => ({ ...v, when_fim: e.target.value }))
-                  }
-                  className="w-full bg-slate-800 border border-slate-700 rounded-lg px-2 py-2 text-sm text-slate-200 outline-none focus:border-slate-600 cursor-pointer appearance-none"
+                  onChange={(e) => setNovoPlano((v) => ({ ...v, when_fim: e.target.value }))}
+                  placeholder="dd/mm/yyyy"
+                  className="w-full bg-slate-800 border border-slate-700 rounded-lg px-2 py-2 text-sm text-slate-200 outline-none focus:border-slate-600 placeholder:text-slate-600"
                 />
               </div>
               <div className="flex gap-2">
                 <button
                   type="button"
                   onClick={handleAddPlano}
-                  disabled={!novoPlano.titulo.trim()}
+                  disabled={!novoPlano.titulo.trim() || !parseDateBR(novoPlano.when_fim) || !novoPlano.who_id.trim()}
                   className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg transition-colors"
                 >
                   Criar
@@ -827,6 +1043,9 @@ const PrioridadeCard: React.FC<{
                 onAddTarefa={onAddTarefa}
                 onUpdateTarefa={onUpdateTarefa}
                 onDeleteTarefa={onDeleteTarefa}
+                loggedUserResponsavelId={loggedUserResponsavelId}
+                loggedUserResponsavelNomeDisplay={loggedUserResponsavelNomeDisplay}
+                canEditResponsavel={canEditResponsavel}
               />
             ))}
           </div>
@@ -846,8 +1065,6 @@ export const EstrategicoView: React.FC<EstrategicoViewProps> = (props) => {
     responsaveis,
     computeStatusPlano,
     onAddPrioridade,
-    onUpdatePrioridade,
-    onDeletePrioridade,
     podeAdicionarPrioridade,
     onAddPlano,
     onUpdatePlano,
@@ -855,257 +1072,130 @@ export const EstrategicoView: React.FC<EstrategicoViewProps> = (props) => {
     onAddTarefa,
     onUpdateTarefa,
     onDeleteTarefa,
+    loggedUserUid,
+    loggedUserRole,
+    loggedUserName,
+    focusPrioridadeId,
   } = props;
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [concluidosOpen, setConcluidosOpen] = useState(false);
+
+  const isAdmin = loggedUserRole === 'administrador' || loggedUserRole === 'gerente';
+
+  useEffect(() => {
+    if (!focusPrioridadeId) return;
+    const el = document.getElementById(`prioridade-card-${focusPrioridadeId}`);
+    el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [focusPrioridadeId]);
+
+  const myResponsavelIds = useMemo(() => {
+    const ids = new Set<string>();
+    if (loggedUserUid) ids.add(normStr(loggedUserUid));
+    if (loggedUserName) {
+      const match = responsaveis.find((r) => normStr(r.nome) === normStr(loggedUserName));
+      if (match) ids.add(normStr(match.id));
+    }
+    // Fallback: caso o dono_id esteja sendo salvo como "nome" ao invés de id.
+    if (loggedUserName) ids.add(normStr(loggedUserName));
+    return ids;
+  }, [loggedUserUid, loggedUserName, responsaveis]);
+
+  const loggedUserResponsavelId = useMemo(() => {
+    const matchByName = loggedUserName
+      ? responsaveis.find((r) => normStr(r.nome) === normStr(loggedUserName))
+      : undefined;
+    return matchByName?.id ?? loggedUserUid ?? '';
+  }, [loggedUserName, loggedUserUid, responsaveis]);
+
+  const loggedUserResponsavelNomeDisplay = loggedUserName ?? '';
+
+  const filteredPrioridades = useMemo(() => {
+    if (isAdmin) return prioridades;
+    if (myResponsavelIds.size > 0) {
+      return prioridades.filter((p) => myResponsavelIds.has(normStr(p.dono_id)));
+    }
+    return prioridades;
+  }, [prioridades, isAdmin, myResponsavelIds]);
 
   const ativas = useMemo(
-    () => prioridades.filter((p) => p.status_prioridade !== 'Concluido'),
-    [prioridades],
-  );
-  const concluidas = useMemo(
-    () => prioridades.filter((p) => p.status_prioridade === 'Concluido'),
-    [prioridades],
-  );
-  const selected = useMemo(
-    () => prioridades.find((p) => p.id === selectedId) || null,
-    [prioridades, selectedId],
+    () => filteredPrioridades.filter((p) => p.status_prioridade !== 'Concluido'),
+    [filteredPrioridades],
   );
 
-  if (selected) {
-    return (
-      <DetalhePrioridade
-        prioridade={selected}
-        planos={planos.filter((pl) => pl.prioridade_id === selected.id)}
-        todasTarefas={tarefas}
-        responsaveis={responsaveis}
-        computeStatusPlano={computeStatusPlano}
-        onBack={() => setSelectedId(null)}
-        onUpdatePrioridade={(u) => onUpdatePrioridade(selected.id, u)}
-        onAddPlano={(p) => onAddPlano({ ...p, prioridade_id: selected.id })}
-        onUpdatePlano={onUpdatePlano}
-        onDeletePlano={onDeletePlano}
-        onAddTarefa={onAddTarefa}
-        onUpdateTarefa={onUpdateTarefa}
-        onDeleteTarefa={onDeleteTarefa}
-      />
-    );
-  }
+  const blocksRef = useRef<HTMLDivElement>(null);
+  const scrollToBlocks = () => {
+    blocksRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
 
   return (
     <div className="space-y-6">
-      <div className="space-y-0.5">
-        <p className="text-[10px] font-semibold text-emerald-500 uppercase tracking-widest">
-          VISÃO EXECUTIVA
-        </p>
-        <h2 className="text-2xl font-bold text-slate-100">Prioridades Estratégicas</h2>
-      </div>
-
-      <div className="bg-slate-900/60 border border-slate-800 rounded-xl overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[680px]">
-            <thead>
-              <tr className="border-b border-slate-800 text-[10px] font-semibold text-slate-500 uppercase tracking-wider">
-                <th className="px-5 py-3 text-left">Prioridade Ativa</th>
-                <th className="px-4 py-3 text-left">Dono</th>
-                <th className="px-4 py-3 text-center">Em Execução</th>
-                <th className="px-4 py-3 text-center">Bloqueado</th>
-                <th className="px-5 py-3 text-right">Ações</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-800/60">
-              {ativas.map((p) => {
-                const dono = responsaveis.find((r) => r.id === p.dono_id);
-                const emExecucao = p.status_prioridade === 'Execucao';
-                const bloqueado = p.status_prioridade === 'Bloqueado';
-                return (
-                  <tr key={p.id} className="hover:bg-slate-800/30 transition-colors group">
-                    <td className="px-5 py-4">
-                      <button
-                        type="button"
-                        onClick={() => setSelectedId(p.id)}
-                        className="text-left"
-                      >
-                        <p className="text-sm font-semibold text-emerald-400 hover:text-emerald-300 transition-colors flex items-center gap-1.5">
-                          {p.titulo}
-                          <ChevronRight
-                            size={14}
-                            className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
-                          />
-                        </p>
-                        <p className="text-[11px] text-slate-500 mt-0.5">
-                          Meta: {fmtDate(p.data_alvo)}
-                        </p>
-                      </button>
-                    </td>
-                    <td className="px-4 py-4">
-                      {dono ? (
-                        <div className="flex items-center gap-2">
-                          <span className="w-7 h-7 rounded-full bg-slate-700 text-slate-300 text-[10px] font-bold flex items-center justify-center shrink-0">
-                            {initials(dono.nome)}
-                          </span>
-                          <span className="text-sm text-slate-200 truncate max-w-[110px]">
-                            {dono.nome}
-                          </span>
-                        </div>
-                      ) : (
-                        <span className="text-xs text-slate-600">—</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-4 text-center">
-                      <button
-                        type="button"
-                        onClick={() =>
-                          onUpdatePrioridade(p.id, { status_prioridade: 'Execucao' })
-                        }
-                        className="inline-flex items-center justify-center"
-                      >
-                        <span
-                          className={`inline-block w-3 h-3 rounded-full ${
-                            emExecucao
-                              ? 'bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.5)]'
-                              : 'border border-slate-600'
-                          }`}
-                        />
-                      </button>
-                    </td>
-                    <td className="px-4 py-4 text-center">
-                      <button
-                        type="button"
-                        onClick={() =>
-                          onUpdatePrioridade(p.id, { status_prioridade: 'Bloqueado' })
-                        }
-                        className="inline-flex items-center justify-center"
-                      >
-                        <span
-                          className={`inline-block w-3 h-3 rounded-full ${
-                            bloqueado
-                              ? 'bg-red-500 shadow-[0_0_6px_rgba(239,68,68,0.5)]'
-                              : 'border border-slate-600'
-                          }`}
-                        />
-                      </button>
-                    </td>
-                    <td className="px-5 py-4">
-                      <div className="flex items-center justify-end gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() =>
-                            onUpdatePrioridade(p.id, { status_prioridade: 'Execucao' })
-                          }
-                          className="flex items-center gap-1 text-[11px] font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-700 px-2 py-1 rounded transition-colors"
-                        >
-                          <RotateCcw size={11} /> Backlog
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            onUpdatePrioridade(p.id, { status_prioridade: 'Concluido' })
-                          }
-                          className="flex items-center gap-1 text-[11px] font-medium text-slate-300 hover:text-slate-100 hover:bg-slate-700 px-2 py-1 rounded transition-colors"
-                        >
-                          <Check size={11} /> Arquivar
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => onDeletePrioridade(p)}
-                          className="p-1.5 text-slate-600 hover:text-red-400 hover:bg-red-500/10 rounded transition-colors"
-                          title="Excluir"
-                        >
-                          <Trash2 size={13} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-              {ativas.length === 0 && (
-                <tr>
-                  <td
-                    colSpan={5}
-                    className="px-5 py-14 text-center text-slate-500 text-sm"
-                  >
-                    Nenhuma prioridade ativa. Adicione uma abaixo.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div className="space-y-0.5">
+          <p className="text-[10px] font-semibold text-emerald-500 uppercase tracking-widest">
+            VISÃO EXECUTIVA
+          </p>
+          <h2 className="text-2xl font-bold text-slate-100">Prioridades Estratégicas</h2>
         </div>
-        {podeAdicionarPrioridade && (
-          <div className="px-5 py-3 border-t border-slate-800/60">
-            <button
-              type="button"
-              onClick={onAddPrioridade}
-              className="flex items-center gap-2 text-xs text-slate-500 hover:text-slate-300 hover:bg-slate-800/50 px-3 py-2 rounded-lg transition-colors w-full border border-dashed border-slate-700 hover:border-slate-600"
-            >
-              <Plus size={14} /> Adicionar prioridade
-            </button>
-          </div>
-        )}
-      </div>
-
-      <section className="bg-slate-900/30 border border-slate-800/60 rounded-xl overflow-hidden">
         <button
           type="button"
-          onClick={() => setConcluidosOpen((o) => !o)}
-          className="w-full px-5 py-3 flex items-center justify-between hover:bg-slate-800/30 transition-colors"
+          onClick={scrollToBlocks}
+          className="shrink-0 p-2 rounded-lg bg-slate-900/60 border border-slate-800 text-slate-300 hover:text-slate-100 hover:bg-slate-900"
+          aria-label="Ir para prioridades"
+          title="Ir para prioridades"
         >
-          <div className="flex items-center gap-2 text-slate-400">
-            {concluidosOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-            <CheckCircle size={14} className="text-emerald-500/70" />
-            <span className="text-sm font-medium text-slate-300">Arquivados</span>
-          </div>
-          <span className="text-[10px] text-slate-600 bg-slate-800 px-2 py-0.5 rounded tabular-nums">
-            {concluidas.length}
-          </span>
+          <Target size={18} className="text-blue-400" />
         </button>
-        {concluidosOpen && (
-          <div className="border-t border-slate-800/60 divide-y divide-slate-800/60">
-            {concluidas.length === 0 ? (
-              <div className="px-5 py-4 text-sm text-slate-500">
-                Nenhuma prioridade arquivada ainda.
-              </div>
-            ) : (
-              concluidas.map((p) => {
-                const d = responsaveis.find((r) => r.id === p.dono_id);
-                return (
-                  <div key={p.id} className="px-5 py-3 flex items-center justify-between gap-3">
-                    <div>
-                      <p className="text-sm text-slate-400 line-through">{p.titulo}</p>
-                      {d && <p className="text-[11px] text-slate-600">{d.nome}</p>}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() =>
-                          onUpdatePrioridade(p.id, { status_prioridade: 'Execucao' })
-                        }
-                        className="flex items-center gap-1 text-[11px] text-slate-500 hover:text-slate-300 hover:bg-slate-700 px-2 py-1 rounded transition-colors"
-                      >
-                        <RotateCcw size={11} /> Reativar
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => onDeletePrioridade(p)}
-                        className="p-1.5 text-slate-600 hover:text-red-400 hover:bg-red-500/10 rounded transition-colors"
-                      >
-                        <Trash2 size={13} />
-                      </button>
-                    </div>
-                  </div>
-                );
-              })
-            )}
-          </div>
-        )}
-      </section>
-
-      <div className="flex items-center gap-5 text-[11px] text-slate-500">
-        <p>Clique no título para ver os planos de ataque</p>
-        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0" /> Em Execução</span>
-        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-red-500 shrink-0" /> Bloqueado</span>
       </div>
+
+      <div ref={blocksRef} className="space-y-4">
+        {ativas.length === 0 ? (
+          <div className="px-5 py-12 text-center text-slate-500 text-sm border border-slate-800/60 rounded-xl bg-slate-900/30">
+            Nenhuma prioridade ativa {isAdmin ? 'disponível.' : 'para você.'}
+          </div>
+        ) : (
+          ativas.map((p) => {
+            const dono = responsaveis.find((r) => normStr(r.id) === normStr(p.dono_id));
+            // Sempre exibir o nome de quem criou a PRIORIDADE (p.dono_id).
+            // Se não acharmos no cadastro de responsaveis, usa o nome do usuário logado (modo não-admin).
+            const priorityOwnerNameOverride = dono?.nome ?? (isAdmin ? p.dono_id : (loggedUserName ?? p.dono_id));
+            return (
+              <div key={p.id} id={`prioridade-card-${p.id}`}>
+                <PrioridadeCard
+                  prioridade={p}
+                  planos={planos.filter((pl) => pl.prioridade_id === p.id)}
+                  todasTarefas={tarefas}
+                  responsaveis={responsaveis}
+                  computeStatusPlano={computeStatusPlano}
+                  expanded={true}
+                  onToggle={() => {}}
+                  showDonoName={isAdmin}
+                  priorityOwnerNameOverride={priorityOwnerNameOverride}
+                  lockPlanoWhoToPriorityDono={!isAdmin}
+                  loggedUserResponsavelId={loggedUserResponsavelId}
+                  loggedUserResponsavelNomeDisplay={loggedUserResponsavelNomeDisplay}
+                  canEditResponsavel={isAdmin}
+                  onAddPlano={(pl) => onAddPlano({ ...pl, prioridade_id: p.id })}
+                  onUpdatePlano={onUpdatePlano}
+                  onDeletePlano={onDeletePlano}
+                  onAddTarefa={onAddTarefa}
+                  onUpdateTarefa={onUpdateTarefa}
+                  onDeleteTarefa={onDeleteTarefa}
+                />
+              </div>
+            );
+          })
+        )}
+      </div>
+
+      {podeAdicionarPrioridade && (
+        <div className="pt-2">
+          <button
+            type="button"
+            onClick={onAddPrioridade}
+            className="flex items-center gap-2 text-xs text-slate-500 hover:text-slate-300 hover:bg-slate-800/50 px-3 py-2 rounded-lg transition-colors w-full border border-dashed border-slate-700 hover:border-slate-600"
+          >
+            <Plus size={14} /> Adicionar prioridade
+          </button>
+        </div>
+      )}
     </div>
   );
 };

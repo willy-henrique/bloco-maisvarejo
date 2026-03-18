@@ -47,11 +47,11 @@ export const BacklogView: React.FC<BacklogViewProps> = ({
 
   return (
     <div className="max-w-5xl mx-auto space-y-6 w-full min-w-0">
-      {/* BackLog (não concluídos) */}
+      {/* Backlog (não concluídos) */}
       <section className="bg-slate-900/50 border border-slate-800 rounded-lg overflow-hidden">
         <div className="px-4 py-3 border-b border-slate-800 flex items-center justify-between bg-slate-900/80">
           <h3 className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
-            BackLog
+            Backlog
           </h3>
           <span className="text-[10px] text-slate-500 bg-slate-800 px-2 py-1 rounded tabular-nums">
             {backlogItems.length} {backlogItems.length === 1 ? 'item' : 'itens'}
@@ -61,8 +61,8 @@ export const BacklogView: React.FC<BacklogViewProps> = ({
           {backlogItems.length === 0 ? (
             <div className="py-10 px-4 flex flex-col sm:flex-row items-center justify-between gap-4 text-sm">
               <p className="text-slate-500 text-center sm:text-left">
-                Nenhum item em demanda. Use &quot;Nova Iniciativa&quot; para registrar uma nova ideia
-                ou mova itens do Kanban de volta para o BackLog.
+                Nenhum item em demanda. Use &quot;Item Backlog&quot; para registrar uma nova ideia
+                ou mova itens do Kanban de volta para o Backlog.
               </p>
               {onAddNew && (
                 <button
@@ -71,7 +71,7 @@ export const BacklogView: React.FC<BacklogViewProps> = ({
                   className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-xs font-medium text-white shadow-sm transition-colors"
                 >
                   <PlayCircle size={14} />
-                  Nova iniciativa
+                  Item Backlog
                 </button>
               )}
             </div>
@@ -112,16 +112,16 @@ export const BacklogView: React.FC<BacklogViewProps> = ({
                           type="button"
                           onClick={() => moveToPrioridade(item.id)}
                           className="inline-flex items-center justify-center px-3 py-1.5 text-[11px] font-medium rounded-full bg-blue-600/90 hover:bg-blue-500 text-white transition-colors shadow-sm"
-                          title="Mover para Prioridade Ativa (Kanban)"
+                          title="Mover para Priorizar (Kanban)"
                         >
                           <PlayCircle size={14} className="mr-1" />
-                          Prioridade Ativa
+                          Priorizar
                         </button>
                         <button
                           type="button"
                           onClick={() => onDelete(item.id)}
                           className="inline-flex items-center justify-center p-2 rounded-full text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition-colors"
-                          title="Excluir iniciativa do BackLog"
+                          title="Excluir iniciativa do Backlog"
                         >
                           <Trash2 size={14} />
                         </button>

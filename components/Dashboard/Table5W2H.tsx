@@ -1,6 +1,6 @@
 
 import React, { useMemo, useState, useEffect } from 'react';
-import { ActionItem, ItemStatus, UrgencyLevel } from '../../types';
+import { ActionItem, ItemStatus } from '../../types';
 import { formatDateOnlyPtBr } from '../../utils/date';
 import { Trash2, Pencil, ShieldAlert, Calendar, User, Info, MapPin, FileText, ChevronDown, ChevronRight, CheckCircle, Activity } from 'lucide-react';
 
@@ -60,7 +60,6 @@ export const Table5W2H: React.FC<Table5W2HProps> = ({
             <th className="px-4 py-3 font-semibold">Who · Quem?</th>
             <th className="px-4 py-3 font-semibold">How · Como?</th>
             <th className="px-4 py-3 font-semibold">Empresa</th>
-            <th className="px-4 py-3 font-semibold">Urgência</th>
             <th className="px-4 py-3 font-semibold">Status</th>
             <th className="px-4 py-3 font-semibold">Notas</th>
             <th className="px-4 py-3 font-semibold text-center w-20">Ações</th>
@@ -157,15 +156,6 @@ export const Table5W2H: React.FC<Table5W2HProps> = ({
                   );
                 })()}
               </td>
-              <td className="px-4 py-3 min-w-[100px]">
-                <select
-                  value={item.urgency}
-                  onChange={(e) => onUpdate(item.id, { urgency: e.target.value as UrgencyLevel })}
-                  className="bg-slate-800/50 border border-slate-700 text-xs font-medium rounded py-2 px-2 outline-none text-slate-200 focus:border-slate-500 w-full cursor-pointer"
-                >
-                  {Object.values(UrgencyLevel).map(u => <option key={u} value={u} className="bg-slate-900">{u}</option>)}
-                </select>
-              </td>
               <td className="px-4 py-3 min-w-[130px]">
                 <select
                   value={item.status}
@@ -248,7 +238,7 @@ export const Table5W2H: React.FC<Table5W2HProps> = ({
           <div className="p-4 bg-slate-800/50 rounded-full">
             <ShieldAlert size={32} className="text-slate-600" />
           </div>
-          <p className="text-slate-400 text-sm font-medium">Nenhum item em andamento. Use &quot;Nova Iniciativa&quot; ou abra um concluído para reativar.</p>
+          <p className="text-slate-400 text-sm font-medium">Nenhum item em andamento. Use &quot;Novo&quot; ou abra um concluído para reativar.</p>
         </div>
       )}
       </div>

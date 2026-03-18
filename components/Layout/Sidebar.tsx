@@ -1,8 +1,8 @@
 import React from 'react';
-import { LayoutDashboard, LogOut, ShieldCheck, PieChart, Briefcase, X, ListTodo, Bot, Target } from 'lucide-react';
+import { LayoutDashboard, LogOut, ShieldCheck, PieChart, Briefcase, X, ListTodo, Bot, Target, FileText } from 'lucide-react';
 import type { UserRole } from '../../types/user';
 
-export type ViewId = 'workspace' | 'dashboard' | 'table' | 'backlog' | 'performance' | 'roadmap' | 'ia';
+export type ViewId = 'workspace' | 'dashboard' | 'table' | 'backlog' | 'performance' | 'roadmap' | 'ia' | 'operacional';
 
 interface SidebarProps {
   activeView: ViewId;
@@ -37,9 +37,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const canAccessView = (view: ViewId) => isFullAccess || (allowedViews?.includes(view) ?? false);
 
   const allMenuItems = [
-    { id: 'backlog', icon: ListTodo, label: 'BackLog' },
+    { id: 'backlog', icon: ListTodo, label: 'Backlog' },
     { id: 'dashboard', icon: LayoutDashboard, label: 'Estratégico' },
     { id: 'table', icon: Target, label: 'Tático' },
+    { id: 'operacional', icon: FileText, label: 'Operacional' },
   ];
   const menuItems = allMenuItems.filter((item) => canAccessView(item.id as ViewId));
 

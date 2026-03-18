@@ -63,7 +63,7 @@ export interface Backlog {
   empresa?: string;
 }
 
-/** Prioridade ativa (nível estratégico). Máx 3 ativas por quadro. */
+/** Priorizar (nível estratégico). Máx 3 priorizadas por quadro. */
 export interface Prioridade {
   id: string;
   titulo: string;

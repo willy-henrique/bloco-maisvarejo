@@ -12,18 +12,22 @@ interface ActionItemModalProps {
   onUpdate: (id: string, data: Partial<ActionItem>) => void;
   defaultEmpresa?: string;
   empresaSuggestions?: string[];
-  /** Quando true, esconde campos de local/empresa (modo BackLog) */
+  /** Nome do usuário logado para preencher/lock do campo "Quem?" */
+  loggedUserName?: string;
+  /** Quando true, impede edição do "Quem?" e força o valor para o usuário logado */
+  lockWhoToLoggedUser?: boolean;
+  /** Quando true, esconde campos de local/empresa (modo Backlog) */
   hideWhereEmpresa?: boolean;
-  /** Quando true, esconde Status/Urgência (ex.: BackLog simplificado) */
+  /** Quando true, esconde Status/Urgência (ex.: Backlog simplificado) */
   hideStatusUrgency?: boolean;
 }
 
-const emptyForm = (): Omit<ActionItem, 'id' | 'createdAt' | 'updatedAt'> => ({
+const emptyForm = (whoDefault: string): Omit<ActionItem, 'id' | 'createdAt' | 'updatedAt'> => ({
   what: '',
   why: '',
   where: '',
   when: new Date().toISOString().split('T')[0],
-  who: '',
+  who: whoDefault,
   how: '',
   status: ItemStatus.ACTIVE,
   urgency: UrgencyLevel.MEDIUM,
@@ -40,21 +44,26 @@ export const ActionItemModal: React.FC<ActionItemModalProps> = ({
   onUpdate,
   defaultEmpresa,
   empresaSuggestions,
+  loggedUserName,
+  lockWhoToLoggedUser = false,
   hideWhereEmpresa = false,
   hideStatusUrgency = false,
 }) => {
   const isEdit = item !== null;
   const isBacklogLike = hideWhereEmpresa && hideStatusUrgency;
-  const [form, setForm] = useState(emptyForm());
+  const isWhoLocked = lockWhoToLoggedUser && !!loggedUserName?.trim();
+  const whoDefault = isWhoLocked ? loggedUserName!.trim() : '';
+  const [form, setForm] = useState(emptyForm(whoDefault));
 
   useEffect(() => {
     if (item) {
+      const whoValue = isWhoLocked ? whoDefault : item.who;
       setForm({
         what: item.what,
         why: item.why,
         where: item.where,
         when: item.when,
-        who: item.who,
+        who: whoValue,
         how: item.how,
         status: item.status,
         urgency: item.urgency,
@@ -63,12 +72,13 @@ export const ActionItemModal: React.FC<ActionItemModalProps> = ({
       });
     } else {
       setForm({
-        ...emptyForm(),
+        ...emptyForm(whoDefault),
         status: initialStatus ?? ItemStatus.ACTIVE,
         empresa: defaultEmpresa ?? '',
+        who: whoDefault,
       });
     }
-  }, [item, initialStatus, isOpen, defaultEmpresa]);
+  }, [item, initialStatus, isOpen, defaultEmpresa, isWhoLocked, whoDefault]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -88,32 +98,32 @@ export const ActionItemModal: React.FC<ActionItemModalProps> = ({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={isEdit ? 'Editar iniciativa' : 'Nova iniciativa'}
+      title={isEdit ? 'Editar Iniciativa' : isBacklogLike ? 'Item Backlog' : 'Novo'}
       maxWidth="xl"
     >
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="md:col-span-2">
             <label className="block text-[10px] font-medium text-slate-500 uppercase tracking-wider mb-1.5">
-              Descrição
+              {isBacklogLike ? 'Titulo' : 'Descrição'}
             </label>
             <input
               type="text"
               value={form.what}
               onChange={(e) => update('what', e.target.value)}
-              placeholder="Descrição da ação"
+              placeholder={isBacklogLike ? 'Titulo do backlog' : 'Descrição da ação'}
               className="w-full bg-slate-800/50 border border-slate-700 rounded-lg px-3 py-2.5 text-sm text-slate-100 placeholder:text-slate-500 outline-none focus:border-slate-600"
               required
             />
           </div>
           <div className="md:col-span-2">
             <label className="block text-[10px] font-medium text-slate-500 uppercase tracking-wider mb-1.5">
-              Por quê?
+              {isBacklogLike ? 'Descrição' : 'Por quê?'}
             </label>
             <textarea
               value={form.why}
               onChange={(e) => update('why', e.target.value)}
-              placeholder="Justificativa estratégica"
+              placeholder={isBacklogLike ? 'Descrição do backlog' : 'Justificativa estratégica'}
               rows={2}
               className="w-full bg-slate-800/50 border border-slate-700 rounded-lg px-3 py-2.5 text-sm text-slate-300 placeholder:text-slate-500 outline-none focus:border-slate-600 resize-none"
             />
@@ -180,16 +190,25 @@ export const ActionItemModal: React.FC<ActionItemModalProps> = ({
             <label className="block text-[10px] font-medium text-slate-500 uppercase tracking-wider mb-1.5">
               Quem?
             </label>
-            <div className="relative">
-              <User size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-              <input
-                type="text"
-                value={form.who}
-                onChange={(e) => update('who', e.target.value)}
-                placeholder="Responsável"
-                className="w-full bg-slate-800/50 border border-slate-700 rounded-lg pl-9 pr-3 py-2.5 text-sm text-slate-200 placeholder:text-slate-500 outline-none focus:border-slate-600"
-              />
-            </div>
+            {isWhoLocked ? (
+              <div className="relative">
+                <User size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                <div className="w-full bg-slate-800/50 border border-slate-700 rounded-lg pl-9 pr-3 py-2.5 text-sm text-slate-200">
+                  {whoDefault || '—'}
+                </div>
+              </div>
+            ) : (
+              <div className="relative">
+                <User size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                <input
+                  type="text"
+                  value={form.who}
+                  onChange={(e) => update('who', e.target.value)}
+                  placeholder="Responsável"
+                  className="w-full bg-slate-800/50 border border-slate-700 rounded-lg pl-9 pr-3 py-2.5 text-sm text-slate-200 placeholder:text-slate-500 outline-none focus:border-slate-600"
+                />
+              </div>
+            )}
           </div>
           <div>
             <label className="block text-[10px] font-medium text-slate-500 uppercase tracking-wider mb-1.5">
@@ -220,22 +239,6 @@ export const ActionItemModal: React.FC<ActionItemModalProps> = ({
                   {Object.values(ItemStatus).map((s) => (
                     <option key={s} value={s} className="bg-slate-900">
                       {s}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-[10px] font-medium text-slate-500 uppercase tracking-wider mb-1.5">
-                  Urgência
-                </label>
-                <select
-                  value={form.urgency}
-                  onChange={(e) => update('urgency', e.target.value as UrgencyLevel)}
-                  className="w-full bg-slate-800/50 border border-slate-700 rounded-lg px-3 py-2.5 text-sm text-slate-200 outline-none focus:border-slate-600 cursor-pointer"
-                >
-                  {Object.values(UrgencyLevel).map((u) => (
-                    <option key={u} value={u} className="bg-slate-900">
-                      {u}
                     </option>
                   ))}
                 </select>

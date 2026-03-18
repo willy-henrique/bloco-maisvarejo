@@ -79,7 +79,6 @@ export const RoadmapView: React.FC<RoadmapViewProps> = ({ items, onOpenItem }) =
                       onClick={() => onOpenItem?.(item)}
                       className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-slate-800/40 transition-colors group"
                     >
-                      <Badge type="urgency" value={item.urgency} />
                       <Badge type="status" value={item.status} />
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-slate-100 truncate group-hover:text-blue-300 transition-colors">
@@ -113,7 +112,6 @@ export const RoadmapView: React.FC<RoadmapViewProps> = ({ items, onOpenItem }) =
                       onClick={() => onOpenItem?.(item)}
                       className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-slate-800/40 transition-colors group"
                     >
-                      <Badge type="urgency" value={item.urgency} />
                       <Badge type="status" value={item.status} />
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-slate-100 truncate group-hover:text-blue-300 transition-colors">

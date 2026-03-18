@@ -4,9 +4,10 @@ import type { ViewId } from '../Layout/Sidebar';
 import { Save, UserPlus } from 'lucide-react';
 
 const ALL_VIEWS: { id: ViewId; label: string }[] = [
-  { id: 'backlog', label: 'BackLog' },
+  { id: 'backlog', label: 'Backlog' },
   { id: 'dashboard', label: 'Estratégico' },
   { id: 'table', label: 'Tático' },
+  { id: 'operacional', label: 'Operacional' },
   { id: 'performance', label: 'Desempenho' },
   { id: 'roadmap', label: 'Roadmap' },
   { id: 'ia', label: '5W2H CHAT' },
