@@ -37,6 +37,10 @@ function normStr(v: string | null | undefined): string {
   return (v ?? '').trim().toLowerCase();
 }
 
+function todayDateBR(): string {
+  return formatDateBR(Date.now());
+}
+
 function fmtDate(ts: number): string {
   return new Intl.DateTimeFormat('pt-BR', {
     day: '2-digit',
@@ -82,7 +86,11 @@ const TarefaRow: React.FC<{
   onUpdate: (u: Partial<Tarefa>) => void;
   onDelete: () => void;
 }> = ({ tarefa, responsaveis, onUpdate, onDelete }) => {
-  const resp = responsaveis.find((r) => r.id === tarefa.responsavel_id);
+  const resp = responsaveis.find(
+    (r) =>
+      normStr(r.id) === normStr(tarefa.responsavel_id) ||
+      normStr(r.nome) === normStr(tarefa.responsavel_id),
+  );
   const displayNome = resp?.nome || tarefa.responsavel_id || '';
   const cfg = TAREFA_CFG[tarefa.status_tarefa] || TAREFA_CFG.Pendente;
   const StatusIcon = cfg.Icon;
@@ -119,16 +127,23 @@ const TarefaRow: React.FC<{
       <td className="px-4 py-3 text-slate-300">
         <div className="flex items-center gap-2">
           <User size={12} className="text-slate-500" />
-          <span className="truncate max-w-[160px]">{displayNome}</span>
+          <span className="truncate block max-w-[140px]">{displayNome}</span>
         </div>
       </td>
       <td className="px-4 py-3 text-slate-400">{fmtDate(tarefa.data_vencimento)}</td>
       <td className="px-4 py-3">
-        <div className={`inline-flex items-center px-2 py-1 rounded-lg text-[10px] font-semibold border ${cfg.cls}`}>
-          {cfg.label}
-        </div>
+        <select
+          value={tarefa.status_tarefa}
+          onChange={(e) => onUpdate({ status_tarefa: e.target.value as StatusTarefa })}
+          className="text-[10px] font-semibold px-2 py-1 rounded-sm uppercase bg-slate-800 border border-slate-700 text-slate-200 outline-none focus:border-slate-500"
+        >
+          <option value="Pendente">PENDENTE</option>
+          <option value="EmExecucao">EM EXECUÇÃO</option>
+          <option value="Bloqueada">BLOQUEADA</option>
+          <option value="Concluida">CONCLUÍDA</option>
+        </select>
       </td>
-      <td className="px-4 py-3 text-right">
+      <td className="px-2 py-3 text-right w-16">
         <button
           type="button"
           onClick={onDelete}
@@ -174,7 +189,7 @@ const OperacionalPlanoCard: React.FC<{
   const [novaTarefa, setNovaTarefa] = useState({
     titulo: '',
     responsavel_id: loggedUserResponsavelId ?? '',
-    data_vencimento: '',
+    data_vencimento: todayDateBR(),
     descricao: '',
   });
 
@@ -238,11 +253,12 @@ const OperacionalPlanoCard: React.FC<{
       data_inicio: Date.now(),
       data_vencimento: parsedVenc,
       status_tarefa: 'Pendente',
+      empresa: plano.empresa ?? prioridade.empresa,
     });
     setNovaTarefa({
       titulo: '',
       responsavel_id: loggedUserResponsavelId ?? '',
-      data_vencimento: '',
+      data_vencimento: todayDateBR(),
       descricao: '',
     });
     if (canEditResponsavel) {
@@ -376,8 +392,8 @@ const OperacionalPlanoCard: React.FC<{
               Nenhuma tarefa ainda. Clique em &quot;Nova Tarefa&quot; para começar.
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[720px] border-collapse">
+            <div className="overflow-x-hidden">
+              <table className="w-full table-fixed border-collapse">
                 <thead>
                   <tr className="border-b border-slate-800 text-[10px] font-semibold text-slate-500 uppercase tracking-wider">
                     <th className="px-4 py-2 text-left">Status</th>
@@ -385,7 +401,7 @@ const OperacionalPlanoCard: React.FC<{
                     <th className="px-4 py-2 text-left">Responsável</th>
                     <th className="px-4 py-2 text-left">Prazo</th>
                     <th className="px-4 py-2 text-left">Label</th>
-                    <th className="px-4 py-2 text-right">Ações</th>
+                    <th className="px-2 py-2 text-right w-16">Ações</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800/60">
@@ -416,7 +432,7 @@ const OperacionalPlanoCard: React.FC<{
                     setNovaTarefa({
                       titulo: '',
                       responsavel_id: loggedUserResponsavelId ?? '',
-                      data_vencimento: '',
+                      data_vencimento: todayDateBR(),
                       descricao: '',
                     });
                     if (canEditResponsavel) {
@@ -575,7 +591,9 @@ export const OperacionalView: React.FC<OperacionalProps> = ({
     const matchByName = loggedUserName
       ? responsaveis.find((r) => normStr(r.nome) === normStr(loggedUserName))
       : undefined;
-    return matchByName?.id ?? (loggedUserUid ? String(loggedUserUid) : '');
+    // Se não existir vínculo em "responsaveis", usa o nome da conta
+    // para evitar exibir UID bruto na coluna Responsável.
+    return matchByName?.id ?? (loggedUserName?.trim() || (loggedUserUid ? String(loggedUserUid) : ''));
   }, [loggedUserUid, loggedUserName, responsaveis]);
 
   const visiblePrioridades = useMemo(() => {

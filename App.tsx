@@ -67,10 +67,17 @@ function AppContent() {
   const matchWorkspace = useCallback(
     (empresa?: string) => {
       if (!canSeeEmpresa(empresa)) return false;
-      if (workspaceAtivo === 'all') return true;
+
+      // Administrador pode usar "Todas as empresas"
+      if (!profile || profile.role === 'administrador') {
+        if (workspaceAtivo === 'all') return true;
+        return (empresa ?? '') === workspaceAtivo;
+      }
+
+      // Usuário não-admin: SEMPRE filtra pela empresa ativa
       return (empresa ?? '') === workspaceAtivo;
     },
-    [workspaceAtivo, canSeeEmpresa]
+    [workspaceAtivo, canSeeEmpresa, profile]
   );
 
   // Mantém uma lista local de empresas, sempre sincronizada com o controller
@@ -838,6 +845,7 @@ function AppContent() {
           empresaSuggestions={empresasAtivas}
           loggedUserName={profile?.nome}
           lockWhoToLoggedUser={true}
+          canEditWho={profile?.role === 'administrador'}
           hideWhereEmpresa={modalContext === 'backlog'}
           hideStatusUrgency={modalContext === 'backlog'}
         />

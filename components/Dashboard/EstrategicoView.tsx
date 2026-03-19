@@ -18,11 +18,11 @@ import {
   Circle,
   RotateCcw,
   Check,
-  MoreHorizontal,
   User,
   Calendar,
   Target,
   Play,
+  Archive,
 } from 'lucide-react';
 
 function initials(nome: string): string {
@@ -78,6 +78,10 @@ function normStr(v: string | null | undefined): string {
   return (v ?? '').trim().toLowerCase();
 }
 
+function todayDateBR(): string {
+  return formatDateBR(Date.now());
+}
+
 const STATUS_CFG: Record<StatusPlano, { label: string; cls: string }> = {
   Execucao: { label: 'Em Execução', cls: 'text-blue-400 bg-blue-500/10 border border-blue-500/30' },
   Bloqueado: { label: 'Bloqueado', cls: 'text-red-400 bg-red-500/10 border border-red-500/30' },
@@ -124,8 +128,11 @@ const TarefaRow: React.FC<{
   onUpdate: (u: Partial<Tarefa>) => void;
   onDeleteTarefa: () => void;
 }> = ({ tarefa, responsaveis, onUpdate, onDeleteTarefa }) => {
-  const [showMenu, setShowMenu] = useState(false);
-  const resp = responsaveis.find((r) => r.id === tarefa.responsavel_id);
+  const resp = responsaveis.find(
+    (r) =>
+      normStr(r.id) === normStr(tarefa.responsavel_id) ||
+      normStr(r.nome) === normStr(tarefa.responsavel_id),
+  );
   const displayNome = resp?.nome || tarefa.responsavel_id || '';
   const cfg = TAREFA_CFG[tarefa.status_tarefa] || TAREFA_CFG.Pendente;
   const StatusIcon = cfg.Icon;
@@ -197,43 +204,26 @@ const TarefaRow: React.FC<{
         </span>
       </td>
       <td className="px-4 py-3">
-        <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-sm uppercase ${cfg.cls}`}>{cfg.label}</span>
+        <select
+          value={tarefa.status_tarefa}
+          onChange={(e) => onUpdate({ status_tarefa: e.target.value as StatusTarefa })}
+          className="text-[10px] font-semibold px-2 py-1 rounded-sm uppercase bg-slate-800 border border-slate-700 text-slate-200 outline-none focus:border-slate-500"
+        >
+          <option value="Pendente">PENDENTE</option>
+          <option value="EmExecucao">EM EXECUÇÃO</option>
+          <option value="Bloqueada">BLOQUEADA</option>
+          <option value="Concluida">CONCLUÍDA</option>
+        </select>
       </td>
-      <td className="px-4 py-3 text-right relative">
-        <button type="button" onClick={() => setShowMenu((v) => !v)} className="p-1.5 text-slate-500 hover:text-slate-300 hover:bg-slate-700 rounded transition-colors">
-          <MoreHorizontal size={14} />
+      <td className="px-2 py-3 text-right w-16">
+        <button
+          type="button"
+          onClick={onDeleteTarefa}
+          className="p-1.5 rounded text-slate-600 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+          title="Excluir tarefa"
+        >
+          <Trash2 size={13} />
         </button>
-        {showMenu && (
-          <div className="absolute right-4 top-10 z-20 bg-slate-800 border border-slate-700 rounded-lg shadow-xl py-1 min-w-[190px]">
-            {(['Pendente', 'EmExecucao'] as StatusTarefa[]).map((s) => (
-              <button
-                key={s}
-                type="button"
-                onClick={() => {
-                  onUpdate({ status_tarefa: s });
-                  setShowMenu(false);
-                }}
-                className={`w-full text-left px-3 py-2 text-xs hover:bg-slate-700 transition-colors ${
-                  tarefa.status_tarefa === s ? 'text-blue-400 font-semibold' : 'text-slate-300'
-                }`}
-              >
-                {TAREFA_CFG[s].label}
-              </button>
-            ))}
-            <div className="border-t border-slate-700 mt-1 pt-1">
-              <button
-                type="button"
-                onClick={() => {
-                  onDeleteTarefa();
-                  setShowMenu(false);
-                }}
-                className="w-full text-left px-3 py-2 text-xs text-red-400 hover:bg-red-500/10 transition-colors"
-              >
-                Excluir tarefa
-              </button>
-            </div>
-          </div>
-        )}
       </td>
     </tr>
   );
@@ -282,7 +272,7 @@ const PlanoCard: React.FC<{
   const [novaTarefa, setNovaTarefa] = useState({
     titulo: '',
     responsavel_id: loggedUserResponsavelId ?? '',
-    data_vencimento: '',
+    data_vencimento: todayDateBR(),
     descricao: '',
   });
 
@@ -330,11 +320,12 @@ const PlanoCard: React.FC<{
       data_inicio: Date.now(),
       data_vencimento: parsedVenc,
       status_tarefa: 'Pendente',
+      empresa: plano.empresa,
     });
     setNovaTarefa({
       titulo: '',
       responsavel_id: loggedUserResponsavelId ?? '',
-      data_vencimento: '',
+      data_vencimento: todayDateBR(),
       descricao: '',
     });
     setRespQuery(loggedUserResponsavelNomeDisplay ?? '');
@@ -500,7 +491,7 @@ const PlanoCard: React.FC<{
                       setNovaTarefa({
                         titulo: '',
                         responsavel_id: loggedUserResponsavelId ?? '',
-                        data_vencimento: '',
+                        data_vencimento: todayDateBR(),
                         descricao: '',
                       });
                       if (canEditResponsavel) {
@@ -517,15 +508,15 @@ const PlanoCard: React.FC<{
             </div>
 
             {tarefas.length > 0 && (
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[560px]">
+              <div className="overflow-x-hidden">
+                <table className="w-full table-fixed">
                   <thead>
                     <tr className="border-t border-b border-slate-800 text-[10px] font-semibold text-slate-600 uppercase tracking-wider bg-slate-900/40">
                       <th className="px-4 py-2 text-left">Tarefa</th>
                       <th className="px-4 py-2 text-left">Responsável</th>
                       <th className="px-4 py-2 text-left">Prazo</th>
                       <th className="px-4 py-2 text-left">Status</th>
-                      <th className="px-4 py-2 text-right">Ações</th>
+                      <th className="px-2 py-2 text-right w-16">Ações</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-800/50">
@@ -778,6 +769,10 @@ const PrioridadeCard: React.FC<{
   loggedUserResponsavelNomeDisplay?: string;
   /** Se true, permite editar o responsável (admin/gerente) */
   canEditResponsavel?: boolean;
+  /** Permite atualizar o dono da prioridade (admin) */
+  onUpdatePrioridadeOwner?: (ownerId: string) => void;
+  /** Ação para arquivar a prioridade (status Concluido) */
+  onArchive?: () => void;
   onAddPlano: (p: Omit<PlanoDeAtaque, 'id' | 'prioridade_id'>) => void;
   onUpdatePlano: (id: string, u: Partial<PlanoDeAtaque>) => void;
   onDeletePlano: (id: string) => void;
@@ -798,6 +793,8 @@ const PrioridadeCard: React.FC<{
   loggedUserResponsavelId,
   loggedUserResponsavelNomeDisplay,
   canEditResponsavel = false,
+  onUpdatePrioridadeOwner,
+  onArchive,
   onAddPlano,
   onUpdatePlano,
   onDeletePlano,
@@ -809,7 +806,7 @@ const PrioridadeCard: React.FC<{
   const [novoPlano, setNovoPlano] = useState({
     titulo: '',
     who_id: loggedUserResponsavelId ?? '',
-    when_fim: '',
+    when_fim: todayDateBR(),
   });
 
   const dono = responsaveis.find((r) => normStr(r.id) === normStr(prioridade.dono_id));
@@ -824,6 +821,8 @@ const PrioridadeCard: React.FC<{
 
   const [respQueryPlano, setRespQueryPlano] = useState(loggedUserResponsavelNome);
   const [showRespPlanoDropdown, setShowRespPlanoDropdown] = useState(false);
+  const [ownerQuery, setOwnerQuery] = useState(dono?.nome ?? prioridade.dono_id ?? '');
+  const [showOwnerDropdown, setShowOwnerDropdown] = useState(false);
 
   const respPlanoOptions = useMemo(() => {
     if (!canEditResponsavel) return [];
@@ -831,6 +830,17 @@ const PrioridadeCard: React.FC<{
     if (!q) return [];
     return responsaveis.filter((r) => normStr(r.nome).startsWith(q)).slice(0, 6);
   }, [canEditResponsavel, respQueryPlano, responsaveis]);
+
+  const ownerOptions = useMemo(() => {
+    if (!canEditResponsavel) return [];
+    const q = normStr(ownerQuery);
+    if (!q) return [];
+    return responsaveis.filter((r) => normStr(r.nome).startsWith(q)).slice(0, 6);
+  }, [canEditResponsavel, ownerQuery, responsaveis]);
+
+  useEffect(() => {
+    setOwnerQuery(dono?.nome ?? prioridade.dono_id ?? '');
+  }, [dono?.nome, prioridade.dono_id]);
 
   const handleAddPlano = () => {
     if (!novoPlano.titulo.trim()) return;
@@ -849,7 +859,7 @@ const PrioridadeCard: React.FC<{
     setNovoPlano({
       titulo: '',
       who_id: loggedUserResponsavelId ?? '',
-      when_fim: '',
+      when_fim: todayDateBR(),
     });
     setShowAddPlano(false);
   };
@@ -872,13 +882,51 @@ const PrioridadeCard: React.FC<{
               </p>
               <h3 className="text-lg font-bold text-slate-100">{prioridade.titulo}</h3>
               <div className="flex items-center gap-3 mt-1.5 text-[12px] text-slate-400 flex-wrap">
-                {dono && showDonoName && (
-                  <span className="flex items-center gap-1.5">
-                    <span className="w-5 h-5 rounded-full bg-slate-700 text-slate-300 text-[9px] font-bold flex items-center justify-center">
-                      {initials(dono.nome)}
-                    </span>
-                    {dono.nome}
-                  </span>
+                {showDonoName && (
+                  canEditResponsavel && onUpdatePrioridadeOwner ? (
+                    <div className="relative">
+                      <input
+                        value={ownerQuery}
+                        onChange={(e) => {
+                          setOwnerQuery(e.target.value);
+                          setShowOwnerDropdown(true);
+                        }}
+                        onBlur={() => {
+                          window.setTimeout(() => setShowOwnerDropdown(false), 150);
+                        }}
+                        placeholder="Dono da prioridade"
+                        className="bg-slate-800 border border-slate-700 rounded-lg px-2 py-1 text-[12px] text-slate-200 outline-none focus:border-slate-600 placeholder:text-slate-600 w-[180px]"
+                      />
+                      {showOwnerDropdown && ownerOptions.length > 0 && (
+                        <div className="absolute left-0 z-20 mt-1 w-full bg-slate-900 border border-slate-700 rounded-lg shadow-lg max-h-40 overflow-auto">
+                          {ownerOptions.map((r) => (
+                            <button
+                              key={r.id}
+                              type="button"
+                              className="w-full text-left px-3 py-2 text-[13px] text-slate-100 hover:bg-slate-800 transition-colors"
+                              onMouseDown={(e) => {
+                                e.preventDefault();
+                                setOwnerQuery(r.nome);
+                                onUpdatePrioridadeOwner(r.id);
+                                setShowOwnerDropdown(false);
+                              }}
+                            >
+                              {r.nome}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    dono && (
+                      <span className="flex items-center gap-1.5">
+                        <span className="w-5 h-5 rounded-full bg-slate-700 text-slate-300 text-[9px] font-bold flex items-center justify-center">
+                          {initials(dono.nome)}
+                        </span>
+                        {dono.nome}
+                      </span>
+                    )
+                  )
                 )}
                 <span>Meta: {fmtDate(prioridade.data_alvo)}</span>
                 <span
@@ -888,13 +936,27 @@ const PrioridadeCard: React.FC<{
                 </span>
               </div>
             </div>
-            <div className="flex items-center gap-6 shrink-0">
+            <div className="flex items-center gap-4 shrink-0">
               <div className="text-center">
                 <p className="text-2xl font-bold text-slate-100 tabular-nums">
                   {planos.length}
                 </p>
                 <p className="text-[11px] text-slate-500">planos de ataque</p>
               </div>
+              {onArchive && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onArchive();
+                  }}
+                  className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-[11px] font-medium bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-amber-300 transition-colors"
+                  title="Arquivar prioridade (marcar como concluída)"
+                >
+                  <Archive size={13} />
+                  Arquivar
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -915,7 +977,7 @@ const PrioridadeCard: React.FC<{
                     setNovoPlano({
                       titulo: '',
                       who_id: loggedUserResponsavelId ?? '',
-                      when_fim: '',
+                      when_fim: todayDateBR(),
                     });
                     setRespQueryPlano(loggedUserResponsavelNome);
                     setShowRespPlanoDropdown(false);
@@ -1043,6 +1105,8 @@ const PrioridadeCard: React.FC<{
                 onAddTarefa={onAddTarefa}
                 onUpdateTarefa={onUpdateTarefa}
                 onDeleteTarefa={onDeleteTarefa}
+                whoOverrideName={planoWhoOverrideName}
+                lockWhoToOverrideName={lockPlanoWhoToPriorityDono}
                 loggedUserResponsavelId={loggedUserResponsavelId}
                 loggedUserResponsavelNomeDisplay={loggedUserResponsavelNomeDisplay}
                 canEditResponsavel={canEditResponsavel}
@@ -1065,6 +1129,7 @@ export const EstrategicoView: React.FC<EstrategicoViewProps> = (props) => {
     responsaveis,
     computeStatusPlano,
     onAddPrioridade,
+    onUpdatePrioridade,
     podeAdicionarPrioridade,
     onAddPlano,
     onUpdatePlano,
@@ -1079,6 +1144,7 @@ export const EstrategicoView: React.FC<EstrategicoViewProps> = (props) => {
   } = props;
 
   const isAdmin = loggedUserRole === 'administrador' || loggedUserRole === 'gerente';
+  const canEditResponsavel = loggedUserRole === 'administrador';
 
   useEffect(() => {
     if (!focusPrioridadeId) return;
@@ -1102,7 +1168,9 @@ export const EstrategicoView: React.FC<EstrategicoViewProps> = (props) => {
     const matchByName = loggedUserName
       ? responsaveis.find((r) => normStr(r.nome) === normStr(loggedUserName))
       : undefined;
-    return matchByName?.id ?? loggedUserUid ?? '';
+    // Se não existir vínculo em "responsaveis", usa o nome da conta
+    // para evitar salvar/exibir UID bruto como responsável.
+    return matchByName?.id ?? (loggedUserName?.trim() || loggedUserUid || '');
   }, [loggedUserName, loggedUserUid, responsaveis]);
 
   const loggedUserResponsavelNomeDisplay = loggedUserName ?? '';
@@ -1171,8 +1239,20 @@ export const EstrategicoView: React.FC<EstrategicoViewProps> = (props) => {
                   lockPlanoWhoToPriorityDono={!isAdmin}
                   loggedUserResponsavelId={loggedUserResponsavelId}
                   loggedUserResponsavelNomeDisplay={loggedUserResponsavelNomeDisplay}
-                  canEditResponsavel={isAdmin}
-                  onAddPlano={(pl) => onAddPlano({ ...pl, prioridade_id: p.id })}
+                  canEditResponsavel={canEditResponsavel}
+                  onUpdatePrioridadeOwner={
+                    onUpdatePrioridade
+                      ? (ownerId) => onUpdatePrioridade(p.id, { dono_id: ownerId })
+                      : undefined
+                  }
+                  onArchive={
+                    onUpdatePrioridade
+                      ? () => onUpdatePrioridade(p.id, { status_prioridade: 'Concluido' })
+                      : undefined
+                  }
+                  onAddPlano={(pl) =>
+                    onAddPlano({ ...pl, prioridade_id: p.id, empresa: p.empresa })
+                  }
                   onUpdatePlano={onUpdatePlano}
                   onDeletePlano={onDeletePlano}
                   onAddTarefa={onAddTarefa}

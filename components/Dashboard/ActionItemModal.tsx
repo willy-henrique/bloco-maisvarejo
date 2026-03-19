@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ActionItem, ItemStatus, UrgencyLevel } from '../../types';
 import { Modal } from '../Shared/Modal';
-import { MapPin, User, Calendar, FileText } from 'lucide-react';
+import { MapPin, User, Calendar } from 'lucide-react';
 
 interface ActionItemModalProps {
   isOpen: boolean;
@@ -20,6 +20,8 @@ interface ActionItemModalProps {
   hideWhereEmpresa?: boolean;
   /** Quando true, esconde Status/Urgência (ex.: Backlog simplificado) */
   hideStatusUrgency?: boolean;
+  /** Quando true, permite editar o campo "Quem?" */
+  canEditWho?: boolean;
 }
 
 const emptyForm = (whoDefault: string): Omit<ActionItem, 'id' | 'createdAt' | 'updatedAt'> => ({
@@ -48,16 +50,24 @@ export const ActionItemModal: React.FC<ActionItemModalProps> = ({
   lockWhoToLoggedUser = false,
   hideWhereEmpresa = false,
   hideStatusUrgency = false,
+  canEditWho = false,
 }) => {
   const isEdit = item !== null;
-  const isBacklogLike = hideWhereEmpresa && hideStatusUrgency;
+  const isBacklogItem =
+    item?.status === ItemStatus.BACKLOG || initialStatus === ItemStatus.BACKLOG;
+  const isBacklogLike = (hideWhereEmpresa && hideStatusUrgency) || isBacklogItem;
+  const effectiveHideWhereEmpresa = hideWhereEmpresa || isBacklogLike;
+  const effectiveHideStatusUrgency = hideStatusUrgency || isBacklogLike;
   const isWhoLocked = lockWhoToLoggedUser && !!loggedUserName?.trim();
-  const whoDefault = isWhoLocked ? loggedUserName!.trim() : '';
+  // Em edição, mantém o "Quem?" original do item.
+  const shouldLockWho = isWhoLocked && !isEdit;
+  const isWhoReadOnly = !canEditWho;
+  const whoDefault = shouldLockWho ? loggedUserName!.trim() : '';
   const [form, setForm] = useState(emptyForm(whoDefault));
 
   useEffect(() => {
     if (item) {
-      const whoValue = isWhoLocked ? whoDefault : item.who;
+      const whoValue = item.who;
       setForm({
         what: item.what,
         why: item.why,
@@ -78,7 +88,7 @@ export const ActionItemModal: React.FC<ActionItemModalProps> = ({
         who: whoDefault,
       });
     }
-  }, [item, initialStatus, isOpen, defaultEmpresa, isWhoLocked, whoDefault]);
+  }, [item, initialStatus, isOpen, defaultEmpresa, whoDefault]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -98,7 +108,7 @@ export const ActionItemModal: React.FC<ActionItemModalProps> = ({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={isEdit ? 'Editar Iniciativa' : isBacklogLike ? 'Item Backlog' : 'Novo'}
+      title={isBacklogLike ? 'Item Backlog' : isEdit ? 'Editar Iniciativa' : 'Novo'}
       maxWidth="xl"
     >
       <form onSubmit={handleSubmit} className="space-y-4">
@@ -128,7 +138,7 @@ export const ActionItemModal: React.FC<ActionItemModalProps> = ({
               className="w-full bg-slate-800/50 border border-slate-700 rounded-lg px-3 py-2.5 text-sm text-slate-300 placeholder:text-slate-500 outline-none focus:border-slate-600 resize-none"
             />
           </div>
-          {!hideWhereEmpresa && (
+          {!effectiveHideWhereEmpresa && (
             <>
               <div>
                 <label className="block text-[10px] font-medium text-slate-500 uppercase tracking-wider mb-1.5">
@@ -190,11 +200,11 @@ export const ActionItemModal: React.FC<ActionItemModalProps> = ({
             <label className="block text-[10px] font-medium text-slate-500 uppercase tracking-wider mb-1.5">
               Quem?
             </label>
-            {isWhoLocked ? (
+            {isWhoReadOnly ? (
               <div className="relative">
                 <User size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
                 <div className="w-full bg-slate-800/50 border border-slate-700 rounded-lg pl-9 pr-3 py-2.5 text-sm text-slate-200">
-                  {whoDefault || '—'}
+                  {form.who || whoDefault || '—'}
                 </div>
               </div>
             ) : (
@@ -225,7 +235,7 @@ export const ActionItemModal: React.FC<ActionItemModalProps> = ({
               />
             </div>
           </div>
-          {!hideStatusUrgency && (
+          {!effectiveHideStatusUrgency && (
             <>
               <div>
                 <label className="block text-[10px] font-medium text-slate-500 uppercase tracking-wider mb-1.5">
@@ -242,37 +252,6 @@ export const ActionItemModal: React.FC<ActionItemModalProps> = ({
                     </option>
                   ))}
                 </select>
-              </div>
-            </>
-          )}
-          {(!isBacklogLike || isEdit) && (
-            <>
-              <div className="md:col-span-2">
-                <label className="block text-[10px] font-medium text-slate-500 uppercase tracking-wider mb-1.5">
-                  Como?
-                </label>
-                <textarea
-                  value={form.how}
-                  onChange={(e) => update('how', e.target.value)}
-                  placeholder="Plano de execução"
-                  rows={3}
-                  className="w-full bg-slate-800/50 border border-slate-700 rounded-lg px-3 py-2.5 text-sm text-slate-300 placeholder:text-slate-500 outline-none focus:border-slate-600 resize-none"
-                />
-              </div>
-              <div className="md:col-span-2">
-                <label className="block text-[10px] font-medium text-slate-500 uppercase tracking-wider mb-1.5">
-                  Notas
-                </label>
-                <div className="relative">
-                  <FileText size={14} className="absolute left-3 top-3 text-slate-500" />
-                  <textarea
-                    value={form.notes}
-                    onChange={(e) => update('notes', e.target.value)}
-                    placeholder="Observações adicionais"
-                    rows={2}
-                    className="w-full bg-slate-800/50 border border-slate-700 rounded-lg pl-9 pr-3 py-2.5 text-sm text-slate-400 placeholder:text-slate-500 outline-none focus:border-slate-600 resize-none"
-                  />
-                </div>
               </div>
             </>
           )}
