@@ -847,7 +847,7 @@ function AppContent() {
             <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
             Conectado
           </div>
-          <span>WillTech v8</span>
+          <span>WillTech v9</span>
         </footer>
       </main>
     </div>
