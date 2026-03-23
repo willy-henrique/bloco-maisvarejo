@@ -51,7 +51,12 @@ function titleFromFirstMessage(content: string): string {
   return t ? (t.length >= 50 ? `${t}…` : t) : 'Nova conversa';
 }
 
-export const ChatView: React.FC = () => {
+interface ChatViewProps {
+  /** Permissão "Enviar mensagens" no painel admin */
+  canSend?: boolean;
+}
+
+export const ChatView: React.FC<ChatViewProps> = ({ canSend = true }) => {
   const [conversations, setConversations] = useState<Conversation[]>(() => loadConversations());
   const [currentId, setCurrentId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -132,6 +137,7 @@ export const ChatView: React.FC = () => {
   );
 
   const sendMessage = async () => {
+    if (!canSend) return;
     const text = input.trim();
     if (!text || loading) return;
 
@@ -223,14 +229,16 @@ export const ChatView: React.FC = () => {
             <ChevronRight size={18} />
           </button>
         </div>
-        <button
-          type="button"
-          onClick={startNewConversation}
-          className="m-2 flex items-center gap-2 px-3 py-2.5 rounded-lg bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 text-sm font-medium transition-colors"
-        >
-          <MessageSquarePlus size={18} />
-          Nova conversa
-        </button>
+        {canSend && (
+          <button
+            type="button"
+            onClick={startNewConversation}
+            className="m-2 flex items-center gap-2 px-3 py-2.5 rounded-lg bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 text-sm font-medium transition-colors"
+          >
+            <MessageSquarePlus size={18} />
+            Nova conversa
+          </button>
+        )}
         <div className="flex-1 overflow-y-auto min-h-0 p-2 space-y-0.5">
           {conversations.length === 0 && (
             <p className="text-slate-500 text-xs px-3 py-4">Nenhuma conversa salva.</p>
@@ -251,14 +259,16 @@ export const ChatView: React.FC = () => {
                 <p className="text-sm font-medium truncate">{c.title}</p>
                 <p className="text-[10px] text-slate-500">{formatDate(c.updatedAt)}</p>
               </div>
-              <button
-                type="button"
-                onClick={(e) => deleteConversation(e, c.id)}
-                className="shrink-0 p-1.5 rounded text-slate-500 hover:text-red-400 hover:bg-red-500/10 opacity-0 group-hover:opacity-100 transition-all"
-                aria-label="Excluir conversa"
-              >
-                <Trash2 size={12} />
-              </button>
+              {canSend && (
+                <button
+                  type="button"
+                  onClick={(e) => deleteConversation(e, c.id)}
+                  className="shrink-0 p-1.5 rounded text-slate-500 hover:text-red-400 hover:bg-red-500/10 opacity-0 group-hover:opacity-100 transition-all"
+                  aria-label="Excluir conversa"
+                >
+                  <Trash2 size={12} />
+                </button>
+              )}
             </div>
           ))}
         </div>
@@ -317,31 +327,37 @@ export const ChatView: React.FC = () => {
           </div>
 
           <div className="shrink-0 pt-4">
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                sendMessage();
-              }}
-              className="flex gap-3"
-            >
-              <input
-                type="text"
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                placeholder="Digite sua mensagem..."
-                className="flex-1 bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-sm text-slate-100 placeholder:text-slate-500 outline-none focus:border-blue-500/60 focus:ring-1 focus:ring-blue-500/30 transition-all"
-                disabled={loading}
-              />
-              <button
-                type="submit"
-                disabled={loading || !input.trim()}
-                className="shrink-0 px-5 py-3 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl font-medium text-sm transition-colors flex items-center gap-2"
-                aria-label="Enviar"
+            {!canSend ? (
+              <p className="text-center text-xs text-amber-400/90 bg-amber-500/10 border border-amber-500/20 rounded-xl px-4 py-3">
+                Você não tem permissão para enviar mensagens no chat.
+              </p>
+            ) : (
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  sendMessage();
+                }}
+                className="flex gap-3"
               >
-                {loading ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}
-                <span className="hidden sm:inline">Enviar</span>
-              </button>
-            </form>
+                <input
+                  type="text"
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  placeholder="Digite sua mensagem..."
+                  className="flex-1 bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-sm text-slate-100 placeholder:text-slate-500 outline-none focus:border-blue-500/60 focus:ring-1 focus:ring-blue-500/30 transition-all"
+                  disabled={loading}
+                />
+                <button
+                  type="submit"
+                  disabled={loading || !input.trim()}
+                  className="shrink-0 px-5 py-3 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl font-medium text-sm transition-colors flex items-center gap-2"
+                  aria-label="Enviar"
+                >
+                  {loading ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}
+                  <span className="hidden sm:inline">Enviar</span>
+                </button>
+              </form>
+            )}
           </div>
         </div>
       </div>

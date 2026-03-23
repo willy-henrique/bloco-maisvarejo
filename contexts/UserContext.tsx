@@ -4,6 +4,7 @@ import { onAuthChange, getUserProfile, logoutFirebase } from '../services/fireba
 import { isFirebaseConfigured } from '../services/firebase';
 import type { UserProfile, UserRole } from '../types/user';
 import type { ViewId } from '../components/Layout/Sidebar';
+import { userHasViewAccess, userHasModuleAction } from '../utils/permissions';
 import {
   exportKeyToBase64,
   importKeyFromBase64,
@@ -137,9 +138,14 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
 
   const hasView = useCallback(
     (view: ViewId): boolean => {
-      if (!profile) return false;
-      if (profile.role === 'administrador' || profile.role === 'gerente') return true;
-      return profile.views.includes(view);
+      return userHasViewAccess(profile, view);
+    },
+    [profile]
+  );
+
+  const hasModuleAction = useCallback(
+    (view: ViewId, actionId: string): boolean => {
+      return userHasModuleAction(profile, view, actionId);
     },
     [profile]
   );
@@ -162,6 +168,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     login,
     logout,
     hasView,
+    hasModuleAction,
     hasEmpresa,
     role: profile?.role ?? null,
   };

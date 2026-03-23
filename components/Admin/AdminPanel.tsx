@@ -67,6 +67,7 @@ export const AdminPanel: React.FC = () => {
     password: string;
     role: UserProfile['role'];
     views: UserProfile['views'];
+    modulePermissions: NonNullable<UserProfile['modulePermissions']>;
     empresas: string[];
     ativo: boolean;
   }) => {
@@ -80,6 +81,9 @@ export const AdminPanel: React.FC = () => {
         nome: data.nome,
         role: data.role,
         views: data.views,
+        ...(data.role !== 'administrador' && Object.keys(data.modulePermissions).length > 0
+          ? { modulePermissions: data.modulePermissions }
+          : {}),
         empresas: data.empresas,
         ativo: data.ativo,
         criadoEm: Date.now(),

@@ -33,8 +33,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
   allowedViews,
   userName,
 }) => {
-  const isFullAccess = !userRole || userRole === 'administrador' || userRole === 'gerente';
-  const canAccessView = (view: ViewId) => isFullAccess || (allowedViews?.includes(view) ?? false);
+  const isAdmin = userRole === 'administrador';
+  /** Gerente sem views cadastradas = acesso a todas (compatível com perfis antigos). */
+  const gerenteLegacyFull =
+    userRole === 'gerente' && (!allowedViews || allowedViews.length === 0);
+  const canAccessView = (view: ViewId) => {
+    if (!userRole) return true;
+    if (view === 'backlog') return true;
+    if (isAdmin) return true;
+    if (gerenteLegacyFull) return true;
+    return allowedViews?.includes(view) ?? false;
+  };
 
   const allMenuItems = [
     { id: 'backlog', icon: ListTodo, label: 'Backlog' },

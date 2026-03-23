@@ -1,17 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import type { UserProfile, UserRole } from '../../types/user';
 import type { ViewId } from '../Layout/Sidebar';
-import { Save, UserPlus } from 'lucide-react';
-
-const ALL_VIEWS: { id: ViewId; label: string }[] = [
-  { id: 'backlog', label: 'Backlog' },
-  { id: 'dashboard', label: 'Estratégico' },
-  { id: 'table', label: 'Tático' },
-  { id: 'operacional', label: 'Operacional' },
-  { id: 'performance', label: 'Desempenho' },
-  { id: 'roadmap', label: 'Roadmap' },
-  { id: 'ia', label: '5W2H CHAT' },
-];
+import {
+  ADMIN_SELECTABLE_VIEWS,
+  MODULE_ACTIONS,
+  type ModulePermissionMap,
+  allActionIdsForView,
+  defaultModulePermissionsForViews,
+} from '../../types/modulePermissions';
+import { Save, UserPlus, ChevronDown, ChevronRight } from 'lucide-react';
 
 const ROLES: { id: UserRole; label: string }[] = [
   { id: 'administrador', label: 'Administrador' },
@@ -29,6 +26,7 @@ interface UserFormProps {
     password: string;
     role: UserRole;
     views: ViewId[];
+    modulePermissions: ModulePermissionMap;
     empresas: string[];
     ativo: boolean;
   }) => Promise<void>;
@@ -42,11 +40,16 @@ export const UserForm: React.FC<UserFormProps> = ({
   onCreate,
   onUpdate,
 }) => {
+  const ensureBacklogView = (list: ViewId[]): ViewId[] =>
+    list.includes('backlog') ? list : (['backlog', ...list] as ViewId[]);
+
   const [nome, setNome] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [role, setRole] = useState<UserRole>('usuario');
   const [views, setViews] = useState<ViewId[]>([]);
+  const [modulePermissions, setModulePermissions] = useState<ModulePermissionMap>({});
+  const [expandedModule, setExpandedModule] = useState<ViewId | null>(null);
   const [empresas, setEmpresas] = useState<string[]>([]);
   const [ativo, setAtivo] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -56,18 +59,72 @@ export const UserForm: React.FC<UserFormProps> = ({
       setNome(user.nome);
       setEmail(user.email);
       setRole(user.role);
-      setViews(user.views);
+      const safeViews = ensureBacklogView(Array.isArray(user.views) ? user.views : []);
+      setViews(safeViews);
+      if (user.modulePermissions && Object.keys(user.modulePermissions).length > 0) {
+        setModulePermissions({
+          ...user.modulePermissions,
+          backlog: user.modulePermissions.backlog ?? allActionIdsForView('backlog'),
+        });
+      } else {
+        setModulePermissions(defaultModulePermissionsForViews(safeViews));
+      }
       setEmpresas(user.empresas);
       setAtivo(user.ativo);
+      setExpandedModule(null);
     }
   }, [mode, user]);
 
+  const showViewsAndActions = role === 'usuario' || role === 'gerente';
+
+  const viewLabel = useMemo(() => {
+    const m = new Map(ADMIN_SELECTABLE_VIEWS.map((v) => [v.id, v.label]));
+    return (id: ViewId) => m.get(id) ?? id;
+  }, []);
+
   const toggleView = (v: ViewId) => {
-    setViews((prev) => (prev.includes(v) ? prev.filter((x) => x !== v) : [...prev, v]));
+    if (v === 'backlog') return;
+    setViews((prev) => {
+      if (prev.includes(v)) {
+        setModulePermissions((mp) => {
+          const next = { ...mp };
+          delete next[v];
+          return next;
+        });
+        return prev.filter((x) => x !== v);
+      }
+      const ids = allActionIdsForView(v);
+      setModulePermissions((mp) => ({ ...mp, [v]: ids }));
+      return ensureBacklogView([...prev, v]);
+    });
   };
 
-  const toggleEmpresa = (e: string) => {
-    setEmpresas((prev) => (prev.includes(e) ? prev.filter((x) => x !== e) : [...prev, e]));
+  const toggleAction = (view: ViewId, actionId: string) => {
+    setModulePermissions((mp) => {
+      const cur = mp[view] ?? allActionIdsForView(view);
+      const next = cur.includes(actionId) ? cur.filter((a) => a !== actionId) : [...cur, actionId];
+      return { ...mp, [view]: next };
+    });
+  };
+
+  const selectAllActions = (view: ViewId) => {
+    setModulePermissions((mp) => ({ ...mp, [view]: allActionIdsForView(view) }));
+  };
+
+  const clearActions = (view: ViewId) => {
+    setModulePermissions((mp) => ({ ...mp, [view]: [] }));
+  };
+
+  const handleRoleClick = (r: UserRole) => {
+    setRole(r);
+    if (r === 'gerente' || r === 'usuario') {
+      setViews((prev) => {
+        if (prev.length > 0) return ensureBacklogView(prev);
+        const allIds = ensureBacklogView(ADMIN_SELECTABLE_VIEWS.map((x) => x.id));
+        setModulePermissions(defaultModulePermissionsForViews(allIds));
+        return allIds;
+      });
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -75,20 +132,43 @@ export const UserForm: React.FC<UserFormProps> = ({
     setSubmitting(true);
     try {
       if (mode === 'create') {
-        await onCreate({ nome, email, password, role, views, empresas, ativo });
+        const mp =
+          role === 'administrador'
+            ? {}
+            : Object.fromEntries(
+                ensureBacklogView(views).map((v) => [v, modulePermissions[v] ?? allActionIdsForView(v)])
+              ) as ModulePermissionMap;
+        const safeViews = ensureBacklogView(views);
+        await onCreate({
+          nome,
+          email,
+          password,
+          role,
+          views: role === 'administrador' ? [] : safeViews,
+          modulePermissions: mp,
+          empresas,
+          ativo,
+        });
       } else if (user) {
-        await onUpdate(user.uid, { nome, role, views, empresas, ativo });
+        const base: Partial<UserProfile> = { nome, role, empresas, ativo };
+        if (role === 'usuario' || role === 'gerente') {
+          const safeViews = ensureBacklogView(views);
+          base.views = safeViews;
+          base.modulePermissions = Object.fromEntries(
+            safeViews.map((v) => [v, modulePermissions[v] ?? allActionIdsForView(v)])
+          ) as ModulePermissionMap;
+        }
+        await onUpdate(user.uid, base);
       }
     } finally {
       setSubmitting(false);
     }
   };
 
-  const showViewsConfig = role === 'usuario';
   const hasAllEmpresas = empresas.includes('*');
 
   return (
-    <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-5 max-w-2xl">
+    <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-5 max-w-3xl">
       <h3 className="text-base font-semibold text-slate-100 mb-4 flex items-center gap-2">
         {mode === 'create' ? <UserPlus size={18} /> : <Save size={18} />}
         {mode === 'create' ? 'Novo Usuário' : `Editar: ${user?.nome}`}
@@ -138,12 +218,12 @@ export const UserForm: React.FC<UserFormProps> = ({
 
         <div>
           <label className="block text-[10px] text-slate-500 uppercase tracking-wider font-medium mb-1.5">Perfil</label>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             {ROLES.map((r) => (
               <button
                 key={r.id}
                 type="button"
-                onClick={() => setRole(r.id)}
+                onClick={() => handleRoleClick(r.id)}
                 className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
                   role === r.id
                     ? 'bg-amber-600 border-amber-500 text-white'
@@ -154,32 +234,111 @@ export const UserForm: React.FC<UserFormProps> = ({
               </button>
             ))}
           </div>
+          {role === 'administrador' && (
+            <p className="text-[10px] text-slate-600 mt-1.5">Administrador tem acesso total a todas as views e ações.</p>
+          )}
         </div>
 
-        {showViewsConfig && (
-          <div>
-            <label className="block text-[10px] text-slate-500 uppercase tracking-wider font-medium mb-1.5">
-              Views permitidas
-            </label>
-            <div className="flex flex-wrap gap-2">
-              {ALL_VIEWS.map((v) => (
-                <button
-                  key={v.id}
-                  type="button"
-                  onClick={() => toggleView(v.id)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
-                    views.includes(v.id)
-                      ? 'bg-blue-600 border-blue-500 text-white'
-                      : 'bg-slate-900 border-slate-700 text-slate-300 hover:border-slate-500'
-                  }`}
-                >
-                  {v.label}
-                </button>
-              ))}
+        {showViewsAndActions && (
+          <div className="space-y-3">
+            <div>
+              <label className="block text-[10px] text-slate-500 uppercase tracking-wider font-medium mb-1.5">
+                Views permitidas
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {ADMIN_SELECTABLE_VIEWS.map((v) => (
+                  <button
+                    key={v.id}
+                    type="button"
+                    onClick={() => toggleView(v.id)}
+                    disabled={v.id === 'backlog'}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
+                      views.includes(v.id)
+                        ? 'bg-blue-600 border-blue-500 text-white'
+                        : 'bg-slate-900 border-slate-700 text-slate-300 hover:border-slate-500'
+                    } ${v.id === 'backlog' ? 'opacity-80 cursor-not-allowed' : ''}`}
+                  >
+                    {v.label} {v.id === 'backlog' ? '(obrigatório)' : ''}
+                  </button>
+                ))}
+              </div>
+              <p className="text-[10px] text-slate-600 mt-1">
+                Workspace é exclusivo para administradores.
+              </p>
             </div>
-            <p className="text-[10px] text-slate-600 mt-1">
-              Workspace é exclusivo para administradores.
-            </p>
+
+            <div className="border border-slate-800 rounded-lg p-3 bg-slate-950/40 space-y-2">
+              <label className="block text-[10px] text-slate-500 uppercase tracking-wider font-medium">
+                Ações por módulo
+              </label>
+              <p className="text-[10px] text-slate-600 mb-2">
+                Para cada view ativa, defina o que o usuário pode fazer. Sem nenhuma ação marcada = apenas visualizar (leitura).
+              </p>
+              {views.length === 0 ? (
+                <p className="text-xs text-slate-500 py-2">Selecione ao menos uma view acima.</p>
+              ) : (
+                <div className="space-y-1">
+                  {views.map((vid) => {
+                    const actions = MODULE_ACTIONS[vid] ?? [];
+                    const selected = new Set(modulePermissions[vid] ?? allActionIdsForView(vid));
+                    const open = expandedModule === vid;
+                    return (
+                      <div key={vid} className="border border-slate-800/80 rounded-lg overflow-hidden">
+                        <button
+                          type="button"
+                          onClick={() => setExpandedModule(open ? null : vid)}
+                          className="w-full flex items-center justify-between px-3 py-2 text-left hover:bg-slate-800/40 transition-colors"
+                        >
+                          <span className="text-xs font-medium text-slate-200 flex items-center gap-2">
+                            {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                            {viewLabel(vid)}
+                          </span>
+                          <span className="text-[10px] text-slate-500 tabular-nums">
+                            {selected.size}/{actions.length} ações
+                          </span>
+                        </button>
+                        {open && (
+                          <div className="px-3 pb-3 pt-0 border-t border-slate-800/80 space-y-2">
+                            <div className="flex flex-wrap gap-2 pt-2">
+                              <button
+                                type="button"
+                                onClick={() => selectAllActions(vid)}
+                                className="text-[10px] px-2 py-1 rounded border border-slate-600 text-slate-400 hover:text-slate-200"
+                              >
+                                Marcar todas
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => clearActions(vid)}
+                                className="text-[10px] px-2 py-1 rounded border border-slate-600 text-slate-400 hover:text-slate-200"
+                              >
+                                Somente leitura
+                              </button>
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                              {actions.map((a) => (
+                                <button
+                                  key={a.id}
+                                  type="button"
+                                  onClick={() => toggleAction(vid, a.id)}
+                                  className={`px-2.5 py-1.5 rounded-lg text-[11px] font-medium border transition-colors ${
+                                    selected.has(a.id)
+                                      ? 'bg-emerald-600/90 border-emerald-500 text-white'
+                                      : 'bg-slate-900 border-slate-700 text-slate-400 hover:border-slate-500'
+                                  }`}
+                                >
+                                  {a.label}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           </div>
         )}
 
@@ -210,7 +369,7 @@ export const UserForm: React.FC<UserFormProps> = ({
                   <button
                     key={emp}
                     type="button"
-                    onClick={() => !hasAllEmpresas && toggleEmpresa(emp)}
+                    onClick={() => !hasAllEmpresas && setEmpresas((prev) => (prev.includes(emp) ? prev.filter((x) => x !== emp) : [...prev, emp]))}
                     disabled={hasAllEmpresas}
                     className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
                       hasAllEmpresas
@@ -251,7 +410,7 @@ export const UserForm: React.FC<UserFormProps> = ({
         <div className="pt-3 border-t border-slate-800">
           <button
             type="submit"
-            disabled={submitting}
+            disabled={submitting || (showViewsAndActions && views.length === 0)}
             className="bg-amber-600 hover:bg-amber-700 disabled:bg-slate-700 text-white text-sm font-medium px-6 py-2.5 rounded-lg flex items-center gap-2 transition-colors disabled:opacity-70"
           >
             {submitting ? (
@@ -266,6 +425,9 @@ export const UserForm: React.FC<UserFormProps> = ({
               </>
             )}
           </button>
+          {showViewsAndActions && views.length === 0 && (
+            <p className="text-[10px] text-amber-500/90 mt-2">Selecione ao menos uma view para gerente ou usuário.</p>
+          )}
         </div>
       </form>
     </div>

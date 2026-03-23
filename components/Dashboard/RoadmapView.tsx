@@ -7,6 +7,8 @@ import { Badge } from '../Shared/Badge';
 interface RoadmapViewProps {
   items: ActionItem[];
   onOpenItem?: (item: ActionItem) => void;
+  /** Permissão para abrir o modal de edição */
+  canOpenItem?: boolean;
 }
 
 const MONTHS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
@@ -26,7 +28,7 @@ function formatMonthLabel(month: number, year: number): string {
   return `${MONTHS[month]} ${year}`;
 }
 
-export const RoadmapView: React.FC<RoadmapViewProps> = ({ items, onOpenItem }) => {
+export const RoadmapView: React.FC<RoadmapViewProps> = ({ items, onOpenItem, canOpenItem = true }) => {
   const byMonth = useMemo(() => {
     const map = new Map<string, ActionItem[]>();
     items.forEach(item => {
@@ -76,8 +78,9 @@ export const RoadmapView: React.FC<RoadmapViewProps> = ({ items, onOpenItem }) =
                   <li key={item.id}>
                     <button
                       type="button"
-                      onClick={() => onOpenItem?.(item)}
-                      className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-slate-800/40 transition-colors group"
+                      onClick={() => canOpenItem && onOpenItem?.(item)}
+                      disabled={!canOpenItem}
+                      className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-slate-800/40 transition-colors group disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:bg-transparent"
                     >
                       <Badge type="status" value={item.status} />
                       <div className="flex-1 min-w-0">
@@ -109,8 +112,9 @@ export const RoadmapView: React.FC<RoadmapViewProps> = ({ items, onOpenItem }) =
                   <li key={item.id}>
                     <button
                       type="button"
-                      onClick={() => onOpenItem?.(item)}
-                      className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-slate-800/40 transition-colors group"
+                      onClick={() => canOpenItem && onOpenItem?.(item)}
+                      disabled={!canOpenItem}
+                      className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-slate-800/40 transition-colors group disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:bg-transparent"
                     >
                       <Badge type="status" value={item.status} />
                       <div className="flex-1 min-w-0">

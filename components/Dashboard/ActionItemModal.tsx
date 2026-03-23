@@ -22,6 +22,13 @@ interface ActionItemModalProps {
   hideStatusUrgency?: boolean;
   /** Quando true, permite editar o campo "Quem?" */
   canEditWho?: boolean;
+  /** Somente leitura (permissão de edição negada) */
+  readOnly?: boolean;
+  /**
+   * Estratégico (Kanban): mesmo formulário “slim” do Backlog (Título, Descrição, Quem?, Quando?),
+   * com título de modal “Item Estratégico”.
+   */
+  itemModalContext?: 'default' | 'backlog' | 'estrategico';
 }
 
 const emptyForm = (whoDefault: string): Omit<ActionItem, 'id' | 'createdAt' | 'updatedAt'> => ({
@@ -51,17 +58,22 @@ export const ActionItemModal: React.FC<ActionItemModalProps> = ({
   hideWhereEmpresa = false,
   hideStatusUrgency = false,
   canEditWho = false,
+  readOnly = false,
+  itemModalContext = 'default',
 }) => {
   const isEdit = item !== null;
   const isBacklogItem =
     item?.status === ItemStatus.BACKLOG || initialStatus === ItemStatus.BACKLOG;
-  const isBacklogLike = (hideWhereEmpresa && hideStatusUrgency) || isBacklogItem;
+  const isEstrategicoKanban = itemModalContext === 'estrategico';
+  const isBacklogLike =
+    (hideWhereEmpresa && hideStatusUrgency) || isBacklogItem || isEstrategicoKanban;
   const effectiveHideWhereEmpresa = hideWhereEmpresa || isBacklogLike;
   const effectiveHideStatusUrgency = hideStatusUrgency || isBacklogLike;
   const isWhoLocked = lockWhoToLoggedUser && !!loggedUserName?.trim();
   // Em edição, mantém o "Quem?" original do item.
   const shouldLockWho = isWhoLocked && !isEdit;
-  const isWhoReadOnly = !canEditWho;
+  const lockWhoAndWhen = isBacklogLike;
+  const isWhoReadOnly = lockWhoAndWhen || !canEditWho;
   const whoDefault = shouldLockWho ? loggedUserName!.trim() : '';
   const [form, setForm] = useState(emptyForm(whoDefault));
 
@@ -92,6 +104,7 @@ export const ActionItemModal: React.FC<ActionItemModalProps> = ({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (readOnly) return;
     if (isEdit && item) {
       onUpdate(item.id, { ...form });
     } else {
@@ -104,14 +117,26 @@ export const ActionItemModal: React.FC<ActionItemModalProps> = ({
     setForm((prev) => ({ ...prev, [field]: value }));
   };
 
+  const slimFormTitle =
+    itemModalContext === 'estrategico'
+      ? 'Item Estratégico'
+      : isBacklogLike
+      ? 'Item Backlog'
+      : null;
+
   return (
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={isBacklogLike ? 'Item Backlog' : isEdit ? 'Editar Iniciativa' : 'Novo'}
+      title={slimFormTitle ?? (isEdit ? 'Editar Iniciativa' : 'Novo')}
       maxWidth="xl"
     >
       <form onSubmit={handleSubmit} className="space-y-4">
+        {readOnly && (
+          <p className="text-xs text-amber-400/90 bg-amber-500/10 border border-amber-500/25 rounded-lg px-3 py-2">
+            Você não tem permissão para editar este item. Os campos estão bloqueados.
+          </p>
+        )}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="md:col-span-2">
             <label className="block text-[10px] font-medium text-slate-500 uppercase tracking-wider mb-1.5">
@@ -122,8 +147,10 @@ export const ActionItemModal: React.FC<ActionItemModalProps> = ({
               value={form.what}
               onChange={(e) => update('what', e.target.value)}
               placeholder={isBacklogLike ? 'Titulo do backlog' : 'Descrição da ação'}
-              className="w-full bg-slate-800/50 border border-slate-700 rounded-lg px-3 py-2.5 text-sm text-slate-100 placeholder:text-slate-500 outline-none focus:border-slate-600"
+              className="w-full bg-slate-800/50 border border-slate-700 rounded-lg px-3 py-2.5 text-sm text-slate-100 placeholder:text-slate-500 outline-none focus:border-slate-600 disabled:opacity-60"
               required
+              readOnly={readOnly}
+              disabled={readOnly}
             />
           </div>
           <div className="md:col-span-2">
@@ -135,7 +162,9 @@ export const ActionItemModal: React.FC<ActionItemModalProps> = ({
               onChange={(e) => update('why', e.target.value)}
               placeholder={isBacklogLike ? 'Descrição do backlog' : 'Justificativa estratégica'}
               rows={2}
-              className="w-full bg-slate-800/50 border border-slate-700 rounded-lg px-3 py-2.5 text-sm text-slate-300 placeholder:text-slate-500 outline-none focus:border-slate-600 resize-none"
+              className="w-full bg-slate-800/50 border border-slate-700 rounded-lg px-3 py-2.5 text-sm text-slate-300 placeholder:text-slate-500 outline-none focus:border-slate-600 resize-none disabled:opacity-60"
+              readOnly={readOnly}
+              disabled={readOnly}
             />
           </div>
           {!effectiveHideWhereEmpresa && (
@@ -151,7 +180,9 @@ export const ActionItemModal: React.FC<ActionItemModalProps> = ({
                     value={form.where}
                     onChange={(e) => update('where', e.target.value)}
                     placeholder="Setor / local"
-                    className="w-full bg-slate-800/50 border border-slate-700 rounded-lg pl-9 pr-3 py-2.5 text-sm text-slate-200 placeholder:text-slate-500 outline-none focus:border-slate-600"
+                    className="w-full bg-slate-800/50 border border-slate-700 rounded-lg pl-9 pr-3 py-2.5 text-sm text-slate-200 placeholder:text-slate-500 outline-none focus:border-slate-600 disabled:opacity-60"
+                    readOnly={readOnly}
+                    disabled={readOnly}
                   />
                 </div>
               </div>
@@ -165,8 +196,10 @@ export const ActionItemModal: React.FC<ActionItemModalProps> = ({
                     value={form.empresa ?? ''}
                     onChange={(e) => update('empresa', e.target.value)}
                     placeholder="Cliente / unidade / grupo"
-                    className="w-full bg-slate-800/50 border border-slate-700 rounded-lg px-3 py-2.5 text-sm text-slate-200 placeholder:text-slate-500 outline-none focus:border-slate-600"
+                    className="w-full bg-slate-800/50 border border-slate-700 rounded-lg px-3 py-2.5 text-sm text-slate-200 placeholder:text-slate-500 outline-none focus:border-slate-600 disabled:opacity-60"
                     autoComplete="off"
+                    readOnly={readOnly}
+                    disabled={readOnly}
                   />
                   {form.empresa &&
                     (empresaSuggestions ?? [])
@@ -184,6 +217,7 @@ export const ActionItemModal: React.FC<ActionItemModalProps> = ({
                             <button
                               key={nome}
                               type="button"
+                              disabled={readOnly}
                               onClick={() => update('empresa', nome)}
                               className="w-full text-left px-3 py-1.5 text-[12px] text-slate-100 hover:bg-slate-800"
                             >
@@ -215,7 +249,9 @@ export const ActionItemModal: React.FC<ActionItemModalProps> = ({
                   value={form.who}
                   onChange={(e) => update('who', e.target.value)}
                   placeholder="Responsável"
-                  className="w-full bg-slate-800/50 border border-slate-700 rounded-lg pl-9 pr-3 py-2.5 text-sm text-slate-200 placeholder:text-slate-500 outline-none focus:border-slate-600"
+                  className="w-full bg-slate-800/50 border border-slate-700 rounded-lg pl-9 pr-3 py-2.5 text-sm text-slate-200 placeholder:text-slate-500 outline-none focus:border-slate-600 disabled:opacity-60"
+                  readOnly={readOnly}
+                  disabled={readOnly}
                 />
               </div>
             )}
@@ -230,7 +266,7 @@ export const ActionItemModal: React.FC<ActionItemModalProps> = ({
                 type="date"
                 value={form.when}
                 onChange={(e) => update('when', e.target.value)}
-                disabled={isBacklogLike && !isEdit}
+                disabled={readOnly || lockWhoAndWhen}
                 className="w-full bg-slate-800/50 border border-slate-700 rounded-lg pl-9 pr-3 py-2.5 text-sm text-slate-200 outline-none focus:border-slate-600 disabled:opacity-70 disabled:cursor-not-allowed"
               />
             </div>
@@ -244,7 +280,8 @@ export const ActionItemModal: React.FC<ActionItemModalProps> = ({
                 <select
                   value={form.status}
                   onChange={(e) => update('status', e.target.value as ItemStatus)}
-                  className="w-full bg-slate-800/50 border border-slate-700 rounded-lg px-3 py-2.5 text-sm text-slate-200 outline-none focus:border-slate-600 cursor-pointer"
+                  disabled={readOnly}
+                  className="w-full bg-slate-800/50 border border-slate-700 rounded-lg px-3 py-2.5 text-sm text-slate-200 outline-none focus:border-slate-600 cursor-pointer disabled:opacity-60"
                 >
                   {Object.values(ItemStatus).map((s) => (
                     <option key={s} value={s} className="bg-slate-900">
@@ -263,14 +300,16 @@ export const ActionItemModal: React.FC<ActionItemModalProps> = ({
             onClick={onClose}
             className="px-4 py-2 text-sm font-medium text-slate-400 hover:text-slate-100 transition-colors"
           >
-            Cancelar
+            {readOnly ? 'Fechar' : 'Cancelar'}
           </button>
-          <button
-            type="submit"
-            className="px-4 py-2.5 min-h-[44px] text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors touch-manipulation"
-          >
-            {isEdit ? 'Salvar' : 'Criar'}
-          </button>
+          {!readOnly && (
+            <button
+              type="submit"
+              className="px-4 py-2.5 min-h-[44px] text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors touch-manipulation"
+            >
+              {isEdit ? 'Salvar' : 'Criar'}
+            </button>
+          )}
         </div>
       </form>
     </Modal>

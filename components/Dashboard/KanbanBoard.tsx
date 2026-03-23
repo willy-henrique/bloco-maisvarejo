@@ -1,8 +1,28 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { ActionItem, ItemStatus } from '../../types';
 import { formatDateOnlyPtBr } from '../../utils/date';
-import { Badge } from '../Shared/Badge';
-import { Clock, User, Plus, ChevronDown, ChevronRight, CheckCircle, Pencil, Trash2, CornerDownLeft, Target } from 'lucide-react';
+import {
+  Clock,
+  User,
+  Plus,
+  ChevronDown,
+  ChevronRight,
+  ChevronLeft,
+  CheckCircle,
+  Pencil,
+  Trash2,
+  CornerDownLeft,
+  Target,
+  Archive,
+} from 'lucide-react';
+
+export interface KanbanCapabilities {
+  canCreate?: boolean;
+  canOpenDetail?: boolean;
+  canDelete?: boolean;
+  canWorkflow?: boolean;
+  canLinkTatico?: boolean;
+}
 
 interface KanbanBoardProps {
   items: ActionItem[];
@@ -12,6 +32,7 @@ interface KanbanBoardProps {
   onDelete?: (id: string) => void;
   forceOpenConcluidos?: boolean;
   onGoToTatico?: (item: ActionItem) => void;
+  capabilities?: KanbanCapabilities;
 }
 
 // Ordem fixa do workflow — NUNCA reordenar
@@ -21,10 +42,155 @@ const WORKFLOW_COLUMNS = [
   { id: ItemStatus.BLOCKED,   label: 'Bloqueado',        color: 'bg-red-500' },
 ];
 
-const ALL_STATUS_OPTIONS = [
-  ...WORKFLOW_COLUMNS,
-  { id: ItemStatus.COMPLETED, label: 'Arquivar prioridade', color: 'bg-emerald-500' },
-];
+/** Índice no fluxo Estratégico (Priorizar → Execução → Bloqueado). */
+const WORKFLOW_STATUS_ORDER = WORKFLOW_COLUMNS.map((c) => c.id);
+
+function workflowNeighbors(status: ItemStatus): {
+  prev: ItemStatus | null;
+  next: ItemStatus | null;
+  prevLabel: string | null;
+  nextLabel: string | null;
+} {
+  const idx = WORKFLOW_STATUS_ORDER.indexOf(status);
+  if (idx < 0) {
+    return { prev: null, next: null, prevLabel: null, nextLabel: null };
+  }
+  const prev = idx > 0 ? WORKFLOW_STATUS_ORDER[idx - 1]! : null;
+  const next = idx < WORKFLOW_STATUS_ORDER.length - 1 ? WORKFLOW_STATUS_ORDER[idx + 1]! : null;
+  const col = (id: ItemStatus | null) =>
+    id ? WORKFLOW_COLUMNS.find((c) => c.id === id)?.label ?? null : null;
+  return {
+    prev,
+    next,
+    prevLabel: col(prev),
+    nextLabel: col(next),
+  };
+}
+
+const iconBtnBase =
+  'inline-flex items-center justify-center p-1.5 rounded-md border border-slate-600/80 bg-slate-700/50 text-slate-300 hover:bg-slate-600/70 hover:border-slate-500 transition-colors touch-manipulation disabled:opacity-25 disabled:pointer-events-none';
+
+const KanbanCard: React.FC<{
+  item: ActionItem;
+  onOpenItem?: (item: ActionItem) => void;
+  onStatusChange: (id: string, status: ItemStatus) => void;
+  onDelete?: (id: string) => void;
+  onGoToTatico?: (item: ActionItem) => void;
+  caps: Required<KanbanCapabilities>;
+}> = ({ item, onOpenItem, onStatusChange, onDelete, onGoToTatico, caps }) => {
+  const { prev, next, prevLabel, nextLabel } = workflowNeighbors(item.status);
+
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={() => caps.canOpenDetail && onOpenItem?.(item)}
+      onKeyDown={(e) => e.key === 'Enter' && caps.canOpenDetail && onOpenItem?.(item)}
+      className={`bg-slate-800/60 p-3 rounded border border-slate-700/50 hover:border-slate-600 hover:ring-1 hover:ring-slate-500/50 transition-all focus:outline-none focus:ring-1 focus:ring-blue-500/50 touch-manipulation active:bg-slate-800/80 ${
+        caps.canOpenDetail ? 'cursor-pointer' : 'cursor-default'
+      }`}
+    >
+      <div className="flex justify-between items-start gap-1.5 mb-1.5 flex-wrap">
+        <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+          {caps.canWorkflow && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onStatusChange(item.id, ItemStatus.BACKLOG);
+              }}
+              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full border border-amber-400/70 bg-amber-500/10 text-[10px] font-medium text-amber-300 hover:bg-amber-500/20 hover:border-amber-300 transition-colors"
+              title="Voltar esta prioridade para o Backlog"
+            >
+              <CornerDownLeft size={12} />
+              <span>Backlog</span>
+            </button>
+          )}
+          {onGoToTatico && caps.canLinkTatico && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onGoToTatico(item);
+              }}
+              className="inline-flex items-center justify-center p-1.5 rounded-full border border-blue-400/40 bg-blue-500/10 text-blue-300 hover:bg-blue-500/20 hover:border-blue-300 transition-colors"
+              title="Ir para Tático"
+              aria-label="Ir para Tático"
+            >
+              <Target size={12} />
+            </button>
+          )}
+        </div>
+        <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+          {caps.canWorkflow && prev != null && (
+            <button
+              type="button"
+              className={iconBtnBase}
+              title={prevLabel ? `Mover para ${prevLabel}` : 'Etapa anterior'}
+              aria-label={prevLabel ? `Mover para ${prevLabel}` : 'Etapa anterior'}
+              onClick={() => onStatusChange(item.id, prev)}
+            >
+              <ChevronLeft size={14} strokeWidth={2.25} />
+            </button>
+          )}
+          {caps.canWorkflow && next != null && (
+            <button
+              type="button"
+              className={iconBtnBase}
+              title={nextLabel ? `Mover para ${nextLabel}` : 'Próxima etapa'}
+              aria-label={nextLabel ? `Mover para ${nextLabel}` : 'Próxima etapa'}
+              onClick={() => onStatusChange(item.id, next)}
+            >
+              <ChevronRight size={14} strokeWidth={2.25} />
+            </button>
+          )}
+          {caps.canWorkflow && (
+            <button
+              type="button"
+              className={`${iconBtnBase} border-emerald-600/50 text-emerald-300/90 hover:bg-emerald-500/15 hover:border-emerald-500/60`}
+              title="Arquivar prioridade"
+              aria-label="Arquivar prioridade"
+              onClick={() => onStatusChange(item.id, ItemStatus.COMPLETED)}
+            >
+              <Archive size={14} />
+            </button>
+          )}
+          {onDelete && caps.canDelete && (
+            <button
+              type="button"
+              onClick={() => onDelete(item.id)}
+              className="p-1.5 rounded text-slate-500 hover:text-red-400 hover:bg-red-500/10 opacity-60 hover:opacity-100 transition-all touch-manipulation border border-transparent hover:border-red-500/20"
+              title="Excluir"
+            >
+              <Trash2 size={12} />
+            </button>
+          )}
+        </div>
+      </div>
+
+      <h4 className="text-xs font-medium text-slate-100 mb-1.5 leading-tight line-clamp-2">{item.what}</h4>
+      {item.why && item.why.trim() !== item.what.trim() && (
+        <p className="text-[10px] text-slate-500 mb-2 line-clamp-2">{item.why}</p>
+      )}
+      {item.where && (
+        <p className="text-[10px] text-slate-500 mb-1 line-clamp-1">Onde: {item.where}</p>
+      )}
+      <div className="flex flex-col gap-1 border-t border-slate-700/50 pt-2">
+        <div className="flex items-center gap-1.5 text-[10px] text-slate-500">
+          <User size={10} />
+          <span className="text-slate-400">{item.who}</span>
+        </div>
+        <div className="flex items-center gap-1.5 text-[10px] text-slate-500">
+          <Clock size={10} />
+          <span>{formatDateOnlyPtBr(item.when)}</span>
+        </div>
+        {item.notes && (
+          <p className="text-[10px] text-slate-500 line-clamp-2 pt-1 border-t border-slate-700/50">{item.notes}</p>
+        )}
+      </div>
+    </div>
+  );
+};
 
 export const KanbanBoard: React.FC<KanbanBoardProps> = ({
   items,
@@ -34,7 +200,16 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
   onDelete,
   forceOpenConcluidos,
   onGoToTatico,
+  capabilities,
 }) => {
+  const caps: Required<KanbanCapabilities> = {
+    canCreate: capabilities?.canCreate !== false,
+    canOpenDetail: capabilities?.canOpenDetail !== false,
+    canDelete: capabilities?.canDelete !== false,
+    canWorkflow: capabilities?.canWorkflow !== false,
+    canLinkTatico: capabilities?.canLinkTatico !== false,
+  };
+
   const [concluidosOpen, setConcluidosOpen] = useState(false);
 
   useEffect(() => {
@@ -99,97 +274,15 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
                 className="border-x border-slate-800/40 bg-slate-900/20 px-2 py-1.5"
               >
                 {item.status === col.id ? (
-                  /* CÉLULA COM CARD */
-                  <div
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => onOpenItem?.(item)}
-                    onKeyDown={(e) => e.key === 'Enter' && onOpenItem?.(item)}
-                    className="bg-slate-800/60 p-3 rounded border border-slate-700/50 hover:border-slate-600 hover:ring-1 hover:ring-slate-500/50 transition-all cursor-pointer focus:outline-none focus:ring-1 focus:ring-blue-500/50 touch-manipulation active:bg-slate-800/80"
-                  >
-                    {/* Urgência + controles */}
-                    <div className="flex justify-between items-start gap-1.5 mb-1.5">
-                      {/* Botão destacado para voltar ao Backlog */}
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onStatusChange(item.id, ItemStatus.BACKLOG);
-                        }}
-                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full border border-amber-400/70 bg-amber-500/10 text-[10px] font-medium text-amber-300 hover:bg-amber-500/20 hover:border-amber-300 transition-colors"
-                        title="Voltar esta prioridade para o Backlog"
-                      >
-                        <CornerDownLeft size={12} />
-                        <span>Backlog</span>
-                      </button>
-                      {onGoToTatico && (
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onGoToTatico(item);
-                          }}
-                          className="inline-flex items-center justify-center p-1.5 rounded-full border border-blue-400/40 bg-blue-500/10 text-blue-300 hover:bg-blue-500/20 hover:border-blue-300 transition-colors"
-                          title="Ir para Tático"
-                          aria-label="Ir para Tático"
-                        >
-                          <Target size={12} />
-                        </button>
-                      )}
-                      <select
-                        value={item.status}
-                        onChange={(e) => onStatusChange(item.id, e.target.value as ItemStatus)}
-                        className="bg-slate-700/80 border border-slate-600 text-[10px] font-medium rounded px-1.5 py-1 text-slate-200 outline-none cursor-pointer max-w-[110px]"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        {ALL_STATUS_OPTIONS.map((opt) => (
-                          <option key={opt.id} value={opt.id} className="bg-slate-900">
-                            {opt.label}
-                          </option>
-                        ))}
-                      </select>
-                      {onDelete && (
-                        <button
-                          type="button"
-                          onClick={(e) => { e.stopPropagation(); onDelete(item.id); }}
-                          className="p-1.5 rounded text-slate-500 hover:text-red-400 hover:bg-red-500/10 opacity-60 hover:opacity-100 transition-all touch-manipulation"
-                          title="Excluir"
-                        >
-                          <Trash2 size={12} />
-                        </button>
-                      )}
-                    </div>
-
-                    {/* Conteúdo */}
-                    <h4 className="text-xs font-medium text-slate-100 mb-1.5 leading-tight line-clamp-2">
-                      {item.what}
-                    </h4>
-                    {item.why && item.why.trim() !== item.what.trim() && (
-                      <p className="text-[10px] text-slate-500 mb-2 line-clamp-2">{item.why}</p>
-                    )}
-                    {item.where && (
-                      <p className="text-[10px] text-slate-500 mb-1 line-clamp-1">
-                        Onde: {item.where}
-                      </p>
-                    )}
-                    <div className="flex flex-col gap-1 border-t border-slate-700/50 pt-2">
-                      <div className="flex items-center gap-1.5 text-[10px] text-slate-500">
-                        <User size={10} />
-                        <span className="text-slate-400">{item.who}</span>
-                      </div>
-                      <div className="flex items-center gap-1.5 text-[10px] text-slate-500">
-                        <Clock size={10} />
-                        <span>{formatDateOnlyPtBr(item.when)}</span>
-                      </div>
-                      {item.notes && (
-                        <p className="text-[10px] text-slate-500 line-clamp-2 pt-1 border-t border-slate-700/50">
-                          {item.notes}
-                        </p>
-                      )}
-                    </div>
-                  </div>
+                  <KanbanCard
+                    item={item}
+                    onOpenItem={onOpenItem}
+                    onStatusChange={onStatusChange}
+                    onDelete={onDelete}
+                    onGoToTatico={onGoToTatico}
+                    caps={caps}
+                  />
                 ) : (
-                  /* CÉLULA VAZIA — mantém a altura da linha */
                   <div aria-hidden="true" />
                 )}
               </div>
@@ -202,7 +295,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
               key={`add-${col.id}`}
               className="border border-t-0 border-slate-800 rounded-b-lg bg-slate-900/50 px-2 py-2"
             >
-              {onAddInColumn && (
+              {onAddInColumn && caps.canCreate && (
                 <button
                   type="button"
                   onClick={() => onAddInColumn(col.id)}
@@ -244,9 +337,11 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
                   key={item.id}
                   role="button"
                   tabIndex={0}
-                  onClick={() => onOpenItem?.(item)}
-                  onKeyDown={(e) => e.key === 'Enter' && onOpenItem?.(item)}
-                  className="bg-slate-800/50 p-3 rounded-lg border border-slate-700/50 hover:border-emerald-500/40 hover:ring-1 hover:ring-emerald-500/30 transition-all cursor-pointer flex items-center gap-3 text-left group focus:outline-none focus:ring-1 focus:ring-emerald-500/50 touch-manipulation"
+                  onClick={() => caps.canOpenDetail && onOpenItem?.(item)}
+                  onKeyDown={(e) => e.key === 'Enter' && caps.canOpenDetail && onOpenItem?.(item)}
+                  className={`bg-slate-800/50 p-3 rounded-lg border border-slate-700/50 hover:border-emerald-500/40 hover:ring-1 hover:ring-emerald-500/30 transition-all flex items-center gap-3 text-left group focus:outline-none focus:ring-1 focus:ring-emerald-500/50 touch-manipulation ${
+                    caps.canOpenDetail ? 'cursor-pointer' : 'cursor-default'
+                  }`}
                 >
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
@@ -260,29 +355,33 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
                     )}
                   </div>
                   <div className="shrink-0 flex flex-col items-end gap-1 text-[11px]">
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onStatusChange(item.id, ItemStatus.ACTIVE);
-                      }}
-                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full border border-blue-400/70 bg-blue-500/10 text-blue-300 hover:bg-blue-500/20 hover:border-blue-300 transition-colors"
-                      title="Reabrir como Priorizar"
-                    >
-                      <CornerDownLeft size={12} />
-                      <span>Priorizar</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onOpenItem?.(item);
-                      }}
-                      className="inline-flex items-center gap-1 text-slate-400 hover:text-emerald-400 transition-colors"
-                    >
-                      <Pencil size={12} />
-                      Abrir detalhes
-                    </button>
+                    {caps.canWorkflow && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onStatusChange(item.id, ItemStatus.ACTIVE);
+                        }}
+                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full border border-blue-400/70 bg-blue-500/10 text-blue-300 hover:bg-blue-500/20 hover:border-blue-300 transition-colors"
+                        title="Reabrir como Priorizar"
+                      >
+                        <CornerDownLeft size={12} />
+                        <span>Priorizar</span>
+                      </button>
+                    )}
+                    {caps.canOpenDetail && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onOpenItem?.(item);
+                        }}
+                        className="inline-flex items-center gap-1 text-slate-400 hover:text-emerald-400 transition-colors"
+                      >
+                        <Pencil size={12} />
+                        Abrir detalhes
+                      </button>
+                    )}
                   </div>
                 </div>
               ))}

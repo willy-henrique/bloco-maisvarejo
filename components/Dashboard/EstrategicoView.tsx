@@ -97,6 +97,14 @@ const TAREFA_CFG: Record<StatusTarefa, { label: string; cls: string; Icon: React
 
 // ── Props ────────────────────────────────────────────────────────────────────
 
+export interface EstrategicoCaps {
+  prioridadeWrite?: boolean;
+  planoWrite?: boolean;
+  planoDelete?: boolean;
+  tarefaWrite?: boolean;
+  tarefaDelete?: boolean;
+}
+
 interface EstrategicoViewProps {
   prioridades: Prioridade[];
   planos: PlanoDeAtaque[];
@@ -118,6 +126,9 @@ interface EstrategicoViewProps {
   loggedUserName?: string | null;
   /** Quando definido, faz scroll até o bloco da prioridade no Tático */
   focusPrioridadeId?: string | null;
+  /** Quando definido, mostra somente esta prioridade no Tático */
+  onlyPrioridadeId?: string | null;
+  estrategicoCaps?: EstrategicoCaps;
 }
 
 // ── TarefaRow ────────────────────────────────────────────────────────────────
@@ -127,7 +138,9 @@ const TarefaRow: React.FC<{
   responsaveis: Responsavel[];
   onUpdate: (u: Partial<Tarefa>) => void;
   onDeleteTarefa: () => void;
-}> = ({ tarefa, responsaveis, onUpdate, onDeleteTarefa }) => {
+  canWriteTarefa?: boolean;
+  canDeleteTarefa?: boolean;
+}> = ({ tarefa, responsaveis, onUpdate, onDeleteTarefa, canWriteTarefa = true, canDeleteTarefa = true }) => {
   const resp = responsaveis.find(
     (r) =>
       normStr(r.id) === normStr(tarefa.responsavel_id) ||
@@ -144,13 +157,14 @@ const TarefaRow: React.FC<{
         <div className="flex items-start gap-2.5">
           <button
             type="button"
+            disabled={!canWriteTarefa}
             onClick={() => {
               const order: StatusTarefa[] = ['Pendente', 'EmExecucao', 'Bloqueada', 'Concluida'];
               const idx = order.indexOf(tarefa.status_tarefa);
               const next = order[(idx + 1) % order.length];
               onUpdate({ status_tarefa: next });
             }}
-            className="mt-0.5 shrink-0 text-slate-500 hover:text-slate-200"
+            className="mt-0.5 shrink-0 text-slate-500 hover:text-slate-200 disabled:opacity-40 disabled:pointer-events-none"
           >
             <StatusIcon
               size={14}
@@ -189,12 +203,16 @@ const TarefaRow: React.FC<{
               ?
             </span>
           )}
-          <input
-            defaultValue={displayNome}
-            onBlur={(e) => onUpdate({ responsavel_id: e.target.value })}
-            placeholder="Responsável"
-            className="bg-transparent border-b border-transparent focus:border-slate-600 outline-none text-xs text-slate-200 placeholder:text-slate-600 w-full max-w-[120px]"
-          />
+          {canWriteTarefa ? (
+            <input
+              defaultValue={displayNome}
+              onBlur={(e) => onUpdate({ responsavel_id: e.target.value })}
+              placeholder="Responsável"
+              className="bg-transparent border-b border-transparent focus:border-slate-600 outline-none text-xs text-slate-200 placeholder:text-slate-600 w-full max-w-[120px]"
+            />
+          ) : (
+            <span className="text-xs text-slate-400 truncate max-w-[120px]">{displayNome || '—'}</span>
+          )}
         </div>
       </td>
       <td className="px-4 py-3">
@@ -207,7 +225,8 @@ const TarefaRow: React.FC<{
         <select
           value={tarefa.status_tarefa}
           onChange={(e) => onUpdate({ status_tarefa: e.target.value as StatusTarefa })}
-          className="text-[10px] font-semibold px-2 py-1 rounded-sm uppercase bg-slate-800 border border-slate-700 text-slate-200 outline-none focus:border-slate-500"
+          disabled={!canWriteTarefa}
+          className="text-[10px] font-semibold px-2 py-1 rounded-sm uppercase bg-slate-800 border border-slate-700 text-slate-200 outline-none focus:border-slate-500 disabled:opacity-50"
         >
           <option value="Pendente">PENDENTE</option>
           <option value="EmExecucao">EM EXECUÇÃO</option>
@@ -216,14 +235,16 @@ const TarefaRow: React.FC<{
         </select>
       </td>
       <td className="px-2 py-3 text-right w-16">
-        <button
-          type="button"
-          onClick={onDeleteTarefa}
-          className="p-1.5 rounded text-slate-600 hover:text-red-400 hover:bg-red-500/10 transition-colors"
-          title="Excluir tarefa"
-        >
-          <Trash2 size={13} />
-        </button>
+        {canDeleteTarefa && (
+          <button
+            type="button"
+            onClick={onDeleteTarefa}
+            className="p-1.5 rounded text-slate-600 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+            title="Excluir tarefa"
+          >
+            <Trash2 size={13} />
+          </button>
+        )}
       </td>
     </tr>
   );
@@ -251,6 +272,10 @@ const PlanoCard: React.FC<{
   loggedUserResponsavelNomeDisplay?: string;
   /** Se true, permite editar o responsável (admin/gerente) */
   canEditResponsavel?: boolean;
+  canWritePlano?: boolean;
+  canDeletePlano?: boolean;
+  canWriteTarefa?: boolean;
+  canDeleteTarefa?: boolean;
 }> = ({
   plano,
   tarefas,
@@ -266,6 +291,10 @@ const PlanoCard: React.FC<{
   loggedUserResponsavelId,
   loggedUserResponsavelNomeDisplay,
   canEditResponsavel = false,
+  canWritePlano = true,
+  canDeletePlano = true,
+  canWriteTarefa = true,
+  canDeleteTarefa = true,
 }) => {
   const [expanded, setExpanded] = useState(false);
   const [showAddTarefa, setShowAddTarefa] = useState(false);
@@ -394,9 +423,11 @@ const PlanoCard: React.FC<{
             </div>
           </button>
         </div>
-        <button type="button" onClick={onDelete} className="p-1.5 text-slate-600 hover:text-red-400 hover:bg-red-500/10 rounded transition-colors shrink-0" title="Excluir plano">
-          <Trash2 size={13} />
-        </button>
+        {canDeletePlano && (
+          <button type="button" onClick={onDelete} className="p-1.5 text-slate-600 hover:text-red-400 hover:bg-red-500/10 rounded transition-colors shrink-0" title="Excluir plano">
+            <Trash2 size={13} />
+          </button>
+        )}
       </div>
 
       {expanded && (
@@ -414,29 +445,39 @@ const PlanoCard: React.FC<{
                     <textarea
                       key={`${plano.id}-${key}`}
                       defaultValue={(plano[key] as string) || ''}
-                      onBlur={(e) => onUpdate({ [key]: e.target.value })}
+                      onBlur={canWritePlano ? (e) => onUpdate({ [key]: e.target.value }) : undefined}
+                      readOnly={!canWritePlano}
+                      disabled={!canWritePlano}
                       rows={2}
-                      className="w-full bg-transparent text-sm text-slate-200 outline-none resize-none border-b border-transparent focus:border-slate-600 transition-colors py-0.5 placeholder:text-slate-700"
+                      className="w-full bg-transparent text-sm text-slate-200 outline-none resize-none border-b border-transparent focus:border-slate-600 transition-colors py-0.5 placeholder:text-slate-700 disabled:opacity-60"
                       placeholder={`${sub}...`}
                     />
                   ) : type === 'input' ? (
                     <input
                       key={`${plano.id}-${key}`}
                       defaultValue={(plano[key] as string) || ''}
-                      onBlur={(e) => onUpdate({ [key]: e.target.value })}
-                      className="w-full bg-transparent text-sm text-slate-200 outline-none border-b border-transparent focus:border-slate-600 transition-colors py-0.5 placeholder:text-slate-700"
+                      onBlur={canWritePlano ? (e) => onUpdate({ [key]: e.target.value }) : undefined}
+                      readOnly={!canWritePlano}
+                      disabled={!canWritePlano}
+                      className="w-full bg-transparent text-sm text-slate-200 outline-none border-b border-transparent focus:border-slate-600 transition-colors py-0.5 placeholder:text-slate-700 disabled:opacity-60"
                       placeholder={`${sub}...`}
                     />
                   ) : type === 'date' ? (
                     <input
                       type="text"
                       defaultValue={formatDateBR(plano.when_fim)}
-                      onBlur={(e) => {
-                        const parsed = parseDateBR(e.target.value);
-                        if (parsed) onUpdate({ when_fim: parsed });
-                      }}
+                      onBlur={
+                        canWritePlano
+                          ? (e) => {
+                              const parsed = parseDateBR(e.target.value);
+                              if (parsed) onUpdate({ when_fim: parsed });
+                            }
+                          : undefined
+                      }
+                      readOnly={!canWritePlano}
+                      disabled={!canWritePlano}
                       placeholder="dd/mm/yyyy"
-                      className="bg-transparent text-sm text-slate-200 outline-none border-b border-transparent focus:border-slate-600 transition-colors py-0.5 placeholder:text-slate-700"
+                      className="bg-transparent text-sm text-slate-200 outline-none border-b border-transparent focus:border-slate-600 transition-colors py-0.5 placeholder:text-slate-700 disabled:opacity-60"
                     />
                   ) : (
                     key === 'who_id' ? (
@@ -447,8 +488,10 @@ const PlanoCard: React.FC<{
                       <input
                         key={`${plano.id}-${key}`}
                         defaultValue={displayWho}
-                        onBlur={(e) => onUpdate({ who_id: e.target.value })}
-                        className="w-full bg-transparent text-sm text-slate-200 outline-none border-b border-transparent focus:border-slate-600 transition-colors py-0.5 placeholder:text-slate-700"
+                        onBlur={canWritePlano ? (e) => onUpdate({ who_id: e.target.value }) : undefined}
+                        readOnly={!canWritePlano}
+                        disabled={!canWritePlano}
+                        className="w-full bg-transparent text-sm text-slate-200 outline-none border-b border-transparent focus:border-slate-600 transition-colors py-0.5 placeholder:text-slate-700 disabled:opacity-60"
                         placeholder={`${sub}...`}
                       />
                     )
@@ -463,8 +506,16 @@ const PlanoCard: React.FC<{
             <div className="bg-slate-900/60 border border-slate-800 rounded-lg p-4">
               <p className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest mb-0.5">HOW — EXECUÇÃO</p>
               <p className="text-[10px] text-slate-600 mb-3">Como será feito</p>
-              <textarea key={`${plano.id}-how`} defaultValue={plano.how || ''} onBlur={(e) => onUpdate({ how: e.target.value })} rows={3}
-                className="w-full bg-transparent text-sm text-slate-200 outline-none resize-none border-b border-transparent focus:border-slate-600 transition-colors placeholder:text-slate-700" placeholder="Descreva como será executado..." />
+              <textarea
+                key={`${plano.id}-how`}
+                defaultValue={plano.how || ''}
+                onBlur={canWritePlano ? (e) => onUpdate({ how: e.target.value }) : undefined}
+                readOnly={!canWritePlano}
+                disabled={!canWritePlano}
+                rows={3}
+                className="w-full bg-transparent text-sm text-slate-200 outline-none resize-none border-b border-transparent focus:border-slate-600 transition-colors placeholder:text-slate-700 disabled:opacity-60"
+                placeholder="Descreva como será executado..."
+              />
             </div>
           </div>
 
@@ -482,29 +533,32 @@ const PlanoCard: React.FC<{
                   </>
                 )}
               </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setShowAddTarefa((v) => {
-                    const next = !v;
-                    if (next) {
-                      setNovaTarefa({
-                        titulo: '',
-                        responsavel_id: loggedUserResponsavelId ?? '',
-                        data_vencimento: todayDateBR(),
-                        descricao: '',
-                      });
-                      if (canEditResponsavel) {
-                        setRespQuery(loggedUserResponsavelNomeDisplay ?? '');
-                        setShowRespDropdown(false);
+              {canWriteTarefa && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowAddTarefa((v) => {
+                      const next = !v;
+                      if (next) {
+                        setNovaTarefa({
+                          titulo: '',
+                          responsavel_id: loggedUserResponsavelId ?? '',
+                          data_vencimento: todayDateBR(),
+                          descricao: '',
+                        });
+                        if (canEditResponsavel) {
+                          setRespQuery(loggedUserResponsavelNomeDisplay ?? '');
+                          setShowRespDropdown(false);
+                        }
                       }
-                    }
-                    return next;
-                  });
-                }}
-                className="flex items-center gap-1 text-[11px] font-medium text-emerald-400 hover:text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 px-2.5 py-1.5 rounded-lg transition-colors">
-                <Plus size={12} /> Nova Tarefa
-              </button>
+                      return next;
+                    });
+                  }}
+                  className="flex items-center gap-1 text-[11px] font-medium text-emerald-400 hover:text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 px-2.5 py-1.5 rounded-lg transition-colors"
+                >
+                  <Plus size={12} /> Nova Tarefa
+                </button>
+              )}
             </div>
 
             {tarefas.length > 0 && (
@@ -527,6 +581,8 @@ const PlanoCard: React.FC<{
                         responsaveis={responsaveis}
                         onUpdate={(u) => onUpdateTarefa(t.id, u)}
                         onDeleteTarefa={() => onDeleteTarefa(t.id)}
+                        canWriteTarefa={canWriteTarefa}
+                        canDeleteTarefa={canDeleteTarefa}
                       />
                     ))}
                   </tbody>
@@ -534,7 +590,7 @@ const PlanoCard: React.FC<{
               </div>
             )}
 
-            {showAddTarefa && (
+            {showAddTarefa && canWriteTarefa && (
               <div className="px-4 py-3 border-t border-slate-800/60 bg-slate-900/30 flex items-end gap-3 flex-wrap">
                 <div className="flex-1 min-w-[180px]">
                   <label className="text-[10px] text-slate-500 uppercase tracking-wider mb-1 block">Tarefa *</label>
@@ -739,10 +795,20 @@ const DetalhePrioridade: React.FC<{
         )}
 
         {planos.map((plano) => (
-          <PlanoCard key={plano.id} plano={plano} tarefas={todasTarefas.filter((t) => t.plano_id === plano.id)} responsaveis={responsaveis}
-            computeStatusPlano={computeStatusPlano} onUpdate={(u) => onUpdatePlano(plano.id, u)} onDelete={() => onDeletePlano(plano.id)}
-            onAddTarefa={onAddTarefa} onUpdateTarefa={onUpdateTarefa} onDeleteTarefa={onDeleteTarefa}
-            whoOverrideName={planoWhoOverrideName} lockWhoToOverrideName={lockPlanoWhoToPriorityDono} />
+          <PlanoCard
+            key={plano.id}
+            plano={plano}
+            tarefas={todasTarefas.filter((t) => t.plano_id === plano.id)}
+            responsaveis={responsaveis}
+            computeStatusPlano={computeStatusPlano}
+            onUpdate={(u) => onUpdatePlano(plano.id, u)}
+            onDelete={() => onDeletePlano(plano.id)}
+            onAddTarefa={onAddTarefa}
+            onUpdateTarefa={onUpdateTarefa}
+            onDeleteTarefa={onDeleteTarefa}
+            whoOverrideName={dono?.nome ?? prioridade.dono_id}
+            lockWhoToOverrideName={false}
+          />
         ))}
       </div>
     </div>
@@ -779,6 +845,11 @@ const PrioridadeCard: React.FC<{
   onAddTarefa: (t: Omit<Tarefa, 'id'>) => void;
   onUpdateTarefa: (id: string, u: Partial<Tarefa>) => void;
   onDeleteTarefa: (id: string) => void;
+  canPrioridadeWrite?: boolean;
+  canPlanoWrite?: boolean;
+  canPlanoDelete?: boolean;
+  canTarefaWrite?: boolean;
+  canTarefaDelete?: boolean;
 }> = ({
   prioridade,
   planos,
@@ -801,6 +872,11 @@ const PrioridadeCard: React.FC<{
   onAddTarefa,
   onUpdateTarefa,
   onDeleteTarefa,
+  canPrioridadeWrite = true,
+  canPlanoWrite = true,
+  canPlanoDelete = true,
+  canTarefaWrite = true,
+  canTarefaDelete = true,
 }) => {
   const [showAddPlano, setShowAddPlano] = useState(false);
   const [novoPlano, setNovoPlano] = useState({
@@ -883,7 +959,7 @@ const PrioridadeCard: React.FC<{
               <h3 className="text-lg font-bold text-slate-100">{prioridade.titulo}</h3>
               <div className="flex items-center gap-3 mt-1.5 text-[12px] text-slate-400 flex-wrap">
                 {showDonoName && (
-                  canEditResponsavel && onUpdatePrioridadeOwner ? (
+                  canPrioridadeWrite && canEditResponsavel && onUpdatePrioridadeOwner ? (
                     <div className="relative">
                       <input
                         value={ownerQuery}
@@ -943,7 +1019,7 @@ const PrioridadeCard: React.FC<{
                 </p>
                 <p className="text-[11px] text-slate-500">planos de ataque</p>
               </div>
-              {onArchive && (
+              {onArchive && canPrioridadeWrite && (
                 <button
                   type="button"
                   onClick={(e) => {
@@ -968,30 +1044,32 @@ const PrioridadeCard: React.FC<{
             <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">
               Planos de Ataque
             </p>
-            <button
-              type="button"
-              onClick={() => {
-                setShowAddPlano((v) => {
-                  const next = !v;
-                  if (next) {
-                    setNovoPlano({
-                      titulo: '',
-                      who_id: loggedUserResponsavelId ?? '',
-                      when_fim: todayDateBR(),
-                    });
-                    setRespQueryPlano(loggedUserResponsavelNome);
-                    setShowRespPlanoDropdown(false);
-                  }
-                  return next;
-                });
-              }}
-              className="flex items-center gap-1.5 text-xs font-medium text-white bg-emerald-600 hover:bg-emerald-700 px-3 py-1.5 rounded-lg transition-colors"
-            >
-              <Plus size={13} /> Novo Plano
-            </button>
+            {canPlanoWrite && (
+              <button
+                type="button"
+                onClick={() => {
+                  setShowAddPlano((v) => {
+                    const next = !v;
+                    if (next) {
+                      setNovoPlano({
+                        titulo: '',
+                        who_id: loggedUserResponsavelId ?? '',
+                        when_fim: todayDateBR(),
+                      });
+                      setRespQueryPlano(loggedUserResponsavelNome);
+                      setShowRespPlanoDropdown(false);
+                    }
+                    return next;
+                  });
+                }}
+                className="flex items-center gap-1.5 text-xs font-medium text-white bg-emerald-600 hover:bg-emerald-700 px-3 py-1.5 rounded-lg transition-colors"
+              >
+                <Plus size={13} /> Novo Plano
+              </button>
+            )}
           </div>
 
-          {showAddPlano && (
+          {showAddPlano && canPlanoWrite && (
             <div className="bg-slate-900/60 border border-slate-700 rounded-xl p-4 flex items-end gap-3 flex-wrap">
               <div className="flex-1 min-w-[200px]">
                 <label className="text-[10px] text-slate-500 uppercase tracking-wider mb-1 block">
@@ -1110,6 +1188,10 @@ const PrioridadeCard: React.FC<{
                 loggedUserResponsavelId={loggedUserResponsavelId}
                 loggedUserResponsavelNomeDisplay={loggedUserResponsavelNomeDisplay}
                 canEditResponsavel={canEditResponsavel}
+                canWritePlano={canPlanoWrite}
+                canDeletePlano={canPlanoDelete}
+                canWriteTarefa={canTarefaWrite}
+                canDeleteTarefa={canTarefaDelete}
               />
             ))}
           </div>
@@ -1141,7 +1223,17 @@ export const EstrategicoView: React.FC<EstrategicoViewProps> = (props) => {
     loggedUserRole,
     loggedUserName,
     focusPrioridadeId,
+    onlyPrioridadeId,
+    estrategicoCaps,
   } = props;
+
+  const caps = {
+    prioridadeWrite: estrategicoCaps?.prioridadeWrite !== false,
+    planoWrite: estrategicoCaps?.planoWrite !== false,
+    planoDelete: estrategicoCaps?.planoDelete !== false,
+    tarefaWrite: estrategicoCaps?.tarefaWrite !== false,
+    tarefaDelete: estrategicoCaps?.tarefaDelete !== false,
+  };
 
   const isAdmin = loggedUserRole === 'administrador' || loggedUserRole === 'gerente';
   const canEditResponsavel = loggedUserRole === 'administrador';
@@ -1183,10 +1275,11 @@ export const EstrategicoView: React.FC<EstrategicoViewProps> = (props) => {
     return prioridades;
   }, [prioridades, isAdmin, myResponsavelIds]);
 
-  const ativas = useMemo(
-    () => filteredPrioridades.filter((p) => p.status_prioridade !== 'Concluido'),
-    [filteredPrioridades],
-  );
+  const ativas = useMemo(() => {
+    const list = filteredPrioridades.filter((p) => p.status_prioridade !== 'Concluido');
+    if (!onlyPrioridadeId) return list;
+    return list.filter((p) => p.id === onlyPrioridadeId);
+  }, [filteredPrioridades, onlyPrioridadeId]);
 
   const blocksRef = useRef<HTMLDivElement>(null);
   const scrollToBlocks = () => {
@@ -1258,6 +1351,11 @@ export const EstrategicoView: React.FC<EstrategicoViewProps> = (props) => {
                   onAddTarefa={onAddTarefa}
                   onUpdateTarefa={onUpdateTarefa}
                   onDeleteTarefa={onDeleteTarefa}
+                  canPrioridadeWrite={caps.prioridadeWrite}
+                  canPlanoWrite={caps.planoWrite}
+                  canPlanoDelete={caps.planoDelete}
+                  canTarefaWrite={caps.tarefaWrite}
+                  canTarefaDelete={caps.tarefaDelete}
                 />
               </div>
             );
@@ -1265,7 +1363,7 @@ export const EstrategicoView: React.FC<EstrategicoViewProps> = (props) => {
         )}
       </div>
 
-      {podeAdicionarPrioridade && (
+      {podeAdicionarPrioridade && caps.prioridadeWrite && (
         <div className="pt-2">
           <button
             type="button"

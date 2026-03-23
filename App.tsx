@@ -24,7 +24,7 @@ import { ChatView } from './components/Chat/ChatView';
 import { Modal } from './components/Shared/Modal';
 
 function AppContent() {
-  const { isAuthenticated, encryptionKey, logout, profile } = useUser();
+  const { isAuthenticated, encryptionKey, logout, profile, hasModuleAction } = useUser();
   const [activeView, setActiveView] = useState<ViewId>('backlog');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [strategicNote, setStrategicNote] = useState('');
@@ -32,7 +32,7 @@ function AppContent() {
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState<ActionItem | null>(null);
   const [defaultStatusForNew, setDefaultStatusForNew] = useState<ItemStatus | null>(null);
-  const [modalContext, setModalContext] = useState<'default' | 'backlog'>('default');
+  const [modalContext, setModalContext] = useState<'default' | 'backlog' | 'estrategico'>('default');
   const [toast, setToast] = useState<{ message: string; type: ToastType } | null>(null);
   const [selectedPrioridade, setSelectedPrioridade] = useState<Prioridade | null>(null);
   const [prioridadeModalOpen, setPrioridadeModalOpen] = useState(false);
@@ -42,6 +42,7 @@ function AppContent() {
   const [backlogOpenConcluidas, setBacklogOpenConcluidas] = useState(false);
   const [quadroVerConcluidas, setQuadroVerConcluidas] = useState(false);
   const [focusPrioridadeId, setFocusPrioridadeId] = useState<string | null>(null);
+  const [tableOnlyPrioridadeId, setTableOnlyPrioridadeId] = useState<string | null>(null);
   const { items, loading, addItem, updateItem, deleteItem, updateStatus } = useStrategicBoard(encryptionKey ?? null);
   const ritmo = useRitmoGestao(encryptionKey ?? null);
   const [workspaceAtivo, setWorkspaceAtivo] = useState<'all' | string>('all');
@@ -147,6 +148,8 @@ function AppContent() {
     () => items.filter((i) => matchWorkspace(i.empresa)),
     [items, matchWorkspace]
   );
+  // Backlog é visão global por regra de negócio (todos os usuários veem os itens).
+  const backlogViewItems = useMemo(() => items, [items]);
 
 
   const sinteticasFromItems = useMemo<Prioridade[]>(() => {
@@ -185,6 +188,44 @@ function AppContent() {
     return todas.filter((p) => matchWorkspace(p.empresa));
   }, [ritmo.board.prioridades, sinteticasFromItems, matchWorkspace]);
 
+  const perm = useMemo(
+    () => ({
+      backlog: {
+        create: hasModuleAction('backlog', 'create'),
+        edit: hasModuleAction('backlog', 'edit'),
+        delete: hasModuleAction('backlog', 'delete'),
+        workflow: hasModuleAction('backlog', 'workflow'),
+      },
+      dashboard: {
+        create: hasModuleAction('dashboard', 'create'),
+        edit: hasModuleAction('dashboard', 'edit'),
+        delete: hasModuleAction('dashboard', 'delete'),
+        workflow: hasModuleAction('dashboard', 'workflow'),
+        linkTatico: hasModuleAction('dashboard', 'link_tatico'),
+      },
+      table: {
+        prioridadeWrite: hasModuleAction('table', 'prioridade_write'),
+        planoWrite: hasModuleAction('table', 'plano_write'),
+        planoDelete: hasModuleAction('table', 'plano_delete'),
+        tarefaWrite: hasModuleAction('table', 'tarefa_write'),
+        tarefaDelete: hasModuleAction('table', 'tarefa_delete'),
+      },
+      operacional: {
+        // Regra de produto: Operacional edita apenas tarefas.
+        planoWrite: false,
+        tarefaWrite: hasModuleAction('operacional', 'tarefa_write'),
+        tarefaDelete: hasModuleAction('operacional', 'tarefa_delete'),
+      },
+      roadmap: {
+        edit: hasModuleAction('roadmap', 'edit'),
+      },
+      ia: {
+        send: hasModuleAction('ia', 'send'),
+      },
+    }),
+    [hasModuleAction, profile]
+  );
+
   const handleGoToTaticoPriority = useCallback(
     (item: ActionItem) => {
       const match =
@@ -193,13 +234,27 @@ function AppContent() {
       // Garante que o focus mude mesmo se clicar duas vezes na mesma prioridade.
       setFocusPrioridadeId(null);
       requestAnimationFrame(() => setFocusPrioridadeId(match?.id ?? null));
+      setTableOnlyPrioridadeId(match?.id ?? null);
       setActiveView('table');
     },
     [taticoPrioridades]
   );
 
+  const handleSetView = useCallback((view: ViewId) => {
+    // Ao abrir Tático pelo menu lateral, volta para visão completa.
+    if (view === 'table') {
+      setTableOnlyPrioridadeId(null);
+      setFocusPrioridadeId(null);
+    }
+    setActiveView(view);
+  }, []);
+
   const openItemModal = useCallback(
-    (item: ActionItem | null, statusForNew?: ItemStatus, context: 'default' | 'backlog' = 'default') => {
+    (
+      item: ActionItem | null,
+      statusForNew?: ItemStatus,
+      context: 'default' | 'backlog' | 'estrategico' = 'default'
+    ) => {
       setSelectedItem(item);
       setDefaultStatusForNew(item === null && statusForNew ? statusForNew : null);
       setModalContext(context);
@@ -245,11 +300,26 @@ function AppContent() {
   }, [encryptionKey, strategicNote]);
 
   const handleAddNew = () => {
-    const isBacklogLike = activeView === 'backlog' || activeView === 'dashboard';
+    if (activeView === 'backlog' && !perm.backlog.create) {
+      setToast({ message: 'Sem permissão para criar itens no Backlog.', type: 'error' });
+      return;
+    }
+    if (activeView === 'dashboard' && !perm.dashboard.create) {
+      setToast({ message: 'Sem permissão para criar no quadro Estratégico.', type: 'error' });
+      return;
+    }
+    if (
+      activeView !== 'backlog' &&
+      activeView !== 'dashboard' &&
+      !perm.dashboard.create
+    ) {
+      setToast({ message: 'Sem permissão para criar novas iniciativas.', type: 'error' });
+      return;
+    }
     openItemModal(
       null,
       activeView === 'backlog' ? ItemStatus.BACKLOG : undefined,
-      isBacklogLike ? 'backlog' : 'default'
+      activeView === 'backlog' ? 'backlog' : activeView === 'dashboard' ? 'estrategico' : 'default'
     );
   };
   const handleAddPrioridade = () => setPrioridadeModalOpen(true);
@@ -321,7 +391,7 @@ function AppContent() {
       />
       <Sidebar
         activeView={activeView}
-        setView={setActiveView}
+        setView={handleSetView}
         onLogout={logout}
         isOpen={isSidebarOpen}
         onClose={() => setIsSidebarOpen(false)}
@@ -389,14 +459,22 @@ function AppContent() {
                 <Plus size={16} /> <span className="hidden sm:inline">Nova prioridade</span>
               </button>
             )}
-            {activeView !== 'ia' && activeView !== 'quadro' && activeView !== 'table' && activeView !== 'operacional' && (
-              <button
-                onClick={handleAddNew}
-                className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2.5 min-h-[44px] rounded-lg flex items-center gap-2 transition-colors shrink-0 touch-manipulation"
-              >
-                <Plus size={16} /> <span className="hidden sm:inline">Novo</span>
-              </button>
-            )}
+            {activeView !== 'ia' &&
+              activeView !== 'quadro' &&
+              activeView !== 'table' &&
+              activeView !== 'operacional' &&
+              ((activeView === 'backlog' && perm.backlog.create) ||
+                (activeView === 'dashboard' && perm.dashboard.create) ||
+                (activeView !== 'backlog' &&
+                  activeView !== 'dashboard' &&
+                  perm.dashboard.create)) && (
+                <button
+                  onClick={handleAddNew}
+                  className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2.5 min-h-[44px] rounded-lg flex items-center gap-2 transition-colors shrink-0 touch-manipulation"
+                >
+                  <Plus size={16} /> <span className="hidden sm:inline">Novo</span>
+                </button>
+              )}
           </div>
         </header>
 
@@ -456,22 +534,33 @@ function AppContent() {
           {(activeView === 'dashboard' || activeView === 'backlog') && (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-4 sm:mb-6">
               {[
-                { label: 'Ações Totais', val: itemsFiltrados.length, color: 'blue', icon: Zap },
+                {
+                  label: 'Ações Totais',
+                  val: activeView === 'backlog' ? backlogViewItems.length : itemsFiltrados.length,
+                  color: 'blue',
+                  icon: Zap,
+                },
                 {
                   label: 'Em Execução',
-                  val: itemsFiltrados.filter((i) => i.status === ItemStatus.EXECUTING).length,
+                  val: (activeView === 'backlog' ? backlogViewItems : itemsFiltrados).filter(
+                    (i) => i.status === ItemStatus.EXECUTING
+                  ).length,
                   color: 'amber',
                   icon: Activity,
                 },
                 {
                   label: 'Bloqueios',
-                  val: itemsFiltrados.filter((i) => i.status === ItemStatus.BLOCKED).length,
+                  val: (activeView === 'backlog' ? backlogViewItems : itemsFiltrados).filter(
+                    (i) => i.status === ItemStatus.BLOCKED
+                  ).length,
                   color: 'red',
                   icon: AlertCircle,
                 },
                 {
                   label: 'Concluídas',
-                  val: itemsFiltrados.filter((i) => i.status === ItemStatus.COMPLETED).length,
+                  val: (activeView === 'backlog' ? backlogViewItems : itemsFiltrados).filter(
+                    (i) => i.status === ItemStatus.COMPLETED
+                  ).length,
                   color: 'emerald',
                   icon: Target,
                 },
@@ -505,7 +594,7 @@ function AppContent() {
 
           {activeView === 'ia' ? (
             <div className="pb-8 h-full min-h-0 flex flex-col">
-              <ChatView />
+              <ChatView canSend={perm.ia.send} />
             </div>
           ) : activeView === 'workspace' ? (
             <div className="pb-8 max-w-xl">
@@ -641,11 +730,18 @@ function AppContent() {
                 <KanbanBoard
                   items={itemsFiltrados}
                   onStatusChange={updateStatus}
-                  onOpenItem={openItemModal}
-                  onAddInColumn={(status) => openItemModal(null, status)}
+                  onOpenItem={(item) => openItemModal(item, undefined, 'estrategico')}
+                  onAddInColumn={(status) => openItemModal(null, status, 'estrategico')}
                   onDelete={deleteItem}
                   forceOpenConcluidos={dashboardOpenConcluidas}
-                  onGoToTatico={handleGoToTaticoPriority}
+                  onGoToTatico={perm.dashboard.linkTatico ? handleGoToTaticoPriority : undefined}
+                  capabilities={{
+                    canCreate: perm.dashboard.create,
+                    canOpenDetail: hasModuleAction('dashboard', 'read'),
+                    canDelete: perm.dashboard.delete,
+                    canWorkflow: perm.dashboard.workflow,
+                    canLinkTatico: perm.dashboard.linkTatico,
+                  }}
                 />
               )}
               {activeView === 'table' && (
@@ -663,12 +759,20 @@ function AppContent() {
                   loggedUserRole={profile?.role}
                   loggedUserName={profile?.nome}
                   focusPrioridadeId={focusPrioridadeId}
+                  onlyPrioridadeId={tableOnlyPrioridadeId}
                   onAddPlano={ritmo.addPlano}
                   onUpdatePlano={ritmo.updatePlano}
                   onDeletePlano={ritmo.deletePlano}
                   onAddTarefa={ritmo.addTarefa}
                   onUpdateTarefa={ritmo.updateTarefa}
                   onDeleteTarefa={ritmo.deleteTarefa}
+                  estrategicoCaps={{
+                    prioridadeWrite: perm.table.prioridadeWrite,
+                    planoWrite: perm.table.planoWrite,
+                    planoDelete: perm.table.planoDelete,
+                    tarefaWrite: perm.table.tarefaWrite,
+                    tarefaDelete: perm.table.tarefaDelete,
+                  }}
                 />
               )}
               {activeView === 'operacional' && (
@@ -686,20 +790,41 @@ function AppContent() {
                   onAddTarefa={ritmo.addTarefa}
                   onUpdateTarefa={ritmo.updateTarefa}
                   onDeleteTarefa={ritmo.deleteTarefa}
+                  operacionalCaps={{
+                    planoWrite: perm.operacional.planoWrite,
+                    tarefaWrite: perm.operacional.tarefaWrite,
+                    tarefaDelete: perm.operacional.tarefaDelete,
+                  }}
                 />
               )}
               {activeView === 'backlog' && (
                 <BacklogView
-                  items={itemsFiltrados}
+                  items={backlogViewItems}
                   onUpdate={updateItem}
                   onDelete={deleteItem}
                   onEditItem={(item) => openItemModal(item, undefined, 'backlog')}
                   onStatusChange={updateStatus}
-                  onAddNew={() => openItemModal(null, ItemStatus.BACKLOG, 'backlog')}
+                  onAddNew={
+                    perm.backlog.create
+                      ? () => openItemModal(null, ItemStatus.BACKLOG, 'backlog')
+                      : undefined
+                  }
+                  capabilities={{
+                    canCreate: perm.backlog.create,
+                    canEdit: perm.backlog.edit,
+                    canDelete: perm.backlog.delete,
+                    canWorkflow: perm.backlog.workflow,
+                  }}
                 />
               )}
               {activeView === 'performance' && <PerformanceView items={itemsFiltrados} />}
-              {activeView === 'roadmap' && <RoadmapView items={itemsFiltrados} onOpenItem={openItemModal} />}
+              {activeView === 'roadmap' && (
+                <RoadmapView
+                  items={itemsFiltrados}
+                  onOpenItem={openItemModal}
+                  canOpenItem={perm.roadmap.edit}
+                />
+              )}
               {activeView === 'quadro' && (
                 <QuadroEstrategico
                   prioridades={quadroPrioridades}
@@ -848,6 +973,15 @@ function AppContent() {
           canEditWho={profile?.role === 'administrador'}
           hideWhereEmpresa={modalContext === 'backlog'}
           hideStatusUrgency={modalContext === 'backlog'}
+          itemModalContext={modalContext}
+          readOnly={
+            selectedItem !== null &&
+            (modalContext === 'backlog'
+              ? !perm.backlog.edit
+              : activeView === 'roadmap'
+              ? !perm.roadmap.edit
+              : !perm.dashboard.edit)
+          }
         />
 
         <footer className="h-8 min-h-[32px] bg-slate-900/95 border-t border-slate-800 px-3 sm:px-4 flex items-center justify-between text-[10px] text-slate-500 uppercase tracking-wider z-30 shrink-0">
@@ -855,7 +989,7 @@ function AppContent() {
             <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
             Conectado
           </div>
-          <span>WillTech v9</span>
+          <span>WillTech v1.0</span>
         </footer>
       </main>
     </div>
