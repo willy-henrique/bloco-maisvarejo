@@ -6,7 +6,8 @@
 
 import React, { useMemo, useState, useEffect } from 'react';
 import type { Prioridade, PlanoDeAtaque, Tarefa, Responsavel, StatusPrioridade } from '../../types';
-import { Target, ChevronDown, ChevronRight, AlertCircle, ListTodo, X, Trash2 } from 'lucide-react';
+import { ChevronDown, ChevronRight, AlertCircle, ListTodo, X, Trash2 } from 'lucide-react';
+import { EstrategicoGridIcon } from '../icons/EstrategicoGridIcon';
 
 const HEADERS = ['PRIORIZAR', 'DONO', 'EM EXECUÇÃO', 'BLOQUEADOS', 'CONCLUIDAS', ''] as const;
 
@@ -86,7 +87,7 @@ export const QuadroEstrategico: React.FC<QuadroEstrategicoProps> = ({
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div className="flex items-center gap-2">
-          <Target className="text-slate-400" size={20} />
+          <EstrategicoGridIcon className="text-blue-400" size={20} strokeWidth={2} />
           <h2 className="text-lg font-semibold text-slate-100">Quadro Estratégico</h2>
         </div>
         <p className="text-xs text-slate-500">

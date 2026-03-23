@@ -24,6 +24,7 @@ import {
   Play,
   Archive,
 } from 'lucide-react';
+import { EstrategicoGridIcon } from '../icons/EstrategicoGridIcon';
 
 function initials(nome: string): string {
   return nome
@@ -1298,11 +1299,11 @@ export const EstrategicoView: React.FC<EstrategicoViewProps> = (props) => {
         <button
           type="button"
           onClick={scrollToBlocks}
-          className="shrink-0 p-2 rounded-lg bg-slate-900/60 border border-slate-800 text-slate-300 hover:text-slate-100 hover:bg-slate-900"
+          className="shrink-0 p-1 rounded-md text-blue-400 hover:text-blue-300 transition-colors"
           aria-label="Ir para prioridades"
           title="Ir para prioridades"
         >
-          <Target size={18} className="text-blue-400" />
+          <EstrategicoGridIcon size={18} strokeWidth={2} />
         </button>
       </div>
 

@@ -1,5 +1,6 @@
 import React from 'react';
-import { LayoutDashboard, LogOut, ShieldCheck, PieChart, Briefcase, X, ListTodo, Bot, Target, FileText } from 'lucide-react';
+import { LogOut, ShieldCheck, PieChart, Briefcase, X, ListTodo, Bot, Target, FileText } from 'lucide-react';
+import { EstrategicoGridIcon } from '../icons/EstrategicoGridIcon';
 import type { UserRole } from '../../types/user';
 
 export type ViewId = 'workspace' | 'dashboard' | 'table' | 'backlog' | 'performance' | 'roadmap' | 'ia' | 'operacional';
@@ -47,7 +48,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   const allMenuItems = [
     { id: 'backlog', icon: ListTodo, label: 'Backlog' },
-    { id: 'dashboard', icon: LayoutDashboard, label: 'Estratégico' },
+    { id: 'dashboard', icon: EstrategicoGridIcon, label: 'Estratégico' },
     { id: 'table', icon: Target, label: 'Tático' },
     { id: 'operacional', icon: FileText, label: 'Operacional' },
   ];

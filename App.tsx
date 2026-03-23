@@ -16,12 +16,26 @@ import { useStrategicBoard } from './controllers/useStrategicBoard';
 import { useRitmoGestao } from './controllers/useRitmoGestao';
 import { StorageService } from './services/storageService';
 import { isFirebaseConfigured, subscribeBoard, saveBoardNotes } from './services/firestoreSync';
-import { Plus, Search, Activity, Target, Zap, Menu, ListTodo, AlertCircle, PieChart, Briefcase, Bot, ShieldCheck, FileText } from 'lucide-react';
+import {
+  Plus,
+  Search,
+  Activity,
+  Target,
+  Menu,
+  ListTodo,
+  AlertCircle,
+  PieChart,
+  Briefcase,
+  Bot,
+  ShieldCheck,
+  FileText,
+} from 'lucide-react';
 import { ActionItem, ItemStatus, UrgencyLevel } from './types';
 import type { Prioridade } from './types';
 import { Toast, type ToastType } from './components/Shared/Toast';
 import { ChatView } from './components/Chat/ChatView';
 import { Modal } from './components/Shared/Modal';
+import { EstrategicoGridIcon } from './components/icons/EstrategicoGridIcon';
 
 function AppContent() {
   const { isAuthenticated, encryptionKey, logout, profile, hasModuleAction } = useUser();
@@ -422,7 +436,13 @@ function AppContent() {
               <Menu size={20} />
             </button>
             <div className="flex items-center gap-2.5">
-              {activeView === 'dashboard' && <Zap size={18} className="text-amber-500 shrink-0" />}
+              {activeView === 'dashboard' && (
+                <EstrategicoGridIcon
+                  size={18}
+                  strokeWidth={2}
+                  className="text-blue-400 shrink-0"
+                />
+              )}
               {activeView === 'table' && <Target size={18} className="text-blue-500 shrink-0" />}
               {activeView === 'backlog' && <ListTodo size={18} className="text-emerald-500 shrink-0" />}
               {activeView === 'performance' && <PieChart size={18} className="text-violet-500 shrink-0" />}
@@ -537,15 +557,13 @@ function AppContent() {
                 {
                   label: 'Ações Totais',
                   val: activeView === 'backlog' ? backlogViewItems.length : itemsFiltrados.length,
-                  color: 'blue',
-                  icon: Zap,
+                  icon: activeView === 'dashboard' ? EstrategicoGridIcon : ListTodo,
                 },
                 {
                   label: 'Em Execução',
                   val: (activeView === 'backlog' ? backlogViewItems : itemsFiltrados).filter(
                     (i) => i.status === ItemStatus.EXECUTING
                   ).length,
-                  color: 'amber',
                   icon: Activity,
                 },
                 {
@@ -553,7 +571,6 @@ function AppContent() {
                   val: (activeView === 'backlog' ? backlogViewItems : itemsFiltrados).filter(
                     (i) => i.status === ItemStatus.BLOCKED
                   ).length,
-                  color: 'red',
                   icon: AlertCircle,
                 },
                 {
@@ -561,7 +578,6 @@ function AppContent() {
                   val: (activeView === 'backlog' ? backlogViewItems : itemsFiltrados).filter(
                     (i) => i.status === ItemStatus.COMPLETED
                   ).length,
-                  color: 'emerald',
                   icon: Target,
                 },
               ].map((stat, i) => (
@@ -580,8 +596,8 @@ function AppContent() {
                       : undefined
                   }
                 >
-                  <div className={`p-2 rounded-lg bg-slate-800 text-slate-400`}>
-                    <stat.icon size={18} />
+                  <div className="p-2 rounded-lg bg-slate-800 text-slate-400">
+                    <stat.icon size={18} strokeWidth={2} />
                   </div>
                   <div className="min-w-0">
                     <p className="text-[10px] uppercase tracking-wider text-slate-500 font-medium">{stat.label}</p>
