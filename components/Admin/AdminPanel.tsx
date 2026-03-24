@@ -5,6 +5,7 @@ import { UserList } from './UserList';
 import { UserForm } from './UserForm';
 import { listAllUsers, saveUserProfile, updateUserProfile, createUser } from '../../services/firebaseAuth';
 import type { UserProfile } from '../../types/user';
+import { PERMISSIONS_SCHEMA_VERSION } from '../../types/user';
 import { LogOut, Users, Plus, ArrowLeft, ShieldCheck } from 'lucide-react';
 
 type AdminView = 'list' | 'create' | 'edit';
@@ -82,7 +83,10 @@ export const AdminPanel: React.FC = () => {
         role: data.role,
         views: data.views,
         ...(data.role !== 'administrador' && Object.keys(data.modulePermissions).length > 0
-          ? { modulePermissions: data.modulePermissions }
+          ? {
+              modulePermissions: data.modulePermissions,
+              permissionsSchemaVersion: PERMISSIONS_SCHEMA_VERSION,
+            }
           : {}),
         empresas: data.empresas,
         ativo: data.ativo,
@@ -130,8 +134,15 @@ export const AdminPanel: React.FC = () => {
     <div className="min-h-screen bg-slate-950 text-slate-100">
       <header className="h-14 bg-slate-900/95 border-b border-slate-800 flex items-center justify-between px-4 md:px-6">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-amber-600/20 text-amber-400 flex items-center justify-center">
-            <ShieldCheck size={16} />
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-slate-950 ring-1 ring-slate-700">
+            <img
+              src="/mavo-logo.png"
+              alt="MAVO"
+              className="h-9 w-9 shrink-0 object-contain object-center"
+              width={36}
+              height={36}
+              decoding="async"
+            />
           </div>
           <h1 className="text-sm font-semibold tracking-tight">Painel Administrativo</h1>
         </div>

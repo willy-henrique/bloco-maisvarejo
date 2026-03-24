@@ -22,7 +22,7 @@ const INITIAL_ITEMS: ActionItem[] = [
     id: '2',
     what: 'Capacitação e Sustentação de Equipe',
     why: 'Garantir autonomia do time e excelência no suporte',
-    where: 'Auditório WillTech / Online',
+    where: 'Auditório MAVO / Online',
     when: '2026-02-20',
     who: 'Grazi',
     how: 'Treinamento intensivo sobre novos módulos e processos',

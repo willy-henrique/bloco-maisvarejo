@@ -74,10 +74,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
         ${isOpen ? 'translate-x-0' : '-translate-x-full'}
         lg:relative lg:translate-x-0 lg:max-w-none
       `}>
-        <div className="px-4 py-4 border-b border-slate-800 flex items-start justify-between gap-3">
-          <div className="flex items-start gap-2">
-            <div className="w-8 h-8 flex items-center justify-center rounded-lg bg-blue-600/20 text-blue-400 mt-0.5">
-              <ShieldCheck size={16} />
+        <div className="px-4 py-4 border-b border-slate-800 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-slate-950 ring-1 ring-slate-700/80">
+              <img
+                src="/mavo-logo.png"
+                alt="MAVO Participações"
+                className="h-11 w-11 shrink-0 object-contain object-center"
+                width={44}
+                height={44}
+                decoding="async"
+              />
             </div>
             <div className="flex flex-col gap-1">
               <span className="font-semibold text-sm text-slate-100 tracking-tight">Estratégico 5W2H</span>

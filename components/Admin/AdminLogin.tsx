@@ -37,8 +37,15 @@ export const AdminLogin: React.FC = () => {
     <div className="min-h-screen min-h-[100dvh] bg-slate-950 flex items-center justify-center p-4 pt-[env(safe-area-inset-top,0)] pb-[env(safe-area-inset-bottom,0)] bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-slate-900 via-slate-950 to-slate-950">
       <div className="w-full max-w-[380px] min-w-0">
         <div className="text-center mb-6">
-          <div className="inline-flex items-center justify-center w-10 h-10 bg-amber-600/10 text-amber-400 rounded-lg mb-3 border border-slate-700">
-            <ShieldCheck size={20} />
+          <div className="inline-flex h-12 w-12 items-center justify-center overflow-hidden rounded-lg border border-slate-700 bg-slate-950 mb-3">
+            <img
+              src="/mavo-logo.png"
+              alt="MAVO Participações"
+              className="h-14 w-14 shrink-0 object-contain object-center"
+              width={56}
+              height={56}
+              decoding="async"
+            />
           </div>
           <h1 className="text-xl font-semibold text-slate-100 tracking-tight">Painel Administrativo</h1>
           <p className="text-slate-500 text-xs mt-0.5">Acesso restrito a administradores</p>

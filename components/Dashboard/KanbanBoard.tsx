@@ -33,6 +33,8 @@ interface KanbanBoardProps {
   forceOpenConcluidos?: boolean;
   onGoToTatico?: (item: ActionItem) => void;
   capabilities?: KanbanCapabilities;
+  /** Resolve `who` (uid / legado) para nome legível no card */
+  displayWho?: (who: string) => string;
 }
 
 // Ordem fixa do workflow — NUNCA reordenar
@@ -77,7 +79,8 @@ const KanbanCard: React.FC<{
   onDelete?: (id: string) => void;
   onGoToTatico?: (item: ActionItem) => void;
   caps: Required<KanbanCapabilities>;
-}> = ({ item, onOpenItem, onStatusChange, onDelete, onGoToTatico, caps }) => {
+  displayWho: (who: string) => string;
+}> = ({ item, onOpenItem, onStatusChange, onDelete, onGoToTatico, caps, displayWho }) => {
   const { prev, next, prevLabel, nextLabel } = workflowNeighbors(item.status);
 
   return (
@@ -178,7 +181,7 @@ const KanbanCard: React.FC<{
       <div className="flex flex-col gap-1 border-t border-slate-700/50 pt-2">
         <div className="flex items-center gap-1.5 text-[10px] text-slate-500">
           <User size={10} />
-          <span className="text-slate-400">{item.who}</span>
+          <span className="text-slate-400">{displayWho(item.who)}</span>
         </div>
         <div className="flex items-center gap-1.5 text-[10px] text-slate-500">
           <Clock size={10} />
@@ -198,6 +201,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
   onOpenItem,
   onAddInColumn,
   onDelete,
+  displayWho: displayWhoProp,
   forceOpenConcluidos,
   onGoToTatico,
   capabilities,
@@ -209,6 +213,8 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
     canWorkflow: capabilities?.canWorkflow !== false,
     canLinkTatico: capabilities?.canLinkTatico !== false,
   };
+
+  const displayWho = displayWhoProp ?? ((w: string) => w);
 
   const [concluidosOpen, setConcluidosOpen] = useState(false);
 
@@ -281,6 +287,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
                     onDelete={onDelete}
                     onGoToTatico={onGoToTatico}
                     caps={caps}
+                    displayWho={displayWho}
                   />
                 ) : (
                   <div aria-hidden="true" />
@@ -346,7 +353,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
                       <span className="text-[10px] text-slate-500">
-                        {item.who} · {item.when ? formatDateOnlyPtBr(item.when) : '—'}
+                        {displayWho(item.who)} · {item.when ? formatDateOnlyPtBr(item.when) : '—'}
                       </span>
                     </div>
                     <h4 className="text-sm font-medium text-slate-100 line-clamp-1">{item.what}</h4>

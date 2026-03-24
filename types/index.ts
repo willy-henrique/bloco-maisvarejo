@@ -73,8 +73,10 @@ export interface Prioridade {
   data_alvo: number;
   status_prioridade: StatusPrioridade;
   origem_backlog_id?: string;
-  /** Empresa / workspace dono desta prioridade (opcional) */
+  /** Empresa / workspace associada a esta prioridade (opcional) */
   empresa?: string;
+  /** Última alteração de dono (ms); usado para não sobrescrever troca local com snapshot atrasado do Firestore */
+  dono_atualizado_em?: number;
 }
 
 /** Plano de ataque (nível gerencial). 5W2H completo. */

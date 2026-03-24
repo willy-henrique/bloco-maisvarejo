@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import type { UserProfile, UserRole } from '../../types/user';
+import { PERMISSIONS_SCHEMA_VERSION, type UserProfile, type UserRole } from '../../types/user';
 import type { ViewId } from '../Layout/Sidebar';
 import {
   ADMIN_SELECTABLE_VIEWS,
@@ -10,10 +10,22 @@ import {
 } from '../../types/modulePermissions';
 import { Save, UserPlus, ChevronDown, ChevronRight } from 'lucide-react';
 
-const ROLES: { id: UserRole; label: string }[] = [
-  { id: 'administrador', label: 'Administrador' },
-  { id: 'gerente', label: 'Gerente' },
-  { id: 'usuario', label: 'Usuário' },
+const ROLES: { id: UserRole; label: string; hint: string }[] = [
+  {
+    id: 'administrador',
+    label: 'Administrador',
+    hint: 'Acesso total, workspaces e painel de usuários.',
+  },
+  {
+    id: 'gerente',
+    label: 'Gerente',
+    hint: 'Visão ampla no app; permissões por view/ação abaixo (incl. atribuir tarefas, se marcado).',
+  },
+  {
+    id: 'usuario',
+    label: 'Usuário',
+    hint: 'Acesso só às views e ações que você marcar (ex.: Tático sem atribuir a terceiros).',
+  },
 ];
 
 interface UserFormProps {
@@ -62,10 +74,19 @@ export const UserForm: React.FC<UserFormProps> = ({
       const safeViews = ensureBacklogView(Array.isArray(user.views) ? user.views : []);
       setViews(safeViews);
       if (user.modulePermissions && Object.keys(user.modulePermissions).length > 0) {
-        setModulePermissions({
+        const ver = user.permissionsSchemaVersion ?? 1;
+        const raw = {
           ...user.modulePermissions,
           backlog: user.modulePermissions.backlog ?? allActionIdsForView('backlog'),
-        });
+        };
+        for (const vid of ['table', 'operacional'] as const) {
+          const arr = raw[vid];
+          if (!arr || ver >= PERMISSIONS_SCHEMA_VERSION) continue;
+          if (arr.includes('tarefa_write') && !arr.includes('tarefa_assign')) {
+            raw[vid] = [...arr, 'tarefa_assign'];
+          }
+        }
+        setModulePermissions(raw);
       } else {
         setModulePermissions(defaultModulePermissionsForViews(safeViews));
       }
@@ -157,6 +178,7 @@ export const UserForm: React.FC<UserFormProps> = ({
           base.modulePermissions = Object.fromEntries(
             safeViews.map((v) => [v, modulePermissions[v] ?? allActionIdsForView(v)])
           ) as ModulePermissionMap;
+          base.permissionsSchemaVersion = PERMISSIONS_SCHEMA_VERSION;
         }
         await onUpdate(user.uid, base);
       }
@@ -234,9 +256,9 @@ export const UserForm: React.FC<UserFormProps> = ({
               </button>
             ))}
           </div>
-          {role === 'administrador' && (
-            <p className="text-[10px] text-slate-600 mt-1.5">Administrador tem acesso total a todas as views e ações.</p>
-          )}
+          <p className="text-[10px] text-slate-500 mt-2 leading-relaxed">
+            {ROLES.find((r) => r.id === role)?.hint}
+          </p>
         </div>
 
         {showViewsAndActions && (
@@ -272,7 +294,12 @@ export const UserForm: React.FC<UserFormProps> = ({
                 Ações por módulo
               </label>
               <p className="text-[10px] text-slate-600 mb-2">
-                Para cada view ativa, defina o que o usuário pode fazer. Sem nenhuma ação marcada = apenas visualizar (leitura).
+                Para cada view ativa, defina o que o usuário pode fazer. Sem nenhuma ação marcada = apenas visualizar (leitura). Em{' '}
+                <span className="text-slate-400">Tático</span> e <span className="text-slate-400">Operacional</span>, a ação{' '}
+                <span className="text-emerald-500/90">&quot;Atribuir tarefas a outras pessoas&quot;</span> controla se pode classificar a
+                tarefa para outro responsável; sem ela, só a si mesmo. A ação{' '}
+                <span className="text-emerald-500/90">&quot;Ver todos os planos de ataque&quot;</span> libera a visão completa da equipe
+                no Tático (todas as prioridades e tarefas nos planos); sem ela, vê só o que for dele como dono ou atribuído.
               </p>
               {views.length === 0 ? (
                 <p className="text-xs text-slate-500 py-2">Selecione ao menos uma view acima.</p>

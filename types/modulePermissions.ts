@@ -28,12 +28,24 @@ export const MODULE_ACTIONS: Record<ViewId, { id: string; label: string }[]> = {
     { id: 'prioridade_write', label: 'Criar/editar prioridades (incl. arquivar)' },
     { id: 'plano_write', label: 'Criar/editar planos 5W2H' },
     { id: 'plano_delete', label: 'Excluir planos' },
+    {
+      id: 'ver_todos_planos',
+      label: 'Ver todos os planos de ataque (visão da equipe)',
+    },
     { id: 'tarefa_write', label: 'Criar/editar tarefas' },
+    {
+      id: 'tarefa_assign',
+      label: 'Atribuir tarefas a outras pessoas',
+    },
     { id: 'tarefa_delete', label: 'Excluir tarefas' },
   ],
   operacional: [
     { id: 'read', label: 'Visualizar' },
     { id: 'tarefa_write', label: 'Criar/editar tarefas' },
+    {
+      id: 'tarefa_assign',
+      label: 'Atribuir tarefas a outras pessoas',
+    },
     { id: 'tarefa_delete', label: 'Excluir tarefas' },
   ],
   performance: [{ id: 'read', label: 'Visualizar' }],

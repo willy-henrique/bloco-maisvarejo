@@ -1,7 +1,14 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import type { PlanoDeAtaque, Prioridade, Responsavel, Tarefa, StatusPlano, StatusTarefa } from '../../types';
 import type { UserRole as UserRoleType } from '../../types/user';
 import { CheckCircle, Play, Circle, AlertTriangle, Plus, ChevronDown, ChevronRight, Trash2, User, Calendar, Target, FileText } from 'lucide-react';
+import { ResponsavelAutocomplete } from './ResponsavelAutocomplete';
+import {
+  responsavelIdsForLoggedUser,
+  donoPrioridadeCorrespondeAoUsuario,
+  displayNomeDonoPrioridade,
+} from './responsavelSearchUtils';
+import { tarefaAtribuidaAoUsuario } from './taskAssignmentUtils';
 
 // Utilidades
 function tsFromDateInput(v: string): number {
@@ -67,6 +74,7 @@ const TAREFA_CFG: Record<StatusTarefa, { label: string; cls: string; Icon: React
 export type OperacionalCaps = {
   planoWrite?: boolean;
   tarefaWrite?: boolean;
+  tarefaAssign?: boolean;
   tarefaDelete?: boolean;
 };
 
@@ -78,6 +86,8 @@ type OperacionalProps = {
   computeStatusPlano: (planoId: string) => StatusPlano | null;
   loggedUserUid?: string | null;
   loggedUserName?: string | null;
+  loggedUserEmail?: string | null;
+  loggedUserDisplayName?: string | null;
   loggedUserRole?: UserRoleType | null;
   onAddTarefa: (t: Omit<Tarefa, 'id'>) => void;
   onUpdateTarefa: (id: string, u: Partial<Tarefa>) => void;
@@ -93,8 +103,17 @@ const TarefaRow: React.FC<{
   onUpdate: (u: Partial<Tarefa>) => void;
   onDelete: () => void;
   canWriteTarefa?: boolean;
+  canAssignTarefa?: boolean;
   canDeleteTarefa?: boolean;
-}> = ({ tarefa, responsaveis, onUpdate, onDelete, canWriteTarefa = true, canDeleteTarefa = true }) => {
+}> = ({
+  tarefa,
+  responsaveis,
+  onUpdate,
+  onDelete,
+  canWriteTarefa = true,
+  canAssignTarefa = true,
+  canDeleteTarefa = true,
+}) => {
   const resp = responsaveis.find(
     (r) =>
       normStr(r.id) === normStr(tarefa.responsavel_id) ||
@@ -135,9 +154,32 @@ const TarefaRow: React.FC<{
         )}
       </td>
       <td className="px-4 py-3 text-slate-300">
-        <div className="flex items-center gap-2">
-          <User size={12} className="text-slate-500" />
-          <span className="truncate block max-w-[140px]">{displayNome}</span>
+        <div className="flex items-center gap-2 min-w-0">
+          {displayNome ? (
+            <span className="w-6 h-6 rounded-full bg-slate-700 text-slate-300 text-[9px] font-bold flex items-center justify-center shrink-0">
+              {displayNome
+                .split(' ')
+                .filter(Boolean)
+                .slice(0, 2)
+                .map((x) => x[0])
+                .join('')
+                .toUpperCase()}
+            </span>
+          ) : (
+            <User size={12} className="text-slate-500 shrink-0" />
+          )}
+          {canWriteTarefa ? (
+            <ResponsavelAutocomplete
+              responsaveis={responsaveis}
+              valueId={tarefa.responsavel_id}
+              onCommit={(id) => onUpdate({ responsavel_id: id })}
+              variant="compact"
+              placeholder="Buscar..."
+              disabled={!canAssignTarefa}
+            />
+          ) : (
+            <span className="truncate block max-w-[140px] text-sm">{displayNome || '—'}</span>
+          )}
         </div>
       </td>
       <td className="px-4 py-3 text-slate-400">{fmtDate(tarefa.data_vencimento)}</td>
@@ -181,10 +223,11 @@ const OperacionalPlanoCard: React.FC<{
   onDeleteTarefa: (id: string) => void;
   onUpdatePlano: (id: string, u: Partial<PlanoDeAtaque>) => void;
   loggedUserResponsavelId?: string;
-  loggedUserResponsavelNomeDisplay?: string;
-  canEditResponsavel?: boolean;
+  isAdmin?: boolean;
+  myResponsavelIds?: Set<string>;
   canWritePlano?: boolean;
   canWriteTarefa?: boolean;
+  canAssignTarefa?: boolean;
   canDeleteTarefa?: boolean;
 }> = ({
   prioridade,
@@ -197,10 +240,11 @@ const OperacionalPlanoCard: React.FC<{
   onDeleteTarefa,
   onUpdatePlano,
   loggedUserResponsavelId,
-  loggedUserResponsavelNomeDisplay,
-  canEditResponsavel = false,
+  isAdmin = true,
+  myResponsavelIds = new Set<string>(),
   canWritePlano = true,
   canWriteTarefa = true,
+  canAssignTarefa = true,
   canDeleteTarefa = true,
 }) => {
   const [expanded, setExpanded] = useState(false);
@@ -212,34 +256,31 @@ const OperacionalPlanoCard: React.FC<{
     descricao: '',
   });
 
-  const [respQuery, setRespQuery] = useState(loggedUserResponsavelNomeDisplay ?? '');
-  const [showRespDropdown, setShowRespDropdown] = useState(false);
-
-  const respOptions = useMemo(() => {
-    if (!canEditResponsavel) return [];
-    const q = normStr(respQuery);
-    if (!q) return [];
-    return responsaveis.filter((r) => normStr(r.nome).startsWith(q)).slice(0, 6);
-  }, [canEditResponsavel, respQuery, responsaveis]);
+  useEffect(() => {
+    if (canAssignTarefa) return;
+    const self = (loggedUserResponsavelId ?? '').trim();
+    if (!self) return;
+    setNovaTarefa((prev) => (prev.responsavel_id === self ? prev : { ...prev, responsavel_id: self }));
+  }, [canAssignTarefa, loggedUserResponsavelId]);
 
   const computed = computeStatusPlano(plano.id);
   const status = (computed || plano.status_plano) as StatusPlano;
   const statusCfg = STATUS_CFG[status] || STATUS_CFG.Execucao;
-  const taskCreatorId = (loggedUserResponsavelId ?? loggedUserResponsavelNomeDisplay ?? '').trim();
+  const defaultAssigneeId = (loggedUserResponsavelId ?? '').trim();
 
   // No Operacional, o "Quem" deve ser o dono da PRIORIDADE (criador da prioridade),
   // igual ao padrão desejado no Tático.
-  const donoPrioridade = responsaveis.find((r) => normStr(r.id) === normStr(prioridade.dono_id));
-  const displayWho = donoPrioridade?.nome || prioridade.dono_id || '';
-  const novaTarefaResponsavelNome =
-    loggedUserResponsavelNomeDisplay ??
-    responsaveis.find((r) => normStr(r.id) === normStr(novaTarefa.responsavel_id))?.nome ??
-    novaTarefa.responsavel_id;
+  const displayWho =
+    displayNomeDonoPrioridade(prioridade.dono_id, responsaveis) || prioridade.dono_id || '';
+  const donoDestaPrioridade =
+    myResponsavelIds.size > 0 &&
+    donoPrioridadeCorrespondeAoUsuario(prioridade.dono_id, myResponsavelIds, responsaveis);
 
-  const tarefasDoPlano = useMemo(
-    () => tarefas.filter((t) => t.plano_id === plano.id),
-    [tarefas, plano.id],
-  );
+  const tarefasDoPlano = useMemo(() => {
+    const list = tarefas.filter((t) => t.plano_id === plano.id);
+    if (isAdmin || donoDestaPrioridade) return list;
+    return list.filter((t) => tarefaAtribuidaAoUsuario(t, myResponsavelIds, responsaveis));
+  }, [tarefas, plano.id, isAdmin, donoDestaPrioridade, myResponsavelIds, responsaveis]);
 
   const W2H: Array<{
     key: keyof PlanoDeAtaque;
@@ -263,12 +304,13 @@ const OperacionalPlanoCard: React.FC<{
     if (!novaTarefa.titulo.trim()) return;
     const parsedVenc = parseDateBR(novaTarefa.data_vencimento);
     if (!parsedVenc) return;
+    const assignee = (canAssignTarefa ? novaTarefa.responsavel_id : defaultAssigneeId).trim();
+    if (!assignee) return;
     onAddTarefa({
       plano_id: plano.id,
       titulo: novaTarefa.titulo.trim(),
       descricao: novaTarefa.descricao.trim(),
-      // Regra de produto: responsável da tarefa = conta que criou.
-      responsavel_id: taskCreatorId || novaTarefa.responsavel_id.trim(),
+      responsavel_id: assignee,
       data_inicio: Date.now(),
       data_vencimento: parsedVenc,
       status_tarefa: 'Pendente',
@@ -276,12 +318,10 @@ const OperacionalPlanoCard: React.FC<{
     });
     setNovaTarefa({
       titulo: '',
-      responsavel_id: taskCreatorId,
+      responsavel_id: defaultAssigneeId,
       data_vencimento: todayDateBR(),
       descricao: '',
     });
-    setRespQuery(loggedUserResponsavelNomeDisplay ?? '');
-    setShowRespDropdown(false);
     setShowAddTarefa(false);
   };
 
@@ -444,6 +484,7 @@ const OperacionalPlanoCard: React.FC<{
                       onUpdate={(u) => onUpdateTarefa(t.id, u)}
                       onDelete={() => onDeleteTarefa(t.id)}
                       canWriteTarefa={canWriteTarefa}
+                      canAssignTarefa={canAssignTarefa}
                       canDeleteTarefa={canDeleteTarefa}
                     />
                   ))}
@@ -465,12 +506,10 @@ const OperacionalPlanoCard: React.FC<{
                     if (next) {
                       setNovaTarefa({
                         titulo: '',
-                      responsavel_id: taskCreatorId,
+                        responsavel_id: defaultAssigneeId,
                         data_vencimento: todayDateBR(),
                         descricao: '',
                       });
-                    setRespQuery(loggedUserResponsavelNomeDisplay ?? '');
-                    setShowRespDropdown(false);
                     }
                     return next;
                   });
@@ -503,12 +542,14 @@ const OperacionalPlanoCard: React.FC<{
                 </div>
                 <div>
                   <label className="block text-[10px] text-slate-500 uppercase tracking-wider mb-1">
-                    Responsável
+                    Responsável *
                   </label>
-                  <input
-                    value={novaTarefaResponsavelNome || 'Conta atual'}
-                    readOnly
-                    className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 outline-none opacity-80 cursor-not-allowed"
+                  <ResponsavelAutocomplete
+                    responsaveis={responsaveis}
+                    valueId={novaTarefa.responsavel_id}
+                    onCommit={(id) => setNovaTarefa((v) => ({ ...v, responsavel_id: id }))}
+                    placeholder="Digite para buscar (ex.: W → Willy)"
+                    disabled={!canAssignTarefa}
                   />
                 </div>
                 <div>
@@ -536,7 +577,8 @@ const OperacionalPlanoCard: React.FC<{
                   onClick={handleAddTarefa}
                   disabled={
                     !novaTarefa.titulo.trim() ||
-                    !parseDateBR(novaTarefa.data_vencimento)
+                    !parseDateBR(novaTarefa.data_vencimento) ||
+                    !novaTarefa.responsavel_id.trim()
                   }
                   className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-medium transition-colors"
                 >
@@ -559,6 +601,8 @@ export const OperacionalView: React.FC<OperacionalProps> = ({
   computeStatusPlano,
   loggedUserUid,
   loggedUserName,
+  loggedUserEmail,
+  loggedUserDisplayName,
   loggedUserRole,
   onAddTarefa,
   onUpdateTarefa,
@@ -569,45 +613,57 @@ export const OperacionalView: React.FC<OperacionalProps> = ({
   const oc = {
     planoWrite: operacionalCaps?.planoWrite !== false,
     tarefaWrite: operacionalCaps?.tarefaWrite !== false,
+    tarefaAssign: operacionalCaps?.tarefaAssign !== false,
     tarefaDelete: operacionalCaps?.tarefaDelete !== false,
   };
 
-  const isAdmin = loggedUserRole === 'administrador' || loggedUserRole === 'gerente';
-  const loggedUserResponsavelNomeDisplay = loggedUserName ?? '';
+  const seesAllPrioridades = loggedUserRole === 'administrador';
+  const viewerSeesAllTarefasNoPlano = loggedUserRole === 'administrador';
   const loggedKeys = [loggedUserUid, loggedUserName]
     .filter((v) => !!v)
     .map((v) => normStr(v as string));
 
   // Em geral, "dono_id" da prioridade aponta para um responsavel (id), não para uid do login.
   // Então tentamos mapear o usuário logado para o responsavel.id via nome/id.
-  const myResponsavelIds = useMemo(() => {
-    const ids = new Set<string>();
-    if (loggedUserUid) ids.add(normStr(loggedUserUid));
-    if (loggedUserName) {
-      const match = responsaveis.find((r) => normStr(r.nome) === normStr(loggedUserName));
-      if (match) ids.add(normStr(match.id));
-    }
-    // Fallback: se dono_id estiver sendo salvo como nome direto.
-    if (loggedUserName) ids.add(normStr(loggedUserName));
-    return ids;
-  }, [loggedUserUid, loggedUserName, responsaveis]);
+  const myResponsavelIds = useMemo(
+    () =>
+      responsavelIdsForLoggedUser(loggedUserUid ?? undefined, loggedUserName ?? undefined, responsaveis, {
+        email: loggedUserEmail,
+        displayName: loggedUserDisplayName,
+      }),
+    [loggedUserUid, loggedUserName, loggedUserEmail, loggedUserDisplayName, responsaveis],
+  );
 
   const loggedUserResponsavelId = useMemo(() => {
+    if (loggedUserUid) {
+      const byUid = responsaveis.find((r) => normStr(r.id) === normStr(loggedUserUid));
+      if (byUid) return byUid.id;
+    }
     const matchByName = loggedUserName
       ? responsaveis.find((r) => normStr(r.nome) === normStr(loggedUserName))
       : undefined;
-    // Se não existir vínculo em "responsaveis", usa o nome da conta
-    // para evitar exibir UID bruto na coluna Responsável.
     return matchByName?.id ?? (loggedUserName?.trim() || (loggedUserUid ? String(loggedUserUid) : ''));
   }, [loggedUserUid, loggedUserName, responsaveis]);
 
   const visiblePrioridades = useMemo(() => {
-    if (isAdmin) return prioridades;
+    if (seesAllPrioridades) return prioridades;
     if (myResponsavelIds.size > 0) {
-      return prioridades.filter((p) => myResponsavelIds.has(normStr(p.dono_id)));
+      const prioIds = new Set(
+        prioridades
+          .filter((p) => donoPrioridadeCorrespondeAoUsuario(p.dono_id, myResponsavelIds, responsaveis))
+          .map((p) => p.id),
+      );
+      for (const t of tarefas) {
+        if (!tarefaAtribuidaAoUsuario(t, myResponsavelIds, responsaveis)) continue;
+        const pl = planos.find((p) => p.id === t.plano_id);
+        if (pl) prioIds.add(pl.prioridade_id);
+      }
+      return prioridades.filter((p) => prioIds.has(p.id));
     }
-    return prioridades.filter((p) => loggedKeys.includes(normStr(p.dono_id)));
-  }, [prioridades, isAdmin, loggedKeys]);
+    return prioridades.filter((p) =>
+      donoPrioridadeCorrespondeAoUsuario(p.dono_id, new Set(loggedKeys), responsaveis),
+    );
+  }, [prioridades, seesAllPrioridades, loggedKeys, myResponsavelIds, tarefas, planos, responsaveis]);
 
   const prioridadeById = useMemo(() => {
     const map = new Map<string, Prioridade>();
@@ -635,7 +691,7 @@ export const OperacionalView: React.FC<OperacionalProps> = ({
 
       {visiblePlanos.length === 0 ? (
         <div className="px-4 py-10 text-sm text-slate-500 text-center">
-          Nenhum plano operacional disponível {isAdmin ? '' : 'para o seu usuário'}.
+          Nenhum plano operacional disponível {seesAllPrioridades ? '' : 'para o seu usuário'}.
         </div>
       ) : (
         <div className="divide-y divide-slate-800/60 p-4 space-y-4">
@@ -655,10 +711,11 @@ export const OperacionalView: React.FC<OperacionalProps> = ({
                 onDeleteTarefa={onDeleteTarefa}
                 onUpdatePlano={onUpdatePlano}
                 loggedUserResponsavelId={loggedUserResponsavelId}
-                loggedUserResponsavelNomeDisplay={loggedUserResponsavelNomeDisplay}
-                canEditResponsavel={isAdmin}
+                isAdmin={viewerSeesAllTarefasNoPlano}
+                myResponsavelIds={myResponsavelIds}
                 canWritePlano={oc.planoWrite}
                 canWriteTarefa={oc.tarefaWrite}
+                canAssignTarefa={oc.tarefaAssign}
                 canDeleteTarefa={oc.tarefaDelete}
               />
             );

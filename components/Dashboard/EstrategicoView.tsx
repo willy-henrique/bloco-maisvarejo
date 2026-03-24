@@ -25,6 +25,16 @@ import {
   Archive,
 } from 'lucide-react';
 import { EstrategicoGridIcon } from '../icons/EstrategicoGridIcon';
+import { ResponsavelAutocomplete } from './ResponsavelAutocomplete';
+import {
+  responsavelIdsForLoggedUser,
+  sameResponsavelReference,
+  donoPrioridadeCorrespondeAoUsuario,
+  displayNomeDonoPrioridade,
+} from './responsavelSearchUtils';
+import { tarefaAtribuidaAoUsuario } from './taskAssignmentUtils';
+
+const EMPTY_ID_SET = new Set<string>();
 
 function initials(nome: string): string {
   return nome
@@ -102,7 +112,11 @@ export interface EstrategicoCaps {
   prioridadeWrite?: boolean;
   planoWrite?: boolean;
   planoDelete?: boolean;
+  /** Lista completa de prioridades + todas as tarefas nos planos (sem ser só dono/atribuído). */
+  verTodosPlanos?: boolean;
   tarefaWrite?: boolean;
+  /** Pode escolher outro responsável na tarefa (senão só a si). */
+  tarefaAssign?: boolean;
   tarefaDelete?: boolean;
 }
 
@@ -112,10 +126,8 @@ interface EstrategicoViewProps {
   tarefas: Tarefa[];
   responsaveis: Responsavel[];
   computeStatusPlano: (id: string) => StatusPlano | null;
-  onAddPrioridade: () => void;
   onUpdatePrioridade: (id: string, u: Partial<Prioridade>) => void;
   onDeletePrioridade: (p: Prioridade) => void;
-  podeAdicionarPrioridade: boolean;
   onAddPlano: (p: Omit<PlanoDeAtaque, 'id'>) => void;
   onUpdatePlano: (id: string, u: Partial<PlanoDeAtaque>) => void;
   onDeletePlano: (id: string) => void;
@@ -125,6 +137,9 @@ interface EstrategicoViewProps {
   loggedUserUid?: string;
   loggedUserRole?: 'administrador' | 'gerente' | 'usuario' | null;
   loggedUserName?: string | null;
+  loggedUserEmail?: string | null;
+  /** Nome exibido no Firebase Auth (fallback quando perfil.nome está vazio ou diferente). */
+  loggedUserDisplayName?: string | null;
   /** Quando definido, faz scroll até o bloco da prioridade no Tático */
   focusPrioridadeId?: string | null;
   /** Quando definido, mostra somente esta prioridade no Tático */
@@ -140,8 +155,17 @@ const TarefaRow: React.FC<{
   onUpdate: (u: Partial<Tarefa>) => void;
   onDeleteTarefa: () => void;
   canWriteTarefa?: boolean;
+  canAssignTarefa?: boolean;
   canDeleteTarefa?: boolean;
-}> = ({ tarefa, responsaveis, onUpdate, onDeleteTarefa, canWriteTarefa = true, canDeleteTarefa = true }) => {
+}> = ({
+  tarefa,
+  responsaveis,
+  onUpdate,
+  onDeleteTarefa,
+  canWriteTarefa = true,
+  canAssignTarefa = true,
+  canDeleteTarefa = true,
+}) => {
   const resp = responsaveis.find(
     (r) =>
       normStr(r.id) === normStr(tarefa.responsavel_id) ||
@@ -193,8 +217,8 @@ const TarefaRow: React.FC<{
           </div>
         </div>
       </td>
-      <td className="px-4 py-3">
-        <div className="flex items-center gap-1.5">
+      <td className="px-4 py-3 align-top relative z-20">
+        <div className="flex items-center gap-1.5 min-w-0">
           {displayNome ? (
             <span className="w-6 h-6 rounded-full bg-slate-700 text-slate-300 text-[9px] font-bold flex items-center justify-center shrink-0">
               {initials(displayNome)}
@@ -205,11 +229,13 @@ const TarefaRow: React.FC<{
             </span>
           )}
           {canWriteTarefa ? (
-            <input
-              defaultValue={displayNome}
-              onBlur={(e) => onUpdate({ responsavel_id: e.target.value })}
-              placeholder="Responsável"
-              className="bg-transparent border-b border-transparent focus:border-slate-600 outline-none text-xs text-slate-200 placeholder:text-slate-600 w-full max-w-[120px]"
+            <ResponsavelAutocomplete
+              responsaveis={responsaveis}
+              valueId={tarefa.responsavel_id}
+              onCommit={(id) => onUpdate({ responsavel_id: id })}
+              variant="compact"
+              placeholder="Buscar..."
+              disabled={!canAssignTarefa}
             />
           ) : (
             <span className="text-xs text-slate-400 truncate max-w-[120px]">{displayNome || '—'}</span>
@@ -271,12 +297,15 @@ const PlanoCard: React.FC<{
   loggedUserResponsavelId?: string;
   /** Nome exibido do responsável (quem está logado) */
   loggedUserResponsavelNomeDisplay?: string;
-  /** Se true, permite editar o responsável (admin/gerente) */
-  canEditResponsavel?: boolean;
   canWritePlano?: boolean;
   canDeletePlano?: boolean;
   canWriteTarefa?: boolean;
+  canAssignTarefa?: boolean;
   canDeleteTarefa?: boolean;
+  /** Dono da prioridade pai (para filtrar tarefas no perfil do executante) */
+  prioridadeDonoId?: string;
+  viewerIsAdmin?: boolean;
+  viewerMyResponsavelIds?: Set<string>;
 }> = ({
   plano,
   tarefas,
@@ -291,12 +320,17 @@ const PlanoCard: React.FC<{
   lockWhoToOverrideName = false,
   loggedUserResponsavelId,
   loggedUserResponsavelNomeDisplay,
-  canEditResponsavel = false,
   canWritePlano = true,
   canDeletePlano = true,
   canWriteTarefa = true,
+  canAssignTarefa = true,
   canDeleteTarefa = true,
+  prioridadeDonoId = '',
+  viewerIsAdmin = true,
+  viewerMyResponsavelIds,
 }) => {
+  const myViewerIds = viewerMyResponsavelIds ?? EMPTY_ID_SET;
+
   const [expanded, setExpanded] = useState(false);
   const [showAddTarefa, setShowAddTarefa] = useState(false);
   const [novaTarefa, setNovaTarefa] = useState({
@@ -306,47 +340,46 @@ const PlanoCard: React.FC<{
     descricao: '',
   });
 
+  useEffect(() => {
+    if (canAssignTarefa) return;
+    const self = loggedUserResponsavelId ?? '';
+    setNovaTarefa((prev) => (prev.responsavel_id === self ? prev : { ...prev, responsavel_id: self }));
+  }, [canAssignTarefa, loggedUserResponsavelId]);
+
   const computed = computeStatusPlano(plano.id);
   const status = (computed || plano.status_plano) as StatusPlano;
   const statusCfg = STATUS_CFG[status] || STATUS_CFG.Execucao;
   const resp = responsaveis.find((r) => normStr(r.id) === normStr(plano.who_id));
-  const displayWho = whoOverrideName || resp?.nome || plano.who_id || '—';
-  const novaTarefaResponsavelNome =
-    loggedUserResponsavelNomeDisplay ??
-    responsaveis.find((r) => normStr(r.id) === normStr(novaTarefa.responsavel_id))?.nome ??
-    novaTarefa.responsavel_id;
+  const planWhoReadable =
+    displayNomeDonoPrioridade(plano.who_id, responsaveis) || resp?.nome || plano.who_id || '';
+  const displayWho = whoOverrideName || planWhoReadable || '—';
 
-  const [respQuery, setRespQuery] = useState(novaTarefaResponsavelNome);
-  const [showRespDropdown, setShowRespDropdown] = useState(false);
+  const donoDestaPrioridade =
+    myViewerIds.size > 0 &&
+    donoPrioridadeCorrespondeAoUsuario(prioridadeDonoId, myViewerIds, responsaveis);
 
-  // Atualiza o texto do input quando o estado base muda (ex: ao abrir "Nova Tarefa").
-  useEffect(() => {
-    if (!canEditResponsavel) return;
-    setRespQuery(novaTarefaResponsavelNome);
-  }, [canEditResponsavel, novaTarefaResponsavelNome]);
+  const tarefasVisiveis = useMemo(() => {
+    if (viewerIsAdmin || donoDestaPrioridade) return tarefas;
+    return tarefas.filter((t) => tarefaAtribuidaAoUsuario(t, myViewerIds, responsaveis));
+  }, [tarefas, viewerIsAdmin, donoDestaPrioridade, myViewerIds, responsaveis]);
 
-  const respOptions = useMemo(() => {
-    if (!canEditResponsavel) return [];
-    const q = normStr(respQuery);
-    if (!q) return [];
-    return responsaveis
-      .filter((r) => normStr(r.nome).startsWith(q))
-      .slice(0, 6);
-  }, [canEditResponsavel, respQuery, responsaveis]);
-  const concluidas = tarefas.filter((t) => t.status_tarefa === 'Concluida').length;
-  const totalTarefas = tarefas.length;
+  const concluidas = tarefasVisiveis.filter((t) => t.status_tarefa === 'Concluida').length;
+  const totalTarefas = tarefasVisiveis.length;
   const progresso = totalTarefas > 0 ? (concluidas / totalTarefas) * 100 : 0;
 
   const handleAddTarefa = () => {
     if (!novaTarefa.titulo.trim()) return;
     const parsedVenc = parseDateBR(novaTarefa.data_vencimento);
     if (!parsedVenc) return;
-    if (canEditResponsavel && !novaTarefa.responsavel_id.trim()) return;
+    const rid = (
+      canAssignTarefa ? novaTarefa.responsavel_id : loggedUserResponsavelId ?? ''
+    ).trim();
+    if (!rid) return;
     onAddTarefa({
       plano_id: plano.id,
       titulo: novaTarefa.titulo.trim(),
       descricao: novaTarefa.descricao.trim(),
-      responsavel_id: novaTarefa.responsavel_id.trim(),
+      responsavel_id: rid,
       data_inicio: Date.now(),
       data_vencimento: parsedVenc,
       status_tarefa: 'Pendente',
@@ -358,7 +391,6 @@ const PlanoCard: React.FC<{
       data_vencimento: todayDateBR(),
       descricao: '',
     });
-    setRespQuery(loggedUserResponsavelNomeDisplay ?? '');
     setShowAddTarefa(false);
   };
 
@@ -369,10 +401,11 @@ const PlanoCard: React.FC<{
     { key: 'when_fim', label: 'WHEN', sub: 'Quando', type: 'date' },
     { key: 'where', label: 'WHERE', sub: 'Onde', type: 'input' },
     { key: 'how_much', label: 'HOW MUCH', sub: 'Quanto', type: 'input' },
+    { key: 'how', label: 'HOW — EXECUÇÃO', sub: 'Como será feito', type: 'textarea' },
   ];
 
   return (
-    <div className="bg-slate-900/40 border border-slate-800 rounded-xl overflow-hidden">
+    <div className="bg-slate-900/40 border border-slate-800 rounded-xl">
       <div className="px-4 py-3 flex items-center gap-3 hover:bg-slate-800/20 transition-colors">
         <button type="button" onClick={() => setExpanded((v) => !v)} className="p-1 text-slate-500 hover:text-slate-300 transition-colors shrink-0">
           {expanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
@@ -480,44 +513,22 @@ const PlanoCard: React.FC<{
                       placeholder="dd/mm/yyyy"
                       className="bg-transparent text-sm text-slate-200 outline-none border-b border-transparent focus:border-slate-600 transition-colors py-0.5 placeholder:text-slate-700 disabled:opacity-60"
                     />
+                  ) : lockWhoToOverrideName ? (
+                    <div className="w-full bg-transparent py-0.5 text-sm text-slate-200">{displayWho || '—'}</div>
+                  ) : canWritePlano ? (
+                    <ResponsavelAutocomplete
+                      responsaveis={responsaveis}
+                      valueId={plano.who_id}
+                      onCommit={(id) => onUpdate({ who_id: id })}
+                      variant="inline"
+                      placeholder="Buscar no cadastro (ex.: Willy)..."
+                    />
                   ) : (
-                    key === 'who_id' ? (
-                      <div className="w-full bg-transparent text-sm text-slate-200 outline-none border-b border-transparent py-0.5">
-                        {displayWho || '—'}
-                      </div>
-                    ) : (
-                      <input
-                        key={`${plano.id}-${key}`}
-                        defaultValue={displayWho}
-                        onBlur={canWritePlano ? (e) => onUpdate({ who_id: e.target.value }) : undefined}
-                        readOnly={!canWritePlano}
-                        disabled={!canWritePlano}
-                        className="w-full bg-transparent text-sm text-slate-200 outline-none border-b border-transparent focus:border-slate-600 transition-colors py-0.5 placeholder:text-slate-700 disabled:opacity-60"
-                        placeholder={`${sub}...`}
-                      />
-                    )
+                    <div className="w-full bg-transparent py-0.5 text-sm text-slate-200">{displayWho || '—'}</div>
                   )}
                 </div>
               </React.Fragment>
             ))}
-          </div>
-
-          {/* HOW section */}
-          <div className="px-6 pb-6">
-            <div className="bg-slate-900/60 border border-slate-800 rounded-lg p-4">
-              <p className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest mb-0.5">HOW — EXECUÇÃO</p>
-              <p className="text-[10px] text-slate-600 mb-3">Como será feito</p>
-              <textarea
-                key={`${plano.id}-how`}
-                defaultValue={plano.how || ''}
-                onBlur={canWritePlano ? (e) => onUpdate({ how: e.target.value }) : undefined}
-                readOnly={!canWritePlano}
-                disabled={!canWritePlano}
-                rows={3}
-                className="w-full bg-transparent text-sm text-slate-200 outline-none resize-none border-b border-transparent focus:border-slate-600 transition-colors placeholder:text-slate-700 disabled:opacity-60"
-                placeholder="Descreva como será executado..."
-              />
-            </div>
           </div>
 
           {/* Tasks section */}
@@ -525,12 +536,12 @@ const PlanoCard: React.FC<{
             <div className="px-5 py-3 flex items-center justify-between gap-3">
               <div className="flex items-center gap-3">
                 <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Tarefas</span>
-                {tarefas.length > 0 && (
+                {tarefasVisiveis.length > 0 && (
                   <>
                     <div className="w-20 h-1 bg-slate-800 rounded-full overflow-hidden">
-                      <div className="h-full bg-emerald-500 rounded-full transition-all duration-500" style={{ width: `${tarefas.length > 0 ? (concluidas / tarefas.length) * 100 : 0}%` }} />
+                      <div className="h-full bg-emerald-500 rounded-full transition-all duration-500" style={{ width: `${tarefasVisiveis.length > 0 ? (concluidas / tarefasVisiveis.length) * 100 : 0}%` }} />
                     </div>
-                    <span className="text-[10px] text-slate-500 tabular-nums">{concluidas}/{tarefas.length} concluídas</span>
+                    <span className="text-[10px] text-slate-500 tabular-nums">{concluidas}/{tarefasVisiveis.length} concluídas</span>
                   </>
                 )}
               </div>
@@ -547,10 +558,6 @@ const PlanoCard: React.FC<{
                           data_vencimento: todayDateBR(),
                           descricao: '',
                         });
-                        if (canEditResponsavel) {
-                          setRespQuery(loggedUserResponsavelNomeDisplay ?? '');
-                          setShowRespDropdown(false);
-                        }
                       }
                       return next;
                     });
@@ -562,9 +569,9 @@ const PlanoCard: React.FC<{
               )}
             </div>
 
-            {tarefas.length > 0 && (
-              <div className="overflow-x-hidden">
-                <table className="w-full table-fixed">
+            {tarefasVisiveis.length > 0 && (
+              <div className="overflow-x-auto">
+                <table className="w-full table-fixed min-w-[640px]">
                   <thead>
                     <tr className="border-t border-b border-slate-800 text-[10px] font-semibold text-slate-600 uppercase tracking-wider bg-slate-900/40">
                       <th className="px-4 py-2 text-left">Tarefa</th>
@@ -575,7 +582,7 @@ const PlanoCard: React.FC<{
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-800/50">
-                    {tarefas.map((t) => (
+                    {tarefasVisiveis.map((t) => (
                       <TarefaRow
                         key={t.id}
                         tarefa={t}
@@ -583,6 +590,7 @@ const PlanoCard: React.FC<{
                         onUpdate={(u) => onUpdateTarefa(t.id, u)}
                         onDeleteTarefa={() => onDeleteTarefa(t.id)}
                         canWriteTarefa={canWriteTarefa}
+                        canAssignTarefa={canAssignTarefa}
                         canDeleteTarefa={canDeleteTarefa}
                       />
                     ))}
@@ -599,50 +607,17 @@ const PlanoCard: React.FC<{
                     onKeyDown={(e) => { if (e.key === 'Enter') handleAddTarefa(); if (e.key === 'Escape') setShowAddTarefa(false); }}
                     placeholder="Título da tarefa..." className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-slate-100 outline-none focus:border-emerald-500/60 placeholder:text-slate-600" />
                 </div>
-                <div className="min-w-[140px]">
+                <div className="min-w-[160px] max-w-[220px]">
                   <label className="text-[10px] text-slate-500 uppercase tracking-wider mb-1 block">
                     Responsável
                   </label>
-                  <div className="relative">
-                    <input
-                      value={canEditResponsavel ? respQuery : novaTarefaResponsavelNome}
-                      readOnly={!canEditResponsavel}
-                      placeholder="Nome do responsável"
-                      onChange={(e) => {
-                        if (!canEditResponsavel) return;
-                        const v = e.target.value;
-                        setRespQuery(v);
-                        // Só garante "responsavel_id" quando o usuário selecionar um item da lista.
-                        setNovaTarefa((prev) => ({ ...prev, responsavel_id: '' }));
-                        setShowRespDropdown(true);
-                      }}
-                      onBlur={() => {
-                        if (!canEditResponsavel) return;
-                        window.setTimeout(() => setShowRespDropdown(false), 150);
-                      }}
-                      className="w-full bg-slate-800 border border-slate-700 rounded-lg px-2 py-1.5 text-sm text-slate-200 outline-none focus:border-slate-600 placeholder:text-slate-600"
-                    />
-                    {canEditResponsavel && showRespDropdown && respOptions.length > 0 && (
-                      <div className="absolute left-0 right-0 z-20 mt-1 bg-slate-900 border border-slate-700 rounded-lg shadow-lg max-h-40 overflow-auto">
-                        {respOptions.map((r) => (
-                          <button
-                            key={r.id}
-                            type="button"
-                            className="w-full text-left px-3 py-2 text-[13px] text-slate-100 hover:bg-slate-800 transition-colors"
-                            onMouseDown={(e) => {
-                              // evita o blur antes do clique.
-                              e.preventDefault();
-                              setNovaTarefa((prev) => ({ ...prev, responsavel_id: r.id }));
-                              setRespQuery(r.nome);
-                              setShowRespDropdown(false);
-                            }}
-                          >
-                            {r.nome}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
+                  <ResponsavelAutocomplete
+                    responsaveis={responsaveis}
+                    valueId={novaTarefa.responsavel_id}
+                    onCommit={(id) => setNovaTarefa((prev) => ({ ...prev, responsavel_id: id }))}
+                    placeholder="Buscar no cadastro..."
+                    disabled={!canAssignTarefa}
+                  />
                 </div>
                 <div className="min-w-[130px]">
                   <label className="text-[10px] text-slate-500 uppercase tracking-wider mb-1 block">Prazo</label>
@@ -660,7 +635,7 @@ const PlanoCard: React.FC<{
                     disabled={
                       !novaTarefa.titulo.trim() ||
                       !parseDateBR(novaTarefa.data_vencimento) ||
-                      (canEditResponsavel && !novaTarefa.responsavel_id.trim())
+                      !novaTarefa.responsavel_id.trim()
                     }
                     className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-medium rounded-lg transition-colors">Adicionar</button>
                   <button type="button" onClick={() => setShowAddTarefa(false)} className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-300 text-xs font-medium rounded-lg transition-colors">Cancelar</button>
@@ -705,7 +680,11 @@ const DetalhePrioridade: React.FC<{
   onDeleteTarefa,
 }) => {
   const [showAddPlano, setShowAddPlano] = useState(false);
-  const [novoPlano, setNovoPlano] = useState({ titulo: '', who_id: '', when_fim: '' });
+  const [novoPlano, setNovoPlano] = useState({
+    titulo: '',
+    who_id: responsaveis[0]?.id ?? '',
+    when_fim: '',
+  });
 
   const dono = responsaveis.find((r) => r.id === prioridade.dono_id);
   const tarefasDoPrio = todasTarefas.filter((t) => planos.some((p) => p.id === t.plano_id));
@@ -722,7 +701,7 @@ const DetalhePrioridade: React.FC<{
       when_fim: novoPlano.when_fim ? tsFromDateInput(novoPlano.when_fim) : Date.now() + 30 * 86400000,
       how: '', status_plano: 'Execucao',
     });
-    setNovoPlano({ titulo: '', who_id: '', when_fim: '' });
+    setNovoPlano({ titulo: '', who_id: responsaveis[0]?.id ?? '', when_fim: '' });
     setShowAddPlano(false);
   };
 
@@ -767,15 +746,15 @@ const DetalhePrioridade: React.FC<{
                 onKeyDown={(e) => { if (e.key === 'Enter') handleAddPlano(); if (e.key === 'Escape') setShowAddPlano(false); }}
                 placeholder="Ex.: Pesquisa e validação de mercado..." className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 outline-none focus:border-emerald-500/60 placeholder:text-slate-600" />
             </div>
-            <div className="min-w-[150px]">
+            <div className="min-w-[160px] max-w-[240px]">
               <label className="text-[10px] text-slate-500 uppercase tracking-wider mb-1 block">
                 Responsável
               </label>
-              <input
-                value={novoPlano.who_id}
-                onChange={(e) => setNovoPlano((v) => ({ ...v, who_id: e.target.value }))}
-                placeholder="Nome do responsável"
-                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-2 py-2 text-sm text-slate-200 outline-none focus:border-slate-600 placeholder:text-slate-600"
+              <ResponsavelAutocomplete
+                responsaveis={responsaveis}
+                valueId={novoPlano.who_id}
+                onCommit={(id) => setNovoPlano((v) => ({ ...v, who_id: id }))}
+                placeholder="Buscar no cadastro..."
               />
             </div>
             <div className="min-w-[130px]">
@@ -809,6 +788,8 @@ const DetalhePrioridade: React.FC<{
             onDeleteTarefa={onDeleteTarefa}
             whoOverrideName={dono?.nome ?? prioridade.dono_id}
             lockWhoToOverrideName={false}
+            prioridadeDonoId={prioridade.dono_id}
+            viewerIsAdmin={true}
           />
         ))}
       </div>
@@ -834,7 +815,7 @@ const PrioridadeCard: React.FC<{
   loggedUserResponsavelId?: string;
   /** Nome exibido do responsável (quem está logado) */
   loggedUserResponsavelNomeDisplay?: string;
-  /** Se true, permite editar o responsável (admin/gerente) */
+  /** Admin: permite alterar o dono da prioridade (autocomplete no cabeçalho do card) */
   canEditResponsavel?: boolean;
   /** Permite atualizar o dono da prioridade (admin) */
   onUpdatePrioridadeOwner?: (ownerId: string) => void;
@@ -850,7 +831,10 @@ const PrioridadeCard: React.FC<{
   canPlanoWrite?: boolean;
   canPlanoDelete?: boolean;
   canTarefaWrite?: boolean;
+  canTarefaAssign?: boolean;
   canTarefaDelete?: boolean;
+  viewerIsAdmin?: boolean;
+  viewerMyResponsavelIds?: Set<string>;
 }> = ({
   prioridade,
   planos,
@@ -877,8 +861,13 @@ const PrioridadeCard: React.FC<{
   canPlanoWrite = true,
   canPlanoDelete = true,
   canTarefaWrite = true,
+  canTarefaAssign = true,
   canTarefaDelete = true,
+  viewerIsAdmin = true,
+  viewerMyResponsavelIds,
 }) => {
+  const myViewerIds = viewerMyResponsavelIds ?? EMPTY_ID_SET;
+
   const [showAddPlano, setShowAddPlano] = useState(false);
   const [novoPlano, setNovoPlano] = useState({
     titulo: '',
@@ -886,38 +875,38 @@ const PrioridadeCard: React.FC<{
     when_fim: todayDateBR(),
   });
 
-  const dono = responsaveis.find((r) => normStr(r.id) === normStr(prioridade.dono_id));
-  const statusCfg =
-    STATUS_CFG[prioridade.status_prioridade as StatusPlano] || STATUS_CFG.Execucao;
-  const planoWhoOverrideName = priorityOwnerNameOverride ?? (dono?.nome ?? prioridade.dono_id);
-  const loggedUserResponsavelNome =
-    loggedUserResponsavelNomeDisplay ??
-    responsaveis.find((r) => normStr(r.id) === normStr(loggedUserResponsavelId ?? ''))?.nome ??
-    loggedUserResponsavelId ??
-    '';
+  const [donoSaveFlash, setDonoSaveFlash] = useState(false);
+  const donoSaveFlashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const [respQueryPlano, setRespQueryPlano] = useState(loggedUserResponsavelNome);
-  const [showRespPlanoDropdown, setShowRespPlanoDropdown] = useState(false);
-  const [ownerQuery, setOwnerQuery] = useState(dono?.nome ?? prioridade.dono_id ?? '');
-  const [showOwnerDropdown, setShowOwnerDropdown] = useState(false);
-
-  const respPlanoOptions = useMemo(() => {
-    if (!canEditResponsavel) return [];
-    const q = normStr(respQueryPlano);
-    if (!q) return [];
-    return responsaveis.filter((r) => normStr(r.nome).startsWith(q)).slice(0, 6);
-  }, [canEditResponsavel, respQueryPlano, responsaveis]);
-
-  const ownerOptions = useMemo(() => {
-    if (!canEditResponsavel) return [];
-    const q = normStr(ownerQuery);
-    if (!q) return [];
-    return responsaveis.filter((r) => normStr(r.nome).startsWith(q)).slice(0, 6);
-  }, [canEditResponsavel, ownerQuery, responsaveis]);
+  const persistDonoIfChanged = (id: string) => {
+    const t = id.trim();
+    if (!t) return;
+    if (normStr(t) === normStr(prioridade.dono_id)) return;
+    if (sameResponsavelReference(responsaveis, t, prioridade.dono_id)) return;
+    onUpdatePrioridadeOwner?.(t);
+    if (donoSaveFlashTimer.current) clearTimeout(donoSaveFlashTimer.current);
+    setDonoSaveFlash(true);
+    donoSaveFlashTimer.current = setTimeout(() => {
+      setDonoSaveFlash(false);
+      donoSaveFlashTimer.current = null;
+    }, 1200);
+  };
 
   useEffect(() => {
-    setOwnerQuery(dono?.nome ?? prioridade.dono_id ?? '');
-  }, [dono?.nome, prioridade.dono_id]);
+    return () => {
+      if (donoSaveFlashTimer.current) clearTimeout(donoSaveFlashTimer.current);
+    };
+  }, []);
+
+  const dono = responsaveis.find((r) => normStr(r.id) === normStr(prioridade.dono_id));
+  const donoNomeLegivel =
+    displayNomeDonoPrioridade(prioridade.dono_id, responsaveis) || dono?.nome || prioridade.dono_id || '';
+  const donoNomeDisplay =
+    (priorityOwnerNameOverride && priorityOwnerNameOverride.trim()) || donoNomeLegivel;
+  const statusCfg =
+    STATUS_CFG[prioridade.status_prioridade as StatusPlano] || STATUS_CFG.Execucao;
+  const planoWhoOverrideName =
+    priorityOwnerNameOverride ?? donoNomeLegivel;
 
   const handleAddPlano = () => {
     if (!novoPlano.titulo.trim()) return;
@@ -942,7 +931,7 @@ const PrioridadeCard: React.FC<{
   };
 
   return (
-    <div className="bg-slate-900/60 border border-slate-800 rounded-xl overflow-hidden">
+    <div className="bg-slate-900/60 border border-slate-800 rounded-xl">
       <button
         type="button"
         onClick={onToggle}
@@ -961,46 +950,36 @@ const PrioridadeCard: React.FC<{
               <div className="flex items-center gap-3 mt-1.5 text-[12px] text-slate-400 flex-wrap">
                 {showDonoName && (
                   canPrioridadeWrite && canEditResponsavel && onUpdatePrioridadeOwner ? (
-                    <div className="relative">
-                      <input
-                        value={ownerQuery}
-                        onChange={(e) => {
-                          setOwnerQuery(e.target.value);
-                          setShowOwnerDropdown(true);
-                        }}
-                        onBlur={() => {
-                          window.setTimeout(() => setShowOwnerDropdown(false), 150);
-                        }}
-                        placeholder="Dono da prioridade"
-                        className="bg-slate-800 border border-slate-700 rounded-lg px-2 py-1 text-[12px] text-slate-200 outline-none focus:border-slate-600 placeholder:text-slate-600 w-[180px]"
-                      />
-                      {showOwnerDropdown && ownerOptions.length > 0 && (
-                        <div className="absolute left-0 z-20 mt-1 w-full bg-slate-900 border border-slate-700 rounded-lg shadow-lg max-h-40 overflow-auto">
-                          {ownerOptions.map((r) => (
-                            <button
-                              key={r.id}
-                              type="button"
-                              className="w-full text-left px-3 py-2 text-[13px] text-slate-100 hover:bg-slate-800 transition-colors"
-                              onMouseDown={(e) => {
-                                e.preventDefault();
-                                setOwnerQuery(r.nome);
-                                onUpdatePrioridadeOwner(r.id);
-                                setShowOwnerDropdown(false);
-                              }}
-                            >
-                              {r.nome}
-                            </button>
-                          ))}
-                        </div>
-                      )}
+                    <div
+                      className="flex flex-wrap items-center gap-1.5"
+                      onClick={(e) => e.stopPropagation()}
+                      onPointerDown={(e) => e.stopPropagation()}
+                    >
+                      <div className="w-[min(100%,220px)] min-w-[160px]">
+                        <ResponsavelAutocomplete
+                          responsaveis={responsaveis}
+                          valueId={prioridade.dono_id}
+                          onCommit={(id) => persistDonoIfChanged(id)}
+                          placeholder="Classificar — buscar e selecionar..."
+                        />
+                      </div>
+                      <span
+                        className={`inline-flex shrink-0 w-5 h-5 items-center justify-center transition-opacity duration-200 ${
+                          donoSaveFlash ? 'opacity-100' : 'opacity-0'
+                        }`}
+                        aria-live="polite"
+                        title="Salvo"
+                      >
+                        <Check size={16} className="text-emerald-400" strokeWidth={2.5} />
+                      </span>
                     </div>
                   ) : (
-                    dono && (
+                    donoNomeDisplay.trim() && (
                       <span className="flex items-center gap-1.5">
                         <span className="w-5 h-5 rounded-full bg-slate-700 text-slate-300 text-[9px] font-bold flex items-center justify-center">
-                          {initials(dono.nome)}
+                          {initials(donoNomeDisplay)}
                         </span>
-                        {dono.nome}
+                        {donoNomeDisplay}
                       </span>
                     )
                   )
@@ -1057,8 +1036,6 @@ const PrioridadeCard: React.FC<{
                         who_id: loggedUserResponsavelId ?? '',
                         when_fim: todayDateBR(),
                       });
-                      setRespQueryPlano(loggedUserResponsavelNome);
-                      setShowRespPlanoDropdown(false);
                     }
                     return next;
                   });
@@ -1090,49 +1067,16 @@ const PrioridadeCard: React.FC<{
                   className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 outline-none focus:border-emerald-500/60 placeholder:text-slate-600"
                 />
               </div>
-              <div className="min-w-[150px]">
+              <div className="min-w-[160px] max-w-[240px]">
                 <label className="text-[10px] text-slate-500 uppercase tracking-wider mb-1 block">
                   Responsável
                 </label>
-              <div className="relative">
-                <input
-                  value={canEditResponsavel ? respQueryPlano : loggedUserResponsavelNome}
-                  readOnly={!canEditResponsavel}
-                  placeholder="Nome do responsável"
-                  onChange={(e) => {
-                    if (!canEditResponsavel) return;
-                    const v = e.target.value;
-                    setRespQueryPlano(v);
-                    setShowRespPlanoDropdown(true);
-                    const exact = responsaveis.find((r) => normStr(r.nome) === normStr(v));
-                    setNovoPlano((prev) => ({ ...prev, who_id: exact?.id ?? '' }));
-                  }}
-                  onBlur={() => {
-                    if (!canEditResponsavel) return;
-                    window.setTimeout(() => setShowRespPlanoDropdown(false), 150);
-                  }}
-                  className="w-full bg-slate-800 border border-slate-700 rounded-lg px-2 py-2 text-sm text-slate-200 outline-none focus:border-slate-600 placeholder:text-slate-600"
+                <ResponsavelAutocomplete
+                  responsaveis={responsaveis}
+                  valueId={novoPlano.who_id}
+                  onCommit={(id) => setNovoPlano((prev) => ({ ...prev, who_id: id }))}
+                  placeholder="Buscar no cadastro..."
                 />
-                {canEditResponsavel && showRespPlanoDropdown && respPlanoOptions.length > 0 && (
-                  <div className="absolute left-0 right-0 z-20 mt-1 bg-slate-900 border border-slate-700 rounded-lg shadow-lg max-h-40 overflow-auto">
-                    {respPlanoOptions.map((r) => (
-                      <button
-                        key={r.id}
-                        type="button"
-                        className="w-full text-left px-3 py-2 text-[13px] text-slate-100 hover:bg-slate-800 transition-colors"
-                        onMouseDown={(e) => {
-                          e.preventDefault();
-                          setRespQueryPlano(r.nome);
-                          setNovoPlano((prev) => ({ ...prev, who_id: r.id }));
-                          setShowRespPlanoDropdown(false);
-                        }}
-                      >
-                        {r.nome}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
               </div>
               <div className="min-w-[130px]">
                 <label className="text-[10px] text-slate-500 uppercase tracking-wider mb-1 block">
@@ -1188,11 +1132,14 @@ const PrioridadeCard: React.FC<{
                 lockWhoToOverrideName={lockPlanoWhoToPriorityDono}
                 loggedUserResponsavelId={loggedUserResponsavelId}
                 loggedUserResponsavelNomeDisplay={loggedUserResponsavelNomeDisplay}
-                canEditResponsavel={canEditResponsavel}
                 canWritePlano={canPlanoWrite}
                 canDeletePlano={canPlanoDelete}
                 canWriteTarefa={canTarefaWrite}
+                canAssignTarefa={canTarefaAssign}
                 canDeleteTarefa={canTarefaDelete}
+                prioridadeDonoId={prioridade.dono_id}
+                viewerIsAdmin={viewerIsAdmin}
+                viewerMyResponsavelIds={myViewerIds}
               />
             ))}
           </div>
@@ -1211,9 +1158,7 @@ export const EstrategicoView: React.FC<EstrategicoViewProps> = (props) => {
     tarefas,
     responsaveis,
     computeStatusPlano,
-    onAddPrioridade,
     onUpdatePrioridade,
-    podeAdicionarPrioridade,
     onAddPlano,
     onUpdatePlano,
     onDeletePlano,
@@ -1223,6 +1168,8 @@ export const EstrategicoView: React.FC<EstrategicoViewProps> = (props) => {
     loggedUserUid,
     loggedUserRole,
     loggedUserName,
+    loggedUserEmail,
+    loggedUserDisplayName,
     focusPrioridadeId,
     onlyPrioridadeId,
     estrategicoCaps,
@@ -1232,12 +1179,19 @@ export const EstrategicoView: React.FC<EstrategicoViewProps> = (props) => {
     prioridadeWrite: estrategicoCaps?.prioridadeWrite !== false,
     planoWrite: estrategicoCaps?.planoWrite !== false,
     planoDelete: estrategicoCaps?.planoDelete !== false,
+    verTodosPlanos: estrategicoCaps?.verTodosPlanos === true,
     tarefaWrite: estrategicoCaps?.tarefaWrite !== false,
+    tarefaAssign: estrategicoCaps?.tarefaAssign !== false,
     tarefaDelete: estrategicoCaps?.tarefaDelete !== false,
   };
 
+  /** Admin/gerente: vê tudo e destrava WHO do plano; demais usuários seguem dono da prioridade nos planos. */
   const isAdmin = loggedUserRole === 'administrador' || loggedUserRole === 'gerente';
-  const canEditResponsavel = loggedUserRole === 'administrador';
+  /** Lista ampla: administrador ou permissão explícita no Tático. */
+  const seesAllPrioridades =
+    loggedUserRole === 'administrador' || caps.verTodosPlanos;
+  const viewerSeesAllTarefasNoPlano =
+    loggedUserRole === 'administrador' || caps.verTodosPlanos;
 
   useEffect(() => {
     if (!focusPrioridadeId) return;
@@ -1245,36 +1199,45 @@ export const EstrategicoView: React.FC<EstrategicoViewProps> = (props) => {
     el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }, [focusPrioridadeId]);
 
-  const myResponsavelIds = useMemo(() => {
-    const ids = new Set<string>();
-    if (loggedUserUid) ids.add(normStr(loggedUserUid));
-    if (loggedUserName) {
-      const match = responsaveis.find((r) => normStr(r.nome) === normStr(loggedUserName));
-      if (match) ids.add(normStr(match.id));
-    }
-    // Fallback: caso o dono_id esteja sendo salvo como "nome" ao invés de id.
-    if (loggedUserName) ids.add(normStr(loggedUserName));
-    return ids;
-  }, [loggedUserUid, loggedUserName, responsaveis]);
+  const myResponsavelIds = useMemo(
+    () =>
+      responsavelIdsForLoggedUser(loggedUserUid, loggedUserName, responsaveis, {
+        email: loggedUserEmail,
+        displayName: loggedUserDisplayName,
+      }),
+    [loggedUserUid, loggedUserName, loggedUserEmail, loggedUserDisplayName, responsaveis],
+  );
 
   const loggedUserResponsavelId = useMemo(() => {
+    if (loggedUserUid) {
+      const byUid = responsaveis.find((r) => normStr(r.id) === normStr(loggedUserUid));
+      if (byUid) return byUid.id;
+    }
     const matchByName = loggedUserName
       ? responsaveis.find((r) => normStr(r.nome) === normStr(loggedUserName))
       : undefined;
-    // Se não existir vínculo em "responsaveis", usa o nome da conta
-    // para evitar salvar/exibir UID bruto como responsável.
     return matchByName?.id ?? (loggedUserName?.trim() || loggedUserUid || '');
   }, [loggedUserName, loggedUserUid, responsaveis]);
 
   const loggedUserResponsavelNomeDisplay = loggedUserName ?? '';
 
   const filteredPrioridades = useMemo(() => {
-    if (isAdmin) return prioridades;
+    if (seesAllPrioridades) return prioridades;
     if (myResponsavelIds.size > 0) {
-      return prioridades.filter((p) => myResponsavelIds.has(normStr(p.dono_id)));
+      const prioIds = new Set(
+        prioridades
+          .filter((p) => donoPrioridadeCorrespondeAoUsuario(p.dono_id, myResponsavelIds, responsaveis))
+          .map((p) => p.id),
+      );
+      for (const t of tarefas) {
+        if (!tarefaAtribuidaAoUsuario(t, myResponsavelIds, responsaveis)) continue;
+        const pl = planos.find((p) => p.id === t.plano_id);
+        if (pl) prioIds.add(pl.prioridade_id);
+      }
+      return prioridades.filter((p) => prioIds.has(p.id));
     }
-    return prioridades;
-  }, [prioridades, isAdmin, myResponsavelIds]);
+    return [];
+  }, [prioridades, seesAllPrioridades, myResponsavelIds, tarefas, planos, responsaveis]);
 
   const ativas = useMemo(() => {
     const list = filteredPrioridades.filter((p) => p.status_prioridade !== 'Concluido');
@@ -1310,14 +1273,25 @@ export const EstrategicoView: React.FC<EstrategicoViewProps> = (props) => {
       <div ref={blocksRef} className="space-y-4">
         {ativas.length === 0 ? (
           <div className="px-5 py-12 text-center text-slate-500 text-sm border border-slate-800/60 rounded-xl bg-slate-900/30">
-            Nenhuma prioridade ativa {isAdmin ? 'disponível.' : 'para você.'}
+            Nenhuma prioridade ativa {seesAllPrioridades ? 'disponível.' : 'para você.'}
           </div>
         ) : (
           ativas.map((p) => {
-            const dono = responsaveis.find((r) => normStr(r.id) === normStr(p.dono_id));
-            // Sempre exibir o nome de quem criou a PRIORIDADE (p.dono_id).
-            // Se não acharmos no cadastro de responsaveis, usa o nome do usuário logado (modo não-admin).
-            const priorityOwnerNameOverride = dono?.nome ?? (isAdmin ? p.dono_id : (loggedUserName ?? p.dono_id));
+            const nomeDono = displayNomeDonoPrioridade(p.dono_id, responsaveis);
+            const priorityOwnerNameOverride =
+              nomeDono ||
+              (seesAllPrioridades ? p.dono_id : (loggedUserName ?? p.dono_id));
+            const souDonoDestaPrioridade = donoPrioridadeCorrespondeAoUsuario(
+              p.dono_id,
+              myResponsavelIds,
+              responsaveis,
+            );
+            /** Tático: quem criou/gravou o dono continua no dado; aqui quem pode redirecionar é admin/gerente ou o dono atual com prioridade_write. */
+            const canEditDonoNoTatico =
+              caps.prioridadeWrite &&
+              (loggedUserRole === 'administrador' ||
+                loggedUserRole === 'gerente' ||
+                souDonoDestaPrioridade);
             return (
               <div key={p.id} id={`prioridade-card-${p.id}`}>
                 <PrioridadeCard
@@ -1328,12 +1302,12 @@ export const EstrategicoView: React.FC<EstrategicoViewProps> = (props) => {
                   computeStatusPlano={computeStatusPlano}
                   expanded={true}
                   onToggle={() => {}}
-                  showDonoName={isAdmin}
+                  showDonoName
                   priorityOwnerNameOverride={priorityOwnerNameOverride}
                   lockPlanoWhoToPriorityDono={!isAdmin}
                   loggedUserResponsavelId={loggedUserResponsavelId}
                   loggedUserResponsavelNomeDisplay={loggedUserResponsavelNomeDisplay}
-                  canEditResponsavel={canEditResponsavel}
+                  canEditResponsavel={canEditDonoNoTatico}
                   onUpdatePrioridadeOwner={
                     onUpdatePrioridade
                       ? (ownerId) => onUpdatePrioridade(p.id, { dono_id: ownerId })
@@ -1356,25 +1330,16 @@ export const EstrategicoView: React.FC<EstrategicoViewProps> = (props) => {
                   canPlanoWrite={caps.planoWrite}
                   canPlanoDelete={caps.planoDelete}
                   canTarefaWrite={caps.tarefaWrite}
+                  canTarefaAssign={caps.tarefaAssign}
                   canTarefaDelete={caps.tarefaDelete}
+                  viewerIsAdmin={viewerSeesAllTarefasNoPlano}
+                  viewerMyResponsavelIds={myResponsavelIds}
                 />
               </div>
             );
           })
         )}
       </div>
-
-      {podeAdicionarPrioridade && caps.prioridadeWrite && (
-        <div className="pt-2">
-          <button
-            type="button"
-            onClick={onAddPrioridade}
-            className="flex items-center gap-2 text-xs text-slate-500 hover:text-slate-300 hover:bg-slate-800/50 px-3 py-2 rounded-lg transition-colors w-full border border-dashed border-slate-700 hover:border-slate-600"
-          >
-            <Plus size={14} /> Adicionar prioridade
-          </button>
-        </div>
-      )}
     </div>
   );
 };

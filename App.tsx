@@ -16,6 +16,9 @@ import { useStrategicBoard } from './controllers/useStrategicBoard';
 import { useRitmoGestao } from './controllers/useRitmoGestao';
 import { StorageService } from './services/storageService';
 import { isFirebaseConfigured, subscribeBoard, saveBoardNotes } from './services/firestoreSync';
+import { listAllUsers } from './services/firebaseAuth';
+import type { UserProfile } from './types/user';
+import { mergeResponsaveisComPerfis } from './utils/mergeResponsaveisComPerfis';
 import {
   Plus,
   Search,
@@ -32,13 +35,46 @@ import {
 } from 'lucide-react';
 import { ActionItem, ItemStatus, UrgencyLevel } from './types';
 import type { Prioridade } from './types';
+import {
+  responsavelIdsForLoggedUser,
+  donoPrioridadeCorrespondeAoUsuario,
+  nomeExibicaoWhoParaItem,
+} from './components/Dashboard/responsavelSearchUtils';
+import { tarefaAtribuidaAoUsuario } from './components/Dashboard/taskAssignmentUtils';
 import { Toast, type ToastType } from './components/Shared/Toast';
 import { ChatView } from './components/Chat/ChatView';
 import { Modal } from './components/Shared/Modal';
 import { EstrategicoGridIcon } from './components/icons/EstrategicoGridIcon';
 
+function normKey(s: string | null | undefined): string {
+  return (s ?? '').trim().toLowerCase();
+}
+
+/**
+ * Empresa gravada na prioridade/planos/tarefas deve ser visível ao dono.
+ * Se ele só tem acesso a outras empresas que a do classificador, usa a primeira empresa permitida dele.
+ */
+function empresaParaDemandaDoDono(
+  assignee: UserProfile | undefined,
+  workspaceClassificador: string,
+): string {
+  const cw = workspaceClassificador.trim();
+  if (!assignee) return cw;
+
+  const raw = Array.isArray(assignee.empresas) ? assignee.empresas : [];
+  const list = raw.map((e) => e.trim()).filter(Boolean);
+  const hasAll = list.some((e) => e === '*' || e.toLowerCase() === 'todas');
+  if (hasAll) return cw;
+  if (list.length === 0) return cw;
+  if (cw) {
+    const hit = list.find((e) => e.toLowerCase() === cw.toLowerCase());
+    if (hit) return hit;
+  }
+  return list[0];
+}
+
 function AppContent() {
-  const { isAuthenticated, encryptionKey, logout, profile, hasModuleAction } = useUser();
+  const { isAuthenticated, encryptionKey, logout, profile, hasModuleAction, firebaseUser } = useUser();
   const [activeView, setActiveView] = useState<ViewId>('backlog');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [strategicNote, setStrategicNote] = useState('');
@@ -59,6 +95,7 @@ function AppContent() {
   const [tableOnlyPrioridadeId, setTableOnlyPrioridadeId] = useState<string | null>(null);
   const { items, loading, addItem, updateItem, deleteItem, updateStatus } = useStrategicBoard(encryptionKey ?? null);
   const ritmo = useRitmoGestao(encryptionKey ?? null);
+  const [perfisCadastroUsuarios, setPerfisCadastroUsuarios] = useState<UserProfile[]>([]);
   const [workspaceAtivo, setWorkspaceAtivo] = useState<'all' | string>('all');
   const [empresasLocais, setEmpresasLocais] = useState<string[]>([]);
   const [empresasBloqueadas, setEmpresasBloqueadas] = useState<string[]>([]);
@@ -81,16 +118,27 @@ function AppContent() {
 
   const matchWorkspace = useCallback(
     (empresa?: string) => {
-      if (!canSeeEmpresa(empresa)) return false;
+      const em = (empresa ?? '').trim();
+      /** Dados antigos sem `empresa`: aparecem no workspace atual (evita lista vazia após classificar dono). */
+      const semEmpresa = em === '';
 
-      // Administrador pode usar "Todas as empresas"
+      if (!semEmpresa && !canSeeEmpresa(empresa)) return false;
+
+      const ws =
+        workspaceAtivo === 'all' ? '' : String(workspaceAtivo).trim();
+      const sameCompany = (a: string, b: string) =>
+        a.toLowerCase() === b.toLowerCase();
+
       if (!profile || profile.role === 'administrador') {
         if (workspaceAtivo === 'all') return true;
-        return (empresa ?? '') === workspaceAtivo;
+        if (semEmpresa) return true;
+        return sameCompany(em, ws);
       }
 
-      // Usuário não-admin: SEMPRE filtra pela empresa ativa
-      return (empresa ?? '') === workspaceAtivo;
+      if (!canSeeEmpresa(workspaceAtivo)) return false;
+      if (workspaceAtivo === 'all') return semEmpresa;
+      if (semEmpresa) return true;
+      return sameCompany(em, ws);
     },
     [workspaceAtivo, canSeeEmpresa, profile]
   );
@@ -122,6 +170,54 @@ function AppContent() {
       return Array.from(merged);
     });
   }, [ritmo.empresas, ritmo.board.backlog, ritmo.board.prioridades, ritmo.board.planos, ritmo.board.tarefas, items]);
+
+  useEffect(() => {
+    if (!isAuthenticated || !encryptionKey || !isFirebaseConfigured) {
+      setPerfisCadastroUsuarios([]);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const all = await listAllUsers();
+        if (!cancelled) {
+          setPerfisCadastroUsuarios(all.filter((u) => u.ativo !== false));
+        }
+      } catch {
+        if (!cancelled) setPerfisCadastroUsuarios([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isAuthenticated, encryptionKey]);
+
+  const responsaveisParaAtribuicao = useMemo(
+    () => mergeResponsaveisComPerfis(ritmo.responsaveis, perfisCadastroUsuarios),
+    [ritmo.responsaveis, perfisCadastroUsuarios],
+  );
+
+  const displayWhoKanban = useCallback(
+    (who: string) => nomeExibicaoWhoParaItem(who, responsaveisParaAtribuicao, perfisCadastroUsuarios),
+    [responsaveisParaAtribuicao, perfisCadastroUsuarios],
+  );
+
+  /** Grava sempre o uid do cadastro quando o responsável escolhido é um usuário Firebase (alinha filtro “meu perfil”). */
+  const canonicalDonoIdForPersist = useCallback(
+    (selectedId: string): string => {
+      const sid = selectedId.trim();
+      if (!sid) return sid;
+      const perfilByUid = perfisCadastroUsuarios.find((u) => normKey(u.uid) === normKey(sid));
+      if (perfilByUid) return perfilByUid.uid;
+      const r = responsaveisParaAtribuicao.find((x) => normKey(x.id) === normKey(sid));
+      if (!r?.nome?.trim()) return sid;
+      const perfilByNome = perfisCadastroUsuarios.find(
+        (u) => u.ativo !== false && normKey(u.nome) === normKey(r.nome),
+      );
+      return perfilByNome?.uid ?? sid;
+    },
+    [perfisCadastroUsuarios, responsaveisParaAtribuicao],
+  );
 
   const empresasDisponiveis = useMemo(() => empresasLocais, [empresasLocais]);
 
@@ -192,15 +288,94 @@ function AppContent() {
       }));
   }, [items, ritmo.board.prioridades]);
 
+  /** Ids/nomes do usuário logado para cruzar com dono_id / tarefas (independente da empresa gravada). */
+  const myResponsavelIdsForBoard = useMemo(
+    () =>
+      responsavelIdsForLoggedUser(profile?.uid, profile?.nome, responsaveisParaAtribuicao, {
+        email: profile?.email,
+        displayName: firebaseUser?.displayName ?? undefined,
+      }),
+    [
+      profile?.uid,
+      profile?.nome,
+      profile?.email,
+      firebaseUser?.displayName,
+      responsaveisParaAtribuicao,
+    ],
+  );
+
+  /** Prioridade entra na lista mesmo com empresa “errada” se o usuário é dono ou tem tarefa no plano. */
+  const prioridadeVisivelPorDemandaAtribuida = useCallback(
+    (p: Prioridade) => {
+      if (myResponsavelIdsForBoard.size === 0) return false;
+      if (
+        donoPrioridadeCorrespondeAoUsuario(
+          p.dono_id,
+          myResponsavelIdsForBoard,
+          responsaveisParaAtribuicao,
+        )
+      ) {
+        return true;
+      }
+      for (const pl of ritmo.board.planos) {
+        if (pl.prioridade_id !== p.id) continue;
+        for (const t of ritmo.board.tarefas) {
+          if (t.plano_id !== pl.id) continue;
+          if (tarefaAtribuidaAoUsuario(t, myResponsavelIdsForBoard, responsaveisParaAtribuicao)) {
+            return true;
+          }
+        }
+      }
+      return false;
+    },
+    [
+      myResponsavelIdsForBoard,
+      responsaveisParaAtribuicao,
+      ritmo.board.planos,
+      ritmo.board.tarefas,
+    ],
+  );
+
   const quadroPrioridades = useMemo<Prioridade[]>(() => {
     const todas = [...ritmo.board.prioridades, ...sinteticasFromItems];
-    return todas.filter((p) => matchWorkspace(p.empresa));
-  }, [ritmo.board.prioridades, sinteticasFromItems, matchWorkspace]);
+    return todas.filter(
+      (p) => matchWorkspace(p.empresa) || prioridadeVisivelPorDemandaAtribuida(p),
+    );
+  }, [
+    ritmo.board.prioridades,
+    sinteticasFromItems,
+    matchWorkspace,
+    prioridadeVisivelPorDemandaAtribuida,
+  ]);
 
-  const taticoPrioridades = useMemo<Prioridade[]>(() => {
-    const todas = [...ritmo.board.prioridades, ...sinteticasFromItems];
-    return todas.filter((p) => matchWorkspace(p.empresa));
-  }, [ritmo.board.prioridades, sinteticasFromItems, matchWorkspace]);
+  const taticoPrioridades = quadroPrioridades;
+
+  const idsPrioridadesEscopoRitmo = useMemo(
+    () => new Set(quadroPrioridades.map((p) => p.id)),
+    [quadroPrioridades],
+  );
+
+  /** Planos/tarefas das prioridades visíveis entram mesmo com empresa desalinhada (evita card vazio). */
+  const ritmoPlanosEscopoVisivel = useMemo(
+    () =>
+      ritmo.board.planos.filter(
+        (pl) => matchWorkspace(pl.empresa) || idsPrioridadesEscopoRitmo.has(pl.prioridade_id),
+      ),
+    [ritmo.board.planos, matchWorkspace, idsPrioridadesEscopoRitmo],
+  );
+
+  const idsPlanosEscopoVisivel = useMemo(
+    () => new Set(ritmoPlanosEscopoVisivel.map((pl) => pl.id)),
+    [ritmoPlanosEscopoVisivel],
+  );
+
+  const ritmoTarefasEscopoVisivel = useMemo(
+    () =>
+      ritmo.board.tarefas.filter(
+        (t) => matchWorkspace(t.empresa) || idsPlanosEscopoVisivel.has(t.plano_id),
+      ),
+    [ritmo.board.tarefas, matchWorkspace, idsPlanosEscopoVisivel],
+  );
 
   const perm = useMemo(
     () => ({
@@ -221,13 +396,16 @@ function AppContent() {
         prioridadeWrite: hasModuleAction('table', 'prioridade_write'),
         planoWrite: hasModuleAction('table', 'plano_write'),
         planoDelete: hasModuleAction('table', 'plano_delete'),
+        verTodosPlanos: hasModuleAction('table', 'ver_todos_planos'),
         tarefaWrite: hasModuleAction('table', 'tarefa_write'),
+        tarefaAssign: hasModuleAction('table', 'tarefa_assign'),
         tarefaDelete: hasModuleAction('table', 'tarefa_delete'),
       },
       operacional: {
         // Regra de produto: Operacional edita apenas tarefas.
         planoWrite: false,
         tarefaWrite: hasModuleAction('operacional', 'tarefa_write'),
+        tarefaAssign: hasModuleAction('operacional', 'tarefa_assign'),
         tarefaDelete: hasModuleAction('operacional', 'tarefa_delete'),
       },
       roadmap: {
@@ -368,11 +546,55 @@ function AppContent() {
             updateStatus(legacyId, itemStatus);
           }
         }
+        if (updates.dono_id !== undefined) {
+          const donoCanon = canonicalDonoIdForPersist(String(updates.dono_id)).trim();
+          if (donoCanon) {
+            const currentItem = items.find((i) => i.id === legacyId);
+            const antesCanon = currentItem
+              ? canonicalDonoIdForPersist(String(currentItem.who))
+              : '';
+            const patch: Partial<ActionItem> = { who: donoCanon };
+            if (!antesCanon || normKey(donoCanon) !== normKey(antesCanon)) {
+              const assignee = perfisCadastroUsuarios.find(
+                (u) => u.ativo !== false && normKey(u.uid) === normKey(donoCanon),
+              );
+              const wsClass =
+                workspaceAtivo === 'all' ? '' : String(workspaceAtivo).trim();
+              patch.empresa = empresaParaDemandaDoDono(assignee, wsClass);
+            }
+            void updateItem(legacyId, patch);
+          }
+        }
         return;
       }
-      ritmo.updatePrioridade(id, updates);
+      let merged: Partial<Prioridade> = { ...updates };
+      if (updates.dono_id !== undefined) {
+        const current = ritmo.board.prioridades.find((p) => p.id === id);
+        const donoCanon = canonicalDonoIdForPersist(String(updates.dono_id));
+        const antesCanon = current
+          ? canonicalDonoIdForPersist(String(current.dono_id))
+          : '';
+        merged = { ...merged, dono_id: donoCanon };
+        if (!antesCanon || normKey(donoCanon) !== normKey(antesCanon)) {
+          const assignee = perfisCadastroUsuarios.find(
+            (u) => u.ativo !== false && normKey(u.uid) === normKey(donoCanon),
+          );
+          const wsClass =
+            workspaceAtivo === 'all' ? '' : String(workspaceAtivo).trim();
+          merged = { ...merged, empresa: empresaParaDemandaDoDono(assignee, wsClass) };
+        }
+      }
+      ritmo.updatePrioridade(id, merged);
     },
-    [ritmo, updateStatus]
+    [
+      ritmo,
+      updateStatus,
+      updateItem,
+      items,
+      workspaceAtivo,
+      canonicalDonoIdForPersist,
+      perfisCadastroUsuarios,
+    ]
   );
 
   const performDeletePrioridade = useCallback(
@@ -751,6 +973,7 @@ function AppContent() {
                   onDelete={deleteItem}
                   forceOpenConcluidos={dashboardOpenConcluidas}
                   onGoToTatico={perm.dashboard.linkTatico ? handleGoToTaticoPriority : undefined}
+                  displayWho={displayWhoKanban}
                   capabilities={{
                     canCreate: perm.dashboard.create,
                     canOpenDetail: hasModuleAction('dashboard', 'read'),
@@ -763,17 +986,17 @@ function AppContent() {
               {activeView === 'table' && (
                 <EstrategicoView
                   prioridades={taticoPrioridades}
-                  planos={ritmo.board.planos.filter((pl) => matchWorkspace(pl.empresa))}
-                  tarefas={ritmo.board.tarefas.filter((t) => matchWorkspace(t.empresa))}
-                  responsaveis={ritmo.responsaveis}
+                  planos={ritmoPlanosEscopoVisivel}
+                  tarefas={ritmoTarefasEscopoVisivel}
+                  responsaveis={responsaveisParaAtribuicao}
                   computeStatusPlano={ritmo.computeStatusPlano}
-                  onAddPrioridade={handleAddPrioridade}
                   onUpdatePrioridade={handleUpdatePrioridadeTatico}
                   onDeletePrioridade={handleDeletePrioridade}
-                  podeAdicionarPrioridade={ritmo.podeAdicionarPrioridade}
                   loggedUserUid={profile?.uid}
                   loggedUserRole={profile?.role}
                   loggedUserName={profile?.nome}
+                  loggedUserEmail={profile?.email}
+                  loggedUserDisplayName={firebaseUser?.displayName ?? undefined}
                   focusPrioridadeId={focusPrioridadeId}
                   onlyPrioridadeId={tableOnlyPrioridadeId}
                   onAddPlano={ritmo.addPlano}
@@ -786,7 +1009,9 @@ function AppContent() {
                     prioridadeWrite: perm.table.prioridadeWrite,
                     planoWrite: perm.table.planoWrite,
                     planoDelete: perm.table.planoDelete,
+                    verTodosPlanos: perm.table.verTodosPlanos,
                     tarefaWrite: perm.table.tarefaWrite,
+                    tarefaAssign: perm.table.tarefaAssign,
                     tarefaDelete: perm.table.tarefaDelete,
                   }}
                 />
@@ -794,12 +1019,14 @@ function AppContent() {
               {activeView === 'operacional' && (
                 <OperacionalView
                   prioridades={taticoPrioridades}
-                  planos={ritmo.board.planos.filter((pl) => matchWorkspace(pl.empresa))}
-                  tarefas={ritmo.board.tarefas.filter((t) => matchWorkspace(t.empresa))}
-                  responsaveis={ritmo.responsaveis}
+                  planos={ritmoPlanosEscopoVisivel}
+                  tarefas={ritmoTarefasEscopoVisivel}
+                  responsaveis={responsaveisParaAtribuicao}
                   computeStatusPlano={ritmo.computeStatusPlano}
                   loggedUserUid={profile?.uid}
                   loggedUserName={profile?.nome}
+                  loggedUserEmail={profile?.email}
+                  loggedUserDisplayName={firebaseUser?.displayName ?? undefined}
                   loggedUserRole={profile?.role}
                   onUpdatePlano={ritmo.updatePlano}
                   onDeletePlano={ritmo.deletePlano}
@@ -809,6 +1036,7 @@ function AppContent() {
                   operacionalCaps={{
                     planoWrite: perm.operacional.planoWrite,
                     tarefaWrite: perm.operacional.tarefaWrite,
+                    tarefaAssign: perm.operacional.tarefaAssign,
                     tarefaDelete: perm.operacional.tarefaDelete,
                   }}
                 />
@@ -844,9 +1072,9 @@ function AppContent() {
               {activeView === 'quadro' && (
                 <QuadroEstrategico
                   prioridades={quadroPrioridades}
-                  planos={ritmo.board.planos.filter((pl) => matchWorkspace(pl.empresa))}
-                  tarefas={ritmo.board.tarefas.filter((t) => matchWorkspace(t.empresa))}
-                  responsaveis={ritmo.responsaveis}
+                  planos={ritmoPlanosEscopoVisivel}
+                  tarefas={ritmoTarefasEscopoVisivel}
+                  responsaveis={responsaveisParaAtribuicao}
                   computeStatusPlano={ritmo.computeStatusPlano}
                   onStatusChange={(id, status) => ritmo.updatePrioridade(id, { status_prioridade: status })}
                   onOpenPrioridade={handleOpenPrioridade}
@@ -865,19 +1093,20 @@ function AppContent() {
             prioridade={selectedPrioridade}
             planos={ritmo.board.planos}
             tarefas={ritmo.board.tarefas}
-            responsaveis={ritmo.responsaveis}
+            responsaveis={responsaveisParaAtribuicao}
             computeStatusPlano={ritmo.computeStatusPlano}
             onClose={() => setSelectedPrioridade(null)}
             onUpdatePrioridade={async (id, updates) => {
-              await ritmo.updatePrioridade(id, updates);
-              // tenta espelhar alterações básicas no item 5W2H correspondente
-              const atualizada =
-                ritmo.board.prioridades.find((p) => p.id === id) ?? selectedPrioridade;
-              if (!atualizada) return;
-              const titulo = updates.titulo ?? atualizada.titulo;
-              const descricao = updates.descricao ?? atualizada.descricao ?? '';
-              const dono = updates.dono_id ?? atualizada.dono_id;
-              const dataAlvoMs = updates.data_alvo ?? atualizada.data_alvo;
+              handleUpdatePrioridadeTatico(id, updates);
+              const base = selectedPrioridade?.id === id ? selectedPrioridade : null;
+              if (!base) return;
+              const titulo = updates.titulo ?? base.titulo;
+              const descricao = updates.descricao ?? base.descricao ?? '';
+              const dono =
+                updates.dono_id !== undefined
+                  ? canonicalDonoIdForPersist(String(updates.dono_id))
+                  : base.dono_id;
+              const dataAlvoMs = updates.data_alvo ?? base.data_alvo;
               const whenIso = new Date(dataAlvoMs).toISOString().slice(0, 10);
               const candidato = items.find(
                 (i) => i.what === titulo && i.who === dono
@@ -941,14 +1170,25 @@ function AppContent() {
         <PrioridadeModal
           isOpen={prioridadeModalOpen}
           onClose={() => setPrioridadeModalOpen(false)}
-          responsaveis={ritmo.responsaveis}
+          responsaveis={responsaveisParaAtribuicao}
           defaultEmpresa={workspaceAtivo === 'all' ? '' : workspaceAtivo}
           empresaSuggestions={empresasAtivas}
           onSave={(item) => {
             if (item.empresa && !empresasDisponiveis.includes(item.empresa)) {
               ritmo.addEmpresa(item.empresa);
             }
-            const ok = ritmo.addPrioridade(item);
+            const donoCanon = canonicalDonoIdForPersist(item.dono_id);
+            const assigneeNova = perfisCadastroUsuarios.find(
+              (u) => u.ativo !== false && normKey(u.uid) === normKey(donoCanon),
+            );
+            const wsClass =
+              workspaceAtivo === 'all' ? '' : String(workspaceAtivo).trim();
+            const itemNorm = {
+              ...item,
+              dono_id: donoCanon,
+              empresa: empresaParaDemandaDoDono(assigneeNova, wsClass),
+            };
+            const ok = ritmo.addPrioridade(itemNorm);
             if (!ok) {
               setToast({
                 message: 'Máximo de 3 prioridades ativas. Conclua uma para liberar vaga.',
@@ -958,18 +1198,18 @@ function AppContent() {
             }
             // Espelha a prioridade criada no quadro de Prioridades (Kanban),
             // para que apareça também como cartão no dashboard.
-            const whenIso = new Date(item.data_alvo).toISOString().slice(0, 10);
+            const whenIso = new Date(itemNorm.data_alvo).toISOString().slice(0, 10);
             addItem({
-              what: item.titulo,
-              why: item.descricao,
+              what: itemNorm.titulo,
+              why: itemNorm.descricao,
               where: '',
               when: whenIso,
-              who: item.dono_id,
+              who: itemNorm.dono_id,
               how: '',
               status: ItemStatus.ACTIVE,
               urgency: UrgencyLevel.MEDIUM,
               notes: '',
-              empresa: item.empresa,
+              empresa: itemNorm.empresa,
             });
             return true;
           }}
@@ -1005,7 +1245,7 @@ function AppContent() {
             <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
             Conectado
           </div>
-          <span>WillTech v1.0</span>
+          <span>MAVO 1.1</span>
         </footer>
       </main>
     </div>
