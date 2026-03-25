@@ -24,6 +24,11 @@ service cloud.firestore {
       allow create, update, delete: if isAdmin();
     }
 
+    match /appSettings/{docId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAdmin();
+    }
+
     match /strategic_items/{itemId} {
       allow read, write: if isAuthenticated();
     }

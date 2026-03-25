@@ -268,10 +268,9 @@ const OperacionalPlanoCard: React.FC<{
   const statusCfg = STATUS_CFG[status] || STATUS_CFG.Execucao;
   const defaultAssigneeId = (loggedUserResponsavelId ?? '').trim();
 
-  // No Operacional, o "Quem" deve ser o dono da PRIORIDADE (criador da prioridade),
-  // igual ao padrão desejado no Tático.
-  const displayWho =
-    displayNomeDonoPrioridade(prioridade.dono_id, responsaveis) || prioridade.dono_id || '';
+  /** WHO do plano (5W2H) — pode diferir do dono da prioridade; sempre refletir `plano.who_id`. */
+  const displayWhoPlano =
+    displayNomeDonoPrioridade(plano.who_id, responsaveis).trim() || (plano.who_id || '').trim() || '';
   const donoDestaPrioridade =
     myResponsavelIds.size > 0 &&
     donoPrioridadeCorrespondeAoUsuario(prioridade.dono_id, myResponsavelIds, responsaveis);
@@ -344,10 +343,10 @@ const OperacionalPlanoCard: React.FC<{
               <p className="text-sm font-semibold text-slate-100 truncate">{prioridade.titulo}</p>
               <h4 className="text-lg font-bold text-slate-100 truncate">{plano.titulo}</h4>
               <div className="flex items-center gap-3 mt-1.5 text-[12px] text-slate-400 flex-wrap">
-                {displayWho && (
+                {displayWhoPlano && (
                   <span className="inline-flex items-center gap-1">
                     <User size={12} className="text-slate-500" />
-                    {displayWho}
+                    {displayWhoPlano}
                   </span>
                 )}
                 <span className="inline-flex items-center gap-1">
@@ -420,12 +419,12 @@ const OperacionalPlanoCard: React.FC<{
                   ) : (
                     key === 'who_id' ? (
                       <div className="w-full bg-transparent text-sm text-slate-200 outline-none border-b border-transparent py-0.5">
-                        {displayWho || '—'}
+                        {displayWhoPlano || '—'}
                       </div>
                     ) : (
                       <input
                         key={`${plano.id}-${key}`}
-                        defaultValue={displayWho}
+                        defaultValue={displayWhoPlano}
                         onBlur={canWritePlano ? (e) => handleUpdatePlano({ who_id: e.target.value }) : undefined}
                         readOnly={!canWritePlano}
                         disabled={!canWritePlano}
@@ -648,11 +647,17 @@ export const OperacionalView: React.FC<OperacionalProps> = ({
   const visiblePrioridades = useMemo(() => {
     if (seesAllPrioridades) return prioridades;
     if (myResponsavelIds.size > 0) {
-      const prioIds = new Set(
-        prioridades
-          .filter((p) => donoPrioridadeCorrespondeAoUsuario(p.dono_id, myResponsavelIds, responsaveis))
-          .map((p) => p.id),
-      );
+      const prioIds = new Set<string>();
+      for (const p of prioridades) {
+        if (donoPrioridadeCorrespondeAoUsuario(p.dono_id, myResponsavelIds, responsaveis)) {
+          prioIds.add(p.id);
+        }
+      }
+      for (const pl of planos) {
+        if (donoPrioridadeCorrespondeAoUsuario(pl.who_id, myResponsavelIds, responsaveis)) {
+          prioIds.add(pl.prioridade_id);
+        }
+      }
       for (const t of tarefas) {
         if (!tarefaAtribuidaAoUsuario(t, myResponsavelIds, responsaveis)) continue;
         const pl = planos.find((p) => p.id === t.plano_id);

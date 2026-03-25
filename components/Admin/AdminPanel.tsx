@@ -4,9 +4,10 @@ import { useRitmoGestao } from '../../controllers/useRitmoGestao';
 import { UserList } from './UserList';
 import { UserForm } from './UserForm';
 import { listAllUsers, saveUserProfile, updateUserProfile, createUser } from '../../services/firebaseAuth';
+import { getAppSettings, saveAppSettings } from '../../services/appSettings';
 import type { UserProfile } from '../../types/user';
 import { PERMISSIONS_SCHEMA_VERSION } from '../../types/user';
-import { LogOut, Users, Plus, ArrowLeft, ShieldCheck } from 'lucide-react';
+import { LogOut, Users, Plus, ArrowLeft, ShieldCheck, LayoutGrid } from 'lucide-react';
 
 type AdminView = 'list' | 'create' | 'edit';
 
@@ -19,6 +20,8 @@ export const AdminPanel: React.FC = () => {
   const [editingUser, setEditingUser] = useState<UserProfile | null>(null);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [estrategicoFiltrarKanbanPorWho, setEstrategicoFiltrarKanbanPorWho] = useState(false);
+  const [loadingAppSettings, setLoadingAppSettings] = useState(true);
 
   const loadUsers = useCallback(async () => {
     setLoadingUsers(true);
@@ -35,6 +38,23 @@ export const AdminPanel: React.FC = () => {
   useEffect(() => {
     loadUsers();
   }, [loadUsers]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const s = await getAppSettings();
+        if (!cancelled) setEstrategicoFiltrarKanbanPorWho(s.estrategicoFiltrarKanbanPorWho);
+      } catch {
+        if (!cancelled) setEstrategicoFiltrarKanbanPorWho(false);
+      } finally {
+        if (!cancelled) setLoadingAppSettings(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Garante que empresas já cadastradas nos perfis de usuário
   // apareçam também como workspaces no Ritmo de Gestão.
@@ -190,6 +210,50 @@ export const AdminPanel: React.FC = () => {
               onToggleAtivo={handleToggleAtivo}
               currentUid={currentAdmin?.uid ?? ''}
             />
+
+            {/* Configurações do sistema */}
+            <div className="mt-10 border-t border-slate-800 pt-6">
+              <div className="flex items-center gap-2 mb-4">
+                <LayoutGrid size={18} className="text-slate-400" />
+                <h3 className="text-sm font-semibold">Configurações do sistema</h3>
+              </div>
+              <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-4 max-w-xl">
+                <label className="flex items-start gap-3 cursor-pointer group">
+                  <input
+                    type="checkbox"
+                    className="mt-1 rounded border-slate-600 bg-slate-950 text-amber-600 focus:ring-amber-500/40"
+                    checked={estrategicoFiltrarKanbanPorWho}
+                    disabled={loadingAppSettings}
+                    onChange={async (e) => {
+                      const next = e.target.checked;
+                      setEstrategicoFiltrarKanbanPorWho(next);
+                      setError('');
+                      try {
+                        await saveAppSettings({ estrategicoFiltrarKanbanPorWho: next });
+                        setSuccess(
+                          next
+                            ? 'Filtro do Estratégico ativado: cada usuário verá só os cartões do seu WHO (exceto administradores).'
+                            : 'Filtro do Estratégico desativado: todos veem as iniciativas do workspace (conforme empresa).',
+                        );
+                      } catch {
+                        setEstrategicoFiltrarKanbanPorWho(!next);
+                        setError('Não foi possível salvar a configuração. Verifique o Firestore e as regras de segurança.');
+                      }
+                    }}
+                  />
+                  <span>
+                    <span className="text-sm font-medium text-slate-200 group-hover:text-white transition-colors">
+                      Filtrar quadro Estratégico (Kanban) por responsável (WHO)
+                    </span>
+                    <span className="block text-[11px] text-slate-500 mt-1 leading-relaxed">
+                      Quando ativado, usuários que <strong className="text-slate-400">não</strong> são administradores só veem
+                      cartões cuja iniciativa está atribuída a eles no campo WHO. Administradores continuam vendo todo o
+                      quadro do workspace. Desligado = comportamento anterior (todos veem as iniciativas da empresa selecionada).
+                    </span>
+                  </span>
+                </label>
+              </div>
+            </div>
 
             {/* Gestão de Workspaces / Empresas */}
             <div className="mt-10 border-t border-slate-800 pt-6">

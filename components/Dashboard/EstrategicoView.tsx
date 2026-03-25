@@ -1224,11 +1224,17 @@ export const EstrategicoView: React.FC<EstrategicoViewProps> = (props) => {
   const filteredPrioridades = useMemo(() => {
     if (seesAllPrioridades) return prioridades;
     if (myResponsavelIds.size > 0) {
-      const prioIds = new Set(
-        prioridades
-          .filter((p) => donoPrioridadeCorrespondeAoUsuario(p.dono_id, myResponsavelIds, responsaveis))
-          .map((p) => p.id),
-      );
+      const prioIds = new Set<string>();
+      for (const p of prioridades) {
+        if (donoPrioridadeCorrespondeAoUsuario(p.dono_id, myResponsavelIds, responsaveis)) {
+          prioIds.add(p.id);
+        }
+      }
+      for (const pl of planos) {
+        if (donoPrioridadeCorrespondeAoUsuario(pl.who_id, myResponsavelIds, responsaveis)) {
+          prioIds.add(pl.prioridade_id);
+        }
+      }
       for (const t of tarefas) {
         if (!tarefaAtribuidaAoUsuario(t, myResponsavelIds, responsaveis)) continue;
         const pl = planos.find((p) => p.id === t.plano_id);

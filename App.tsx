@@ -17,7 +17,9 @@ import { useRitmoGestao } from './controllers/useRitmoGestao';
 import { StorageService } from './services/storageService';
 import { isFirebaseConfigured, subscribeBoard, saveBoardNotes } from './services/firestoreSync';
 import { listAllUsers } from './services/firebaseAuth';
+import { subscribeAppSettings, getDefaultAppSettings } from './services/appSettings';
 import type { UserProfile } from './types/user';
+import type { AppSettings } from './types/appSettings';
 import { mergeResponsaveisComPerfis } from './utils/mergeResponsaveisComPerfis';
 import {
   Plus,
@@ -98,6 +100,7 @@ function AppContent() {
   const [perfisCadastroUsuarios, setPerfisCadastroUsuarios] = useState<UserProfile[]>([]);
   const [workspaceAtivo, setWorkspaceAtivo] = useState<'all' | string>('all');
   const [empresasLocais, setEmpresasLocais] = useState<string[]>([]);
+  const [appSettings, setAppSettings] = useState<AppSettings>(() => getDefaultAppSettings());
   const [empresasBloqueadas, setEmpresasBloqueadas] = useState<string[]>([]);
 
   const canSeeEmpresa = useCallback(
@@ -254,10 +257,6 @@ function AppContent() {
     [empresasDisponiveis, empresasBloqueadas]
   );
 
-  const itemsFiltrados = useMemo(
-    () => items.filter((i) => matchWorkspace(i.empresa)),
-    [items, matchWorkspace]
-  );
   // Backlog é visão global por regra de negócio (todos os usuários veem os itens).
   const backlogViewItems = useMemo(() => items, [items]);
 
@@ -304,7 +303,42 @@ function AppContent() {
     ],
   );
 
-  /** Prioridade entra na lista mesmo com empresa “errada” se o usuário é dono ou tem tarefa no plano. */
+  useEffect(() => {
+    if (!isAuthenticated || !isFirebaseConfigured) {
+      setAppSettings(getDefaultAppSettings());
+      return;
+    }
+    const unsub = subscribeAppSettings(setAppSettings);
+    return () => unsub();
+  }, [isAuthenticated]);
+
+  /**
+   * Estratégico (Kanban): por padrão todos veem iniciativas do workspace.
+   * Se `appSettings.estrategicoFiltrarKanbanPorWho` estiver ativo (Painel Admin), só administrador vê o quadro completo;
+   * demais usuários só veem cartões cujo WHO corresponde a eles.
+   */
+  const itemsFiltrados = useMemo(() => {
+    const base = items.filter((i) => matchWorkspace(i.empresa));
+    if (!appSettings.estrategicoFiltrarKanbanPorWho) return base;
+    if (profile?.role === 'administrador') return base;
+    if (myResponsavelIdsForBoard.size === 0) return [];
+    return base.filter((i) =>
+      donoPrioridadeCorrespondeAoUsuario(
+        i.who,
+        myResponsavelIdsForBoard,
+        responsaveisParaAtribuicao,
+      ),
+    );
+  }, [
+    items,
+    matchWorkspace,
+    appSettings.estrategicoFiltrarKanbanPorWho,
+    profile?.role,
+    myResponsavelIdsForBoard,
+    responsaveisParaAtribuicao,
+  ]);
+
+  /** Prioridade entra na lista mesmo com empresa “errada” se o usuário é dono, WHO de algum plano ou tem tarefa atribuída. */
   const prioridadeVisivelPorDemandaAtribuida = useCallback(
     (p: Prioridade) => {
       if (myResponsavelIdsForBoard.size === 0) return false;
@@ -319,6 +353,15 @@ function AppContent() {
       }
       for (const pl of ritmo.board.planos) {
         if (pl.prioridade_id !== p.id) continue;
+        if (
+          donoPrioridadeCorrespondeAoUsuario(
+            pl.who_id,
+            myResponsavelIdsForBoard,
+            responsaveisParaAtribuicao,
+          )
+        ) {
+          return true;
+        }
         for (const t of ritmo.board.tarefas) {
           if (t.plano_id !== pl.id) continue;
           if (tarefaAtribuidaAoUsuario(t, myResponsavelIdsForBoard, responsaveisParaAtribuicao)) {
