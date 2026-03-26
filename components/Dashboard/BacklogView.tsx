@@ -11,7 +11,6 @@ import {
   PlayCircle,
   Calendar,
   User,
-  Archive,
 } from 'lucide-react';
 
 export interface BacklogCapabilities {
@@ -46,16 +45,15 @@ export const BacklogView: React.FC<BacklogViewProps> = ({
     canDelete: capabilities?.canDelete !== false,
     canWorkflow: capabilities?.canWorkflow !== false,
   };
-  const { backlogItems } = useMemo(() => {
+  const backlogItems = useMemo(() => {
     // Itens em demanda (BACKLOG)
     const backlog = items
       .filter((i) => i.status === ItemStatus.BACKLOG)
       .sort((a, b) => (a.createdAt ?? 0) - (b.createdAt ?? 0));
-    return { backlogItems: backlog };
+    return backlog;
   }, [items]);
 
   const moveToPrioridade = (id: string) => onStatusChange(id, ItemStatus.ACTIVE);
-  const archiveItem = (id: string) => onStatusChange(id, ItemStatus.COMPLETED);
 
   return (
     <div className="max-w-5xl mx-auto space-y-6 w-full min-w-0">
@@ -129,16 +127,6 @@ export const BacklogView: React.FC<BacklogViewProps> = ({
                           >
                             <PlayCircle size={14} className="mr-1" />
                             Priorizar
-                          </button>
-                        )}
-                        {cap.canWorkflow && (
-                          <button
-                            type="button"
-                            onClick={() => archiveItem(item.id)}
-                            className="inline-flex items-center justify-center p-2 rounded-full text-slate-400 hover:text-amber-400 hover:bg-amber-500/10 transition-colors"
-                            title="Arquivar iniciativa do Backlog"
-                          >
-                            <Archive size={14} />
                           </button>
                         )}
                         {cap.canDelete && (

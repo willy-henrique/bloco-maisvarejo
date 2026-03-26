@@ -80,14 +80,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <img
                 src="/mavo-logo.png"
                 alt="MAVO Participações"
-                className="h-11 w-11 shrink-0 object-contain object-center"
-                width={44}
-                height={44}
+                className="h-12 w-12 shrink-0 object-contain object-center scale-110"
+                width={48}
+                height={48}
                 decoding="async"
               />
             </div>
             <div className="flex flex-col gap-1">
-              <span className="font-semibold text-sm text-slate-100 tracking-tight">Estratégico 5W2H</span>
+              <span className="font-semibold text-sm text-slate-100 tracking-tight">Mavo Gestão</span>
               <div className="space-y-1">
                 <p className="text-[10px] text-slate-500 uppercase tracking-wider">
                   Workspace

@@ -167,8 +167,8 @@ export const ActionItemModal: React.FC<ActionItemModalProps> = ({
               value={form.why}
               onChange={(e) => update('why', e.target.value)}
               placeholder={isBacklogLike ? 'Descrição do backlog' : 'Justificativa estratégica'}
-              rows={2}
-              className="w-full bg-slate-800/50 border border-slate-700 rounded-lg px-3 py-2.5 text-sm text-slate-300 placeholder:text-slate-500 outline-none focus:border-slate-600 resize-none disabled:opacity-60"
+              rows={isBacklogLike ? 6 : 3}
+              className="w-full bg-slate-800/50 border border-slate-700 rounded-lg px-3 py-2.5 text-sm text-slate-300 placeholder:text-slate-500 outline-none focus:border-slate-600 resize-y min-h-[140px] md:min-h-[180px] disabled:opacity-60"
               readOnly={readOnly}
               disabled={readOnly}
             />

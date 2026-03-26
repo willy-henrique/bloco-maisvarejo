@@ -449,8 +449,8 @@ const OperacionalPlanoCard: React.FC<{
                 onBlur={canWritePlano ? (e) => handleUpdatePlano({ how: e.target.value }) : undefined}
                 readOnly={!canWritePlano}
                 disabled={!canWritePlano}
-                rows={3}
-                className="w-full bg-transparent text-sm text-slate-200 outline-none resize-none border-b border-transparent focus:border-slate-600 transition-colors placeholder:text-slate-700 disabled:opacity-60"
+                rows={4}
+                className="w-full min-h-[96px] bg-transparent text-sm text-slate-200 outline-none resize-none border-b border-transparent focus:border-slate-600 transition-colors placeholder:text-slate-700 disabled:opacity-60"
                 placeholder="Descreva como será executado..."
               />
             </div>
