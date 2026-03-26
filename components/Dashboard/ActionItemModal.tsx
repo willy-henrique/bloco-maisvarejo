@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { ActionItem, ItemStatus, UrgencyLevel } from '../../types';
+import { ActionItem, ItemStatus, UrgencyLevel, Responsavel } from '../../types';
 import { Modal } from '../Shared/Modal';
 import { MapPin, User, Calendar } from 'lucide-react';
+import { ResponsavelAutocomplete } from './ResponsavelAutocomplete';
+import { resolveResponsavelDisplay } from './responsavelSearchUtils';
 
 interface ActionItemModalProps {
   isOpen: boolean;
@@ -22,6 +24,8 @@ interface ActionItemModalProps {
   hideStatusUrgency?: boolean;
   /** Quando true, permite editar o campo "Quem?" */
   canEditWho?: boolean;
+  /** Lista de responsáveis para resolver/editar o campo "Quem?" (Tático/Operacional). */
+  responsaveis?: Responsavel[];
   /** Somente leitura (permissão de edição negada) */
   readOnly?: boolean;
   /**
@@ -58,6 +62,7 @@ export const ActionItemModal: React.FC<ActionItemModalProps> = ({
   hideWhereEmpresa = false,
   hideStatusUrgency = false,
   canEditWho = false,
+  responsaveis = [],
   readOnly = false,
   itemModalContext = 'default',
 }) => {
@@ -76,6 +81,7 @@ export const ActionItemModal: React.FC<ActionItemModalProps> = ({
   const isWhoReadOnly = lockWhoAndWhen || !canEditWho;
   const whoDefault = shouldLockWho ? loggedUserName!.trim() : '';
   const [form, setForm] = useState(emptyForm(whoDefault));
+  const whoDisplay = resolveResponsavelDisplay(responsaveis, form.who || whoDefault).nome || (form.who || whoDefault || '');
 
   useEffect(() => {
     if (item) {
@@ -238,21 +244,21 @@ export const ActionItemModal: React.FC<ActionItemModalProps> = ({
               <div className="relative">
                 <User size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
                 <div className="w-full bg-slate-800/50 border border-slate-700 rounded-lg pl-9 pr-3 py-2.5 text-sm text-slate-200">
-                  {form.who || whoDefault || '—'}
+                  {whoDisplay || '—'}
                 </div>
               </div>
             ) : (
               <div className="relative">
-                <User size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-                <input
-                  type="text"
-                  value={form.who}
-                  onChange={(e) => update('who', e.target.value)}
-                  placeholder="Responsável"
-                  className="w-full bg-slate-800/50 border border-slate-700 rounded-lg pl-9 pr-3 py-2.5 text-sm text-slate-200 placeholder:text-slate-500 outline-none focus:border-slate-600 disabled:opacity-60"
-                  readOnly={readOnly}
-                  disabled={readOnly}
-                />
+                <User size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
+                <div className="pl-9">
+                  <ResponsavelAutocomplete
+                    responsaveis={responsaveis}
+                    valueId={form.who}
+                    onCommit={(id) => update('who', id)}
+                    disabled={readOnly}
+                    placeholder="Buscar responsável..."
+                  />
+                </div>
               </div>
             )}
           </div>

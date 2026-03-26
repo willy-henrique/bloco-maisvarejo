@@ -3,18 +3,15 @@
  * Itens em demanda (não concluídos) em lista profissional; concluídos em seção colapsada.
  */
 
-import React, { useMemo, useState } from 'react';
+import React, { useMemo } from 'react';
 import { ActionItem, ItemStatus } from '../../types';
 import { formatDateOnlyPtBr } from '../../utils/date';
 import {
-  ChevronDown,
-  ChevronRight,
   Trash2,
   PlayCircle,
   Calendar,
   User,
   Archive,
-  CheckCircle,
 } from 'lucide-react';
 
 export interface BacklogCapabilities {
@@ -49,24 +46,16 @@ export const BacklogView: React.FC<BacklogViewProps> = ({
     canDelete: capabilities?.canDelete !== false,
     canWorkflow: capabilities?.canWorkflow !== false,
   };
-  const [arquivadosOpen, setArquivadosOpen] = useState(false);
-  const { backlogItems, archivedItems } = useMemo(() => {
+  const { backlogItems } = useMemo(() => {
     // Itens em demanda (BACKLOG)
     const backlog = items
       .filter((i) => i.status === ItemStatus.BACKLOG)
       .sort((a, b) => (a.createdAt ?? 0) - (b.createdAt ?? 0));
-
-    // Itens arquivados (CONCLUÍDOS)
-    const archived = items
-      .filter((i) => i.status === ItemStatus.COMPLETED)
-      .sort((a, b) => (a.createdAt ?? 0) - (b.createdAt ?? 0));
-
-    return { backlogItems: backlog, archivedItems: archived };
+    return { backlogItems: backlog };
   }, [items]);
 
   const moveToPrioridade = (id: string) => onStatusChange(id, ItemStatus.ACTIVE);
   const archiveItem = (id: string) => onStatusChange(id, ItemStatus.COMPLETED);
-  const unarchiveItem = (id: string) => onStatusChange(id, ItemStatus.BACKLOG);
 
   return (
     <div className="max-w-5xl mx-auto space-y-6 w-full min-w-0">
@@ -171,92 +160,6 @@ export const BacklogView: React.FC<BacklogViewProps> = ({
           )}
         </div>
       </section>
-
-      {/* Arquivados (concluídos) - igual padrão "Concluídos" */}
-      {archivedItems.length > 0 && (
-        <section className="bg-slate-900/30 border border-slate-800/80 rounded-lg overflow-hidden">
-          <button
-            type="button"
-            onClick={() => setArquivadosOpen((o) => !o)}
-            className="w-full px-4 py-3 flex items-center justify-between text-left hover:bg-slate-800/30 transition-colors"
-          >
-            <div className="flex items-center gap-2 text-slate-400">
-              {arquivadosOpen ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
-              <CheckCircle size={16} className="text-emerald-500/80" />
-              <span className="text-sm font-medium text-slate-300">Arquivados</span>
-              <span className="text-[11px] text-slate-500">
-                — abrir para ver detalhes e editar
-              </span>
-            </div>
-            <span className="text-[10px] text-slate-600 bg-slate-800 px-2 py-0.5 rounded tabular-nums">
-              {archivedItems.length}
-            </span>
-          </button>
-          {arquivadosOpen && (
-            <div className="border-t border-slate-800/80 overflow-x-auto overflow-touch">
-              <table className="w-full text-left border-collapse min-w-[640px]">
-                <tbody className="divide-y divide-slate-800/80">
-                  {archivedItems.map((item) => (
-                    <tr
-                      key={item.id}
-                      className="hover:bg-slate-800/20 transition-colors group"
-                    >
-                      <td className="px-3 py-2.5">
-                        <button
-                          type="button"
-                          onClick={() => onEditItem(item)}
-                          className="text-left w-full text-sm font-medium text-slate-300 hover:text-blue-400 transition-colors line-clamp-2"
-                        >
-                          {item.what || '—'}
-                        </button>
-                        <p className="text-[11px] text-slate-500 line-clamp-1 mt-0.5 sm:hidden">
-                          {item.who && `${item.who} · `}
-                          {item.when && formatDateOnlyPtBr(item.when)}
-                        </p>
-                      </td>
-                      <td className="px-3 py-2.5 hidden sm:table-cell">
-                        <div className="flex items-center gap-1.5 text-[11px] text-slate-400">
-                          <User size={10} />
-                          {item.who || '—'}
-                        </div>
-                        <div className="flex items-center gap-1.5 text-[11px] text-slate-500 mt-0.5">
-                          <Calendar size={10} />
-                          {item.when ? formatDateOnlyPtBr(item.when) : '—'}
-                        </div>
-                      </td>
-                      <td className="px-3 py-2.5 text-right">
-                        <div className="inline-flex items-center gap-1.5 justify-end">
-                          {cap.canWorkflow && (
-                            <button
-                              type="button"
-                              onClick={() => unarchiveItem(item.id)}
-                              className="inline-flex items-center justify-center px-3 py-1.5 text-[11px] font-medium rounded-full bg-slate-700/80 hover:bg-slate-600 text-slate-100 transition-colors shadow-sm"
-                              title="Mover de volta para o Backlog"
-                            >
-                              <PlayCircle size={14} className="mr-1" />
-                              Backlog
-                            </button>
-                          )}
-                          {cap.canDelete && (
-                            <button
-                              type="button"
-                              onClick={() => onDelete(item.id)}
-                              className="inline-flex items-center justify-center p-2 rounded-full text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition-colors"
-                              title="Excluir item arquivado"
-                            >
-                              <Trash2 size={14} />
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </section>
-      )}
     </div>
   );
 };

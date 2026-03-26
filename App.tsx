@@ -1270,6 +1270,7 @@ function AppContent() {
           loggedUserName={profile?.nome}
           lockWhoToLoggedUser={true}
           canEditWho={profile?.role === 'administrador'}
+          responsaveis={responsaveisParaAtribuicao}
           hideWhereEmpresa={modalContext === 'backlog'}
           hideStatusUrgency={modalContext === 'backlog'}
           itemModalContext={modalContext}
