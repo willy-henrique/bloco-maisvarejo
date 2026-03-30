@@ -1,6 +1,6 @@
 import React from 'react';
 import type { UserProfile } from '../../types/user';
-import { Edit2, ToggleLeft, ToggleRight } from 'lucide-react';
+import { Edit2, ToggleLeft, ToggleRight, Trash2 } from 'lucide-react';
 
 const ROLE_LABELS: Record<UserProfile['role'], string> = {
   administrador: 'Admin',
@@ -19,10 +19,18 @@ interface UserListProps {
   loading: boolean;
   onEdit: (user: UserProfile) => void;
   onToggleAtivo: (user: UserProfile) => void;
+  onRequestRemove: (user: UserProfile) => void;
   currentUid: string;
 }
 
-export const UserList: React.FC<UserListProps> = ({ users, loading, onEdit, onToggleAtivo, currentUid }) => {
+export const UserList: React.FC<UserListProps> = ({
+  users,
+  loading,
+  onEdit,
+  onToggleAtivo,
+  onRequestRemove,
+  currentUid,
+}) => {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-40">
@@ -51,7 +59,9 @@ export const UserList: React.FC<UserListProps> = ({ users, loading, onEdit, onTo
               <th className="text-left px-4 py-3 text-[10px] text-slate-500 uppercase tracking-wider font-medium">Views</th>
               <th className="text-left px-4 py-3 text-[10px] text-slate-500 uppercase tracking-wider font-medium">Empresas</th>
               <th className="text-center px-4 py-3 text-[10px] text-slate-500 uppercase tracking-wider font-medium">Status</th>
-              <th className="text-center px-4 py-3 text-[10px] text-slate-500 uppercase tracking-wider font-medium">Ações</th>
+              <th className="text-center px-4 py-3 text-[10px] text-slate-500 uppercase tracking-wider font-medium">
+                Ações
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -111,17 +121,27 @@ export const UserList: React.FC<UserListProps> = ({ users, loading, onEdit, onTo
                       <Edit2 size={14} />
                     </button>
                     {u.uid !== currentUid && (
-                      <button
-                        onClick={() => onToggleAtivo(u)}
-                        className={`p-1.5 rounded-lg transition-colors ${
-                          u.ativo
-                            ? 'text-emerald-400 hover:text-red-400 hover:bg-red-500/10'
-                            : 'text-red-400 hover:text-emerald-400 hover:bg-emerald-500/10'
-                        }`}
-                        title={u.ativo ? 'Desativar' : 'Ativar'}
-                      >
-                        {u.ativo ? <ToggleRight size={18} /> : <ToggleLeft size={18} />}
-                      </button>
+                      <>
+                        <button
+                          onClick={() => onToggleAtivo(u)}
+                          className={`p-1.5 rounded-lg transition-colors ${
+                            u.ativo
+                              ? 'text-emerald-400 hover:text-red-400 hover:bg-red-500/10'
+                              : 'text-red-400 hover:text-emerald-400 hover:bg-emerald-500/10'
+                          }`}
+                          title={u.ativo ? 'Desativar' : 'Ativar'}
+                        >
+                          {u.ativo ? <ToggleRight size={18} /> : <ToggleLeft size={18} />}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => onRequestRemove(u)}
+                          className="p-1.5 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                          title="Excluir cadastro (somente se não houver histórico na plataforma)"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </>
                     )}
                   </div>
                 </td>

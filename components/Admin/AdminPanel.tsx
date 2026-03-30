@@ -3,7 +3,18 @@ import { useUser } from '../../contexts/UserContext';
 import { useRitmoGestao } from '../../controllers/useRitmoGestao';
 import { UserList } from './UserList';
 import { UserForm } from './UserForm';
-import { listAllUsers, saveUserProfile, updateUserProfile, createUser } from '../../services/firebaseAuth';
+import {
+  listAllUsers,
+  saveUserProfile,
+  updateUserProfile,
+  createUser,
+  deleteUserProfile,
+} from '../../services/firebaseAuth';
+import { getBoardDataOnce, getRitmoBoardOnce } from '../../services/firestoreSync';
+import {
+  auditarAtividadeUsuarioNaPlataforma,
+  type UserActivityAuditResult,
+} from '../../utils/userActivityAudit';
 import { getAppSettings, saveAppSettings } from '../../services/appSettings';
 import type { UserProfile } from '../../types/user';
 import { PERMISSIONS_SCHEMA_VERSION } from '../../types/user';
@@ -22,6 +33,10 @@ export const AdminPanel: React.FC = () => {
   const [success, setSuccess] = useState('');
   const [estrategicoFiltrarKanbanPorWho, setEstrategicoFiltrarKanbanPorWho] = useState(false);
   const [loadingAppSettings, setLoadingAppSettings] = useState(true);
+  const [removeModalUser, setRemoveModalUser] = useState<UserProfile | null>(null);
+  const [removeAuditLoading, setRemoveAuditLoading] = useState(false);
+  const [removeAudit, setRemoveAudit] = useState<UserActivityAuditResult | null>(null);
+  const [removeExecuting, setRemoveExecuting] = useState(false);
 
   const loadUsers = useCallback(async () => {
     setLoadingUsers(true);
@@ -150,6 +165,74 @@ export const AdminPanel: React.FC = () => {
     setView('edit');
   };
 
+  const openRemoveUserModal = useCallback(
+    async (user: UserProfile) => {
+      if (user.uid === currentAdmin?.uid) return;
+      setError('');
+      setSuccess('');
+      setRemoveModalUser(user);
+      setRemoveAudit(null);
+      if (!encryptionKey) {
+        setRemoveAudit({
+          semHistoricoNaPlataforma: false,
+          motivos: ['Não foi possível verificar o board (chave de dados indisponível). Faça login novamente.'],
+        });
+        return;
+      }
+      setRemoveAuditLoading(true);
+      try {
+        const [boardPack, ritmo] = await Promise.all([
+          getBoardDataOnce(encryptionKey),
+          getRitmoBoardOnce(encryptionKey),
+        ]);
+        const items = boardPack?.items ?? [];
+        const board = ritmo ?? {
+          backlog: [],
+          prioridades: [],
+          planos: [],
+          tarefas: [],
+          responsaveis: [],
+          empresas: [],
+        };
+        setRemoveAudit(auditarAtividadeUsuarioNaPlataforma(user, users, items, board));
+      } catch {
+        setRemoveAudit({
+          semHistoricoNaPlataforma: false,
+          motivos: ['Erro ao carregar dados do board para auditoria. Tente novamente.'],
+        });
+      } finally {
+        setRemoveAuditLoading(false);
+      }
+    },
+    [currentAdmin?.uid, encryptionKey, users],
+  );
+
+  const closeRemoveModal = useCallback(() => {
+    setRemoveModalUser(null);
+    setRemoveAudit(null);
+    setRemoveAuditLoading(false);
+    setRemoveExecuting(false);
+  }, []);
+
+  const confirmRemoveUser = useCallback(async () => {
+    if (!removeModalUser || !removeAudit?.semHistoricoNaPlataforma || removeExecuting) return;
+    setRemoveExecuting(true);
+    setError('');
+    try {
+      await deleteUserProfile(removeModalUser.uid);
+      setSuccess(
+        `Cadastro de "${removeModalUser.nome}" removido do Firestore. ` +
+          'Se precisar reutilizar o mesmo email, exclua também o usuário em Authentication no console do Firebase.',
+      );
+      closeRemoveModal();
+      await loadUsers();
+    } catch {
+      setError('Não foi possível excluir o cadastro. Verifique permissões e conexão.');
+    } finally {
+      setRemoveExecuting(false);
+    }
+  }, [removeModalUser, removeAudit?.semHistoricoNaPlataforma, removeExecuting, closeRemoveModal, loadUsers]);
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
       <header className="h-14 bg-slate-900/95 border-b border-slate-800 flex items-center justify-between px-4 md:px-6">
@@ -208,8 +291,78 @@ export const AdminPanel: React.FC = () => {
               loading={loadingUsers}
               onEdit={handleEdit}
               onToggleAtivo={handleToggleAtivo}
+              onRequestRemove={openRemoveUserModal}
               currentUid={currentAdmin?.uid ?? ''}
             />
+
+            {removeModalUser && (
+              <div
+                className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="remove-user-title"
+              >
+                <div className="w-full max-w-md rounded-xl border border-slate-800 bg-slate-900 p-5 shadow-xl">
+                  <h3 id="remove-user-title" className="text-sm font-semibold text-slate-100">
+                    Excluir cadastro
+                  </h3>
+                  <p className="mt-2 text-xs text-slate-400 leading-relaxed">
+                    <span className="text-slate-200">{removeModalUser.nome}</span>
+                    {' · '}
+                    <span className="text-slate-500">{removeModalUser.email}</span>
+                  </p>
+                  <p className="mt-3 text-[11px] text-slate-500 leading-relaxed">
+                    Só é possível excluir usuários que nunca geraram referência nos dados da plataforma (iniciativas,
+                    prioridades, planos, tarefas, responsáveis ou cadastro de terceiros).
+                  </p>
+
+                  <div className="mt-4 min-h-18">
+                    {removeAuditLoading && (
+                      <div className="flex items-center gap-2 text-xs text-slate-500">
+                        <div className="h-4 w-4 border-2 border-slate-600 border-t-amber-500 rounded-full animate-spin shrink-0" />
+                        Verificando histórico no board…
+                      </div>
+                    )}
+                    {!removeAuditLoading && removeAudit && !removeAudit.semHistoricoNaPlataforma && (
+                      <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-[11px] text-amber-200/90 space-y-1.5">
+                        <p className="font-medium text-amber-100">Exclusão bloqueada — há vínculos com este usuário:</p>
+                        <ul className="list-disc pl-4 space-y-0.5 text-amber-200/80">
+                          {removeAudit.motivos.map((m) => (
+                            <li key={m}>{m}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    {!removeAuditLoading && removeAudit?.semHistoricoNaPlataforma && (
+                      <div className="rounded-lg border border-emerald-500/25 bg-emerald-500/10 p-3 text-[11px] text-emerald-200/90">
+                        Nenhum registro de atividade encontrado. Você pode remover este cadastro com segurança.
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="mt-5 flex flex-wrap justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={closeRemoveModal}
+                      disabled={removeExecuting}
+                      className="rounded-lg border border-slate-700 bg-slate-950/80 px-3 py-2 text-xs font-medium text-slate-300 hover:bg-slate-800 disabled:opacity-50"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void confirmRemoveUser()}
+                      disabled={
+                        removeAuditLoading || !removeAudit?.semHistoricoNaPlataforma || removeExecuting
+                      }
+                      className="rounded-lg bg-red-600 px-3 py-2 text-xs font-medium text-white hover:bg-red-500 disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      {removeExecuting ? 'Excluindo…' : 'Excluir cadastro'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Configurações do sistema */}
             <div className="mt-10 border-t border-slate-800 pt-6">
