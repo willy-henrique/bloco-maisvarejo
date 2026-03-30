@@ -367,21 +367,24 @@ function AppContent() {
     [profile?.role, isCreatedByMe, myResponsavelIdsForBoard, responsaveisParaAtribuicao],
   );
 
-  // Backlog: filtro estrito por empresa — cada workspace tem seu próprio backlog.
-  // Itens sem empresa (legado) são tratados como pertencentes à primeira empresa disponível.
+  // Filtro estrito por empresa — itens sem empresa (legado) caem na primeira empresa ativa.
   const defaultEmpresaFallback = empresasAtivas[0] ?? '';
-  const backlogViewItems = useMemo(() => {
-    const ws = workspaceAtivo === 'all' ? '' : String(workspaceAtivo).trim();
-    const fallback = defaultEmpresaFallback.toLowerCase();
-    const same = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
-    return items.filter((i) => {
-      const em = (i.empresa ?? '').trim();
+
+  const matchWorkspaceStrict = useCallback(
+    (empresa?: string | null): boolean => {
+      const em = (empresa ?? '').trim();
       const effective = em || defaultEmpresaFallback;
       if (!effective) return workspaceAtivo === 'all';
       if (workspaceAtivo === 'all') return canSeeEmpresa(effective);
-      return same(effective, ws);
-    });
-  }, [items, workspaceAtivo, canSeeEmpresa, defaultEmpresaFallback]);
+      return effective.toLowerCase() === String(workspaceAtivo).trim().toLowerCase();
+    },
+    [workspaceAtivo, canSeeEmpresa, defaultEmpresaFallback],
+  );
+
+  const backlogViewItems = useMemo(
+    () => items.filter((i) => matchWorkspaceStrict(i.empresa)),
+    [items, matchWorkspaceStrict],
+  );
 
   useEffect(() => {
     if (!isAuthenticated || !isFirebaseConfigured) {
@@ -398,16 +401,7 @@ function AppContent() {
    * demais usuários só veem cartões cujo WHO corresponde a eles.
    */
   const itemsFiltrados = useMemo(() => {
-    const ws = workspaceAtivo === 'all' ? '' : String(workspaceAtivo).trim();
-    const fallback = defaultEmpresaFallback.toLowerCase();
-    const same = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
-    const base = items.filter((i) => {
-      const em = (i.empresa ?? '').trim();
-      const effective = em || defaultEmpresaFallback;
-      if (!effective) return workspaceAtivo === 'all';
-      if (workspaceAtivo === 'all') return canSeeEmpresa(effective);
-      return same(effective, ws);
-    });
+    const base = items.filter((i) => matchWorkspaceStrict(i.empresa));
     if (!appSettings.estrategicoFiltrarKanbanPorWho) return base;
     if (profile?.role === 'administrador') return base;
     if (myResponsavelIdsForBoard.size === 0) return [];
@@ -420,9 +414,7 @@ function AppContent() {
     );
   }, [
     items,
-    workspaceAtivo,
-    canSeeEmpresa,
-    defaultEmpresaFallback,
+    matchWorkspaceStrict,
     canUserAccessActionItem,
     appSettings.estrategicoFiltrarKanbanPorWho,
     profile?.role,
@@ -477,14 +469,11 @@ function AppContent() {
 
   const quadroPrioridades = useMemo<Prioridade[]>(() => {
     const todas = [...ritmo.board.prioridades, ...sinteticasFromItems];
-    return todas.filter(
-      (p) => matchWorkspace(p.empresa) || prioridadeVisivelPorDemandaAtribuida(p),
-    );
+    return todas.filter((p) => matchWorkspaceStrict(p.empresa));
   }, [
     ritmo.board.prioridades,
     sinteticasFromItems,
-    matchWorkspace,
-    prioridadeVisivelPorDemandaAtribuida,
+    matchWorkspaceStrict,
   ]);
 
   const taticoPrioridades = quadroPrioridades;
@@ -494,13 +483,9 @@ function AppContent() {
     [quadroPrioridades],
   );
 
-  /** Planos/tarefas das prioridades visíveis entram mesmo com empresa desalinhada (evita card vazio). */
   const ritmoPlanosEscopoVisivel = useMemo(
-    () =>
-      ritmo.board.planos.filter(
-        (pl) => matchWorkspace(pl.empresa) || idsPrioridadesEscopoRitmo.has(pl.prioridade_id),
-      ),
-    [ritmo.board.planos, matchWorkspace, idsPrioridadesEscopoRitmo],
+    () => ritmo.board.planos.filter((pl) => matchWorkspaceStrict(pl.empresa)),
+    [ritmo.board.planos, matchWorkspaceStrict],
   );
 
   const idsPlanosEscopoVisivel = useMemo(
@@ -509,11 +494,8 @@ function AppContent() {
   );
 
   const ritmoTarefasEscopoVisivel = useMemo(
-    () =>
-      ritmo.board.tarefas.filter(
-        (t) => matchWorkspace(t.empresa) || idsPlanosEscopoVisivel.has(t.plano_id),
-      ),
-    [ritmo.board.tarefas, matchWorkspace, idsPlanosEscopoVisivel],
+    () => ritmo.board.tarefas.filter((t) => matchWorkspaceStrict(t.empresa)),
+    [ritmo.board.tarefas, matchWorkspaceStrict],
   );
 
   const perm = useMemo(
