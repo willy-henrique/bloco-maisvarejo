@@ -368,17 +368,20 @@ function AppContent() {
   );
 
   // Backlog: filtro estrito por empresa — cada workspace tem seu próprio backlog.
-  // Itens sem empresa (legado) só aparecem em "Todas as empresas".
+  // Itens sem empresa (legado) são tratados como pertencentes à primeira empresa disponível.
+  const defaultEmpresaFallback = empresasAtivas[0] ?? '';
   const backlogViewItems = useMemo(() => {
     const ws = workspaceAtivo === 'all' ? '' : String(workspaceAtivo).trim();
+    const fallback = defaultEmpresaFallback.toLowerCase();
     const same = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
     return items.filter((i) => {
       const em = (i.empresa ?? '').trim();
-      if (!em) return workspaceAtivo === 'all';
-      if (workspaceAtivo === 'all') return canSeeEmpresa(em);
-      return same(em, ws);
+      const effective = em || defaultEmpresaFallback;
+      if (!effective) return workspaceAtivo === 'all';
+      if (workspaceAtivo === 'all') return canSeeEmpresa(effective);
+      return same(effective, ws);
     });
-  }, [items, workspaceAtivo, canSeeEmpresa]);
+  }, [items, workspaceAtivo, canSeeEmpresa, defaultEmpresaFallback]);
 
   useEffect(() => {
     if (!isAuthenticated || !isFirebaseConfigured) {
