@@ -367,10 +367,11 @@ function AppContent() {
     [profile?.role, isCreatedByMe, myResponsavelIdsForBoard, responsaveisParaAtribuicao],
   );
 
-  // Backlog: respeita workspace, mas mantém visibilidade para criador/responsável.
+  // Backlog: filtra estritamente por workspace/empresa ativo.
+  // A regra de criador/responsável garante acesso no workspace correto do item, não em todos.
   const backlogViewItems = useMemo(
-    () => items.filter((i) => matchWorkspace(i.empresa) || canUserAccessActionItem(i)),
-    [items, matchWorkspace, canUserAccessActionItem],
+    () => items.filter((i) => matchWorkspace(i.empresa)),
+    [items, matchWorkspace],
   );
 
   useEffect(() => {
@@ -1355,14 +1356,18 @@ function AppContent() {
           onClose={closeItemModal}
           item={selectedItem}
           initialStatus={selectedItem === null ? defaultStatusForNew ?? undefined : undefined}
-          onSave={(item) =>
+          onSave={(item) => {
+            const empresa =
+              item.empresa?.trim() ||
+              (workspaceAtivo !== 'all' ? workspaceAtivo : empresasAtivas[0] ?? '');
             addItem({
               ...item,
+              empresa,
               created_by: profile?.uid || profile?.nome || profile?.email || '',
-            })
-          }
+            });
+          }}
           onUpdate={updateItem}
-          defaultEmpresa={workspaceAtivo === 'all' ? '' : workspaceAtivo}
+          defaultEmpresa={workspaceAtivo === 'all' ? (empresasAtivas[0] ?? '') : workspaceAtivo}
           empresaSuggestions={empresasAtivas}
           loggedUserName={profile?.nome}
           lockWhoToLoggedUser={true}
