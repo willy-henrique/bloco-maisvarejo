@@ -32,6 +32,8 @@ export interface ActionItem {
   updatedAt: number;
   /** Empresa / workspace ao qual esta iniciativa pertence (opcional para compatibilidade legada) */
   empresa?: string;
+  /** Usuário que criou o registro (uid/nome), usado para visibilidade. */
+  created_by?: string;
 }
 
 // ========== Ritmo de Gestão – entidades e enums ==========
@@ -61,6 +63,8 @@ export interface Backlog {
   status_backlog: StatusBacklog;
   /** Empresa / workspace à qual esta dor pertence (opcional) */
   empresa?: string;
+  /** Usuário que criou o registro (uid/nome), usado para visibilidade. */
+  created_by?: string;
 }
 
 /** Priorizar (nível estratégico). Máx 3 priorizadas por quadro. */
@@ -77,6 +81,8 @@ export interface Prioridade {
   empresa?: string;
   /** Última alteração de dono (ms); usado para não sobrescrever troca local com snapshot atrasado do Firestore */
   dono_atualizado_em?: number;
+  /** Usuário que criou o registro (uid/nome), usado para visibilidade. */
+  created_by?: string;
 }
 
 /** Plano de ataque (nível gerencial). 5W2H completo. */
@@ -95,6 +101,8 @@ export interface PlanoDeAtaque {
   status_plano: StatusPlano;
   /** Empresa / workspace associada a este plano (opcional) */
   empresa?: string;
+  /** Usuário que criou o registro (uid/nome), usado para visibilidade. */
+  created_by?: string;
 }
 
 /** Tarefa (nível operacional). Materialização do plano. */
@@ -110,6 +118,8 @@ export interface Tarefa {
   bloqueio_motivo?: string;
   /** Empresa / workspace associada a esta tarefa (opcional) */
   empresa?: string;
+  /** Usuário que criou o registro (uid/nome), usado para visibilidade. */
+  created_by?: string;
 }
 
 /** Payload único do board Ritmo de Gestão (persistência) */

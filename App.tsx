@@ -52,6 +52,12 @@ function normKey(s: string | null | undefined): string {
   return (s ?? '').trim().toLowerCase();
 }
 
+function userLocalPart(email?: string | null): string {
+  const raw = (email ?? '').trim();
+  if (!raw.includes('@')) return raw;
+  return raw.split('@')[0]?.trim() ?? '';
+}
+
 /**
  * Empresa gravada na prioridade/planos/tarefas deve ser visível ao dono.
  * Se ele só tem acesso a outras empresas que a do classificador, usa a primeira empresa permitida dele.
@@ -257,10 +263,6 @@ function AppContent() {
     [empresasDisponiveis, empresasBloqueadas]
   );
 
-  // Backlog é visão global por regra de negócio (todos os usuários veem os itens).
-  const backlogViewItems = useMemo(() => items, [items]);
-
-
   const sinteticasFromItems = useMemo<Prioridade[]>(() => {
     return items
       .filter(
@@ -303,6 +305,74 @@ function AppContent() {
     ],
   );
 
+  const currentUserIdentityKeys = useMemo(() => {
+    const keys = new Set<string>();
+    const add = (v: string | null | undefined) => {
+      const n = normKey(v);
+      if (n) keys.add(n);
+    };
+    add(profile?.uid);
+    add(profile?.nome);
+    add(profile?.email);
+    add(userLocalPart(profile?.email));
+    add(firebaseUser?.displayName ?? undefined);
+    for (const id of myResponsavelIdsForBoard) add(id);
+    return keys;
+  }, [
+    profile?.uid,
+    profile?.nome,
+    profile?.email,
+    firebaseUser?.displayName,
+    myResponsavelIdsForBoard,
+  ]);
+
+  const isCreatedByMe = useCallback(
+    (createdBy?: string, fallbackOwnerLike?: string) => {
+      const creator = (createdBy ?? '').trim();
+      if (creator) {
+        if (
+          donoPrioridadeCorrespondeAoUsuario(
+            creator,
+            myResponsavelIdsForBoard,
+            responsaveisParaAtribuicao,
+          )
+        ) {
+          return true;
+        }
+        if (currentUserIdentityKeys.has(normKey(creator))) return true;
+      }
+      const fallback = (fallbackOwnerLike ?? '').trim();
+      if (!fallback) return false;
+      return donoPrioridadeCorrespondeAoUsuario(
+        fallback,
+        myResponsavelIdsForBoard,
+        responsaveisParaAtribuicao,
+      );
+    },
+    [myResponsavelIdsForBoard, responsaveisParaAtribuicao, currentUserIdentityKeys],
+  );
+
+  const canUserAccessActionItem = useCallback(
+    (item: ActionItem) => {
+      if (profile?.role === 'administrador') return true;
+      return (
+        isCreatedByMe(item.created_by, item.who) ||
+        donoPrioridadeCorrespondeAoUsuario(
+          item.who,
+          myResponsavelIdsForBoard,
+          responsaveisParaAtribuicao,
+        )
+      );
+    },
+    [profile?.role, isCreatedByMe, myResponsavelIdsForBoard, responsaveisParaAtribuicao],
+  );
+
+  // Backlog: respeita workspace, mas mantém visibilidade para criador/responsável.
+  const backlogViewItems = useMemo(
+    () => items.filter((i) => matchWorkspace(i.empresa) || canUserAccessActionItem(i)),
+    [items, matchWorkspace, canUserAccessActionItem],
+  );
+
   useEffect(() => {
     if (!isAuthenticated || !isFirebaseConfigured) {
       setAppSettings(getDefaultAppSettings());
@@ -318,12 +388,12 @@ function AppContent() {
    * demais usuários só veem cartões cujo WHO corresponde a eles.
    */
   const itemsFiltrados = useMemo(() => {
-    const base = items.filter((i) => matchWorkspace(i.empresa));
+    const base = items.filter((i) => matchWorkspace(i.empresa) || canUserAccessActionItem(i));
     if (!appSettings.estrategicoFiltrarKanbanPorWho) return base;
     if (profile?.role === 'administrador') return base;
     if (myResponsavelIdsForBoard.size === 0) return [];
     return base.filter((i) =>
-      donoPrioridadeCorrespondeAoUsuario(
+      canUserAccessActionItem(i) || donoPrioridadeCorrespondeAoUsuario(
         i.who,
         myResponsavelIdsForBoard,
         responsaveisParaAtribuicao,
@@ -332,6 +402,7 @@ function AppContent() {
   }, [
     items,
     matchWorkspace,
+    canUserAccessActionItem,
     appSettings.estrategicoFiltrarKanbanPorWho,
     profile?.role,
     myResponsavelIdsForBoard,
@@ -342,6 +413,7 @@ function AppContent() {
   const prioridadeVisivelPorDemandaAtribuida = useCallback(
     (p: Prioridade) => {
       if (myResponsavelIdsForBoard.size === 0) return false;
+      if (isCreatedByMe(p.created_by, p.dono_id)) return true;
       if (
         donoPrioridadeCorrespondeAoUsuario(
           p.dono_id,
@@ -353,6 +425,7 @@ function AppContent() {
       }
       for (const pl of ritmo.board.planos) {
         if (pl.prioridade_id !== p.id) continue;
+        if (isCreatedByMe(pl.created_by, pl.who_id)) return true;
         if (
           donoPrioridadeCorrespondeAoUsuario(
             pl.who_id,
@@ -364,6 +437,7 @@ function AppContent() {
         }
         for (const t of ritmo.board.tarefas) {
           if (t.plano_id !== pl.id) continue;
+          if (isCreatedByMe(t.created_by, t.responsavel_id)) return true;
           if (tarefaAtribuidaAoUsuario(t, myResponsavelIdsForBoard, responsaveisParaAtribuicao)) {
             return true;
           }
@@ -373,6 +447,7 @@ function AppContent() {
     },
     [
       myResponsavelIdsForBoard,
+      isCreatedByMe,
       responsaveisParaAtribuicao,
       ritmo.board.planos,
       ritmo.board.tarefas,
@@ -1042,10 +1117,20 @@ function AppContent() {
                   loggedUserDisplayName={firebaseUser?.displayName ?? undefined}
                   focusPrioridadeId={focusPrioridadeId}
                   onlyPrioridadeId={tableOnlyPrioridadeId}
-                  onAddPlano={ritmo.addPlano}
+                  onAddPlano={(p) =>
+                    ritmo.addPlano({
+                      ...p,
+                      created_by: profile?.uid || profile?.nome || profile?.email || '',
+                    })
+                  }
                   onUpdatePlano={ritmo.updatePlano}
                   onDeletePlano={ritmo.deletePlano}
-                  onAddTarefa={ritmo.addTarefa}
+                  onAddTarefa={(t) =>
+                    ritmo.addTarefa({
+                      ...t,
+                      created_by: profile?.uid || profile?.nome || profile?.email || '',
+                    })
+                  }
                   onUpdateTarefa={ritmo.updateTarefa}
                   onDeleteTarefa={ritmo.deleteTarefa}
                   estrategicoCaps={{
@@ -1073,7 +1158,12 @@ function AppContent() {
                   loggedUserRole={profile?.role}
                   onUpdatePlano={ritmo.updatePlano}
                   onDeletePlano={ritmo.deletePlano}
-                  onAddTarefa={ritmo.addTarefa}
+                  onAddTarefa={(t) =>
+                    ritmo.addTarefa({
+                      ...t,
+                      created_by: profile?.uid || profile?.nome || profile?.email || '',
+                    })
+                  }
                   onUpdateTarefa={ritmo.updateTarefa}
                   onDeleteTarefa={ritmo.deleteTarefa}
                   operacionalCaps={{
@@ -1230,6 +1320,7 @@ function AppContent() {
               ...item,
               dono_id: donoCanon,
               empresa: empresaParaDemandaDoDono(assigneeNova, wsClass),
+              created_by: profile?.uid || profile?.nome || profile?.email || '',
             };
             const ok = ritmo.addPrioridade(itemNorm);
             if (!ok) {
@@ -1253,6 +1344,7 @@ function AppContent() {
               urgency: UrgencyLevel.MEDIUM,
               notes: '',
               empresa: itemNorm.empresa,
+              created_by: itemNorm.created_by,
             });
             return true;
           }}
@@ -1263,7 +1355,12 @@ function AppContent() {
           onClose={closeItemModal}
           item={selectedItem}
           initialStatus={selectedItem === null ? defaultStatusForNew ?? undefined : undefined}
-          onSave={addItem}
+          onSave={(item) =>
+            addItem({
+              ...item,
+              created_by: profile?.uid || profile?.nome || profile?.email || '',
+            })
+          }
           onUpdate={updateItem}
           defaultEmpresa={workspaceAtivo === 'all' ? '' : workspaceAtivo}
           empresaSuggestions={empresasAtivas}
@@ -1289,7 +1386,7 @@ function AppContent() {
             <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
             Conectado
           </div>
-          <span>MAVO 1.1</span>
+          <span>MAVO 1.2</span>
         </footer>
       </main>
     </div>
