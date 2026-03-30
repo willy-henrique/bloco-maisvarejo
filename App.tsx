@@ -398,7 +398,16 @@ function AppContent() {
    * demais usuários só veem cartões cujo WHO corresponde a eles.
    */
   const itemsFiltrados = useMemo(() => {
-    const base = items.filter((i) => matchWorkspace(i.empresa) || canUserAccessActionItem(i));
+    const ws = workspaceAtivo === 'all' ? '' : String(workspaceAtivo).trim();
+    const fallback = defaultEmpresaFallback.toLowerCase();
+    const same = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
+    const base = items.filter((i) => {
+      const em = (i.empresa ?? '').trim();
+      const effective = em || defaultEmpresaFallback;
+      if (!effective) return workspaceAtivo === 'all';
+      if (workspaceAtivo === 'all') return canSeeEmpresa(effective);
+      return same(effective, ws);
+    });
     if (!appSettings.estrategicoFiltrarKanbanPorWho) return base;
     if (profile?.role === 'administrador') return base;
     if (myResponsavelIdsForBoard.size === 0) return [];
@@ -411,7 +420,9 @@ function AppContent() {
     );
   }, [
     items,
-    matchWorkspace,
+    workspaceAtivo,
+    canSeeEmpresa,
+    defaultEmpresaFallback,
     canUserAccessActionItem,
     appSettings.estrategicoFiltrarKanbanPorWho,
     profile?.role,
