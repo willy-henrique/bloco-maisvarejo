@@ -18,6 +18,8 @@ export interface ActionItem {
   id: string;
   what: string;
   why: string;
+  /** Link externo opcional (ex.: Google Docs) para contextualizar a iniciativa. */
+  link?: string;
   where: string;
   when: string;
   who: string;

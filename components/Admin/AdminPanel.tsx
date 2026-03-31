@@ -9,12 +9,20 @@ import {
   updateUserProfile,
   createUser,
   deleteUserProfile,
+  resetPassword,
+  adminSetUserPassword,
 } from '../../services/firebaseAuth';
-import { getBoardDataOnce, getRitmoBoardOnce } from '../../services/firestoreSync';
+import {
+  getBoardDataOnce,
+  getRitmoBoardOnce,
+  saveBoardItems,
+  saveRitmoBoard,
+} from '../../services/firestoreSync';
 import {
   auditarAtividadeUsuarioNaPlataforma,
   type UserActivityAuditResult,
 } from '../../utils/userActivityAudit';
+import { isDeveloperEmail } from '../../config/developer';
 import { getAppSettings, saveAppSettings } from '../../services/appSettings';
 import type { UserProfile } from '../../types/user';
 import { PERMISSIONS_SCHEMA_VERSION } from '../../types/user';
@@ -37,12 +45,36 @@ export const AdminPanel: React.FC = () => {
   const [removeAuditLoading, setRemoveAuditLoading] = useState(false);
   const [removeAudit, setRemoveAudit] = useState<UserActivityAuditResult | null>(null);
   const [removeExecuting, setRemoveExecuting] = useState(false);
+  const [passwordModalUser, setPasswordModalUser] = useState<UserProfile | null>(null);
+  const [newPassword, setNewPassword] = useState('');
+  const [passwordActionLoading, setPasswordActionLoading] = useState(false);
+
+  const buildRefs = useCallback((user: UserProfile): Set<string> => {
+    const out = new Set<string>();
+    const add = (v?: string | null) => {
+      const n = String(v ?? '').trim().toLowerCase();
+      if (n) out.add(n);
+    };
+    add(user.uid);
+    add(user.nome);
+    add(user.email);
+    if ((user.email ?? '').includes('@')) add(user.email.split('@')[0]);
+    return out;
+  }, []);
+
+  const valueMatchesRefs = useCallback((value: string | undefined | null, refs: Set<string>) => {
+    const raw = String(value ?? '').trim().toLowerCase();
+    if (!raw) return false;
+    if (refs.has(raw)) return true;
+    return raw.split('|').some((p) => refs.has(p.trim()));
+  }, []);
 
   const loadUsers = useCallback(async () => {
     setLoadingUsers(true);
     try {
       const all = await listAllUsers();
-      setUsers(all);
+      const visible = all.filter((u) => !isDeveloperEmail(u.email));
+      setUsers(visible);
     } catch {
       setError('Erro ao carregar usuários.');
     } finally {
@@ -165,6 +197,51 @@ export const AdminPanel: React.FC = () => {
     setView('edit');
   };
 
+  const handleResetPassword = useCallback(async (user: UserProfile) => {
+    setError('');
+    setSuccess('');
+    try {
+      await resetPassword(user.email);
+      setSuccess(`Link de redefinição de senha enviado para "${user.email}".`);
+    } catch {
+      setError('Não foi possível enviar o link de redefinição de senha.');
+    }
+  }, []);
+
+  const openPasswordActions = useCallback((user: UserProfile) => {
+    setPasswordModalUser(user);
+    setNewPassword('');
+    setPasswordActionLoading(false);
+    setError('');
+  }, []);
+
+  const closePasswordActions = useCallback(() => {
+    setPasswordModalUser(null);
+    setNewPassword('');
+    setPasswordActionLoading(false);
+  }, []);
+
+  const handleSetPasswordDirect = useCallback(async () => {
+    if (!passwordModalUser) return;
+    if (newPassword.trim().length < 6) {
+      setError('A nova senha deve ter pelo menos 6 caracteres.');
+      return;
+    }
+    setPasswordActionLoading(true);
+    setError('');
+    setSuccess('');
+    try {
+      await adminSetUserPassword(passwordModalUser.uid, newPassword.trim());
+      setSuccess(`Senha do usuário "${passwordModalUser.nome}" alterada com sucesso.`);
+      closePasswordActions();
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Não foi possível alterar a senha no painel.';
+      setError(msg);
+    } finally {
+      setPasswordActionLoading(false);
+    }
+  }, [passwordModalUser, newPassword, closePasswordActions]);
+
   const openRemoveUserModal = useCallback(
     async (user: UserProfile) => {
       if (user.uid === currentAdmin?.uid) return;
@@ -233,6 +310,95 @@ export const AdminPanel: React.FC = () => {
     }
   }, [removeModalUser, removeAudit?.semHistoricoNaPlataforma, removeExecuting, closeRemoveModal, loadUsers]);
 
+  const forceRemoveUserWithCleanup = useCallback(async () => {
+    if (!removeModalUser || !encryptionKey || removeExecuting) return;
+    setRemoveExecuting(true);
+    setError('');
+    setSuccess('');
+    try {
+      const refs = buildRefs(removeModalUser);
+      const [boardPack, ritmoBoard] = await Promise.all([
+        getBoardDataOnce(encryptionKey),
+        getRitmoBoardOnce(encryptionKey),
+      ]);
+
+      const nextItems = (boardPack?.items ?? []).filter(
+        (i) => !valueMatchesRefs(i.created_by, refs) && !valueMatchesRefs(i.who, refs),
+      );
+
+      const baseRitmo = ritmoBoard ?? {
+        backlog: [],
+        prioridades: [],
+        planos: [],
+        tarefas: [],
+        responsaveis: [],
+        empresas: [],
+      };
+
+      const nextBacklog = baseRitmo.backlog.filter((b) => !valueMatchesRefs(b.created_by, refs));
+      const nextPrioridades = baseRitmo.prioridades.filter(
+        (p) => !valueMatchesRefs(p.created_by, refs) && !valueMatchesRefs(p.dono_id, refs),
+      );
+      const prioridadeIds = new Set(nextPrioridades.map((p) => p.id));
+      const nextPlanos = baseRitmo.planos.filter(
+        (pl) =>
+          prioridadeIds.has(pl.prioridade_id) &&
+          !valueMatchesRefs(pl.created_by, refs) &&
+          !valueMatchesRefs(pl.who_id, refs),
+      );
+      const planoIds = new Set(nextPlanos.map((pl) => pl.id));
+      const nextTarefas = baseRitmo.tarefas.filter(
+        (t) =>
+          planoIds.has(t.plano_id) &&
+          !valueMatchesRefs(t.created_by, refs) &&
+          !valueMatchesRefs(t.responsavel_id, refs),
+      );
+      const nextResponsaveis = baseRitmo.responsaveis.filter(
+        (r) => !valueMatchesRefs(r.id, refs) && !valueMatchesRefs(r.nome, refs),
+      );
+
+      const nextRitmo = {
+        ...baseRitmo,
+        backlog: nextBacklog,
+        prioridades: nextPrioridades,
+        planos: nextPlanos,
+        tarefas: nextTarefas,
+        responsaveis: nextResponsaveis,
+      };
+
+      await Promise.all([
+        saveBoardItems(nextItems, encryptionKey),
+        saveRitmoBoard(nextRitmo, encryptionKey),
+      ]);
+
+      const createdByTarget = users.filter(
+        (u) => u.uid !== removeModalUser.uid && u.criadoPor === removeModalUser.uid,
+      );
+      await Promise.all(
+        createdByTarget.map((u) => updateUserProfile(u.uid, { criadoPor: currentAdmin?.uid ?? 'system' })),
+      );
+
+      await deleteUserProfile(removeModalUser.uid);
+      setSuccess(`Usuário "${removeModalUser.nome}" excluído com limpeza de vínculos concluída.`);
+      closeRemoveModal();
+      await loadUsers();
+    } catch {
+      setError('Falha ao excluir usuário com limpeza de vínculos.');
+    } finally {
+      setRemoveExecuting(false);
+    }
+  }, [
+    removeModalUser,
+    encryptionKey,
+    removeExecuting,
+    buildRefs,
+    valueMatchesRefs,
+    users,
+    currentAdmin?.uid,
+    closeRemoveModal,
+    loadUsers,
+  ]);
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
       <header className="h-14 bg-slate-900/95 border-b border-slate-800 flex items-center justify-between px-4 md:px-6">
@@ -292,8 +458,64 @@ export const AdminPanel: React.FC = () => {
               onEdit={handleEdit}
               onToggleAtivo={handleToggleAtivo}
               onRequestRemove={openRemoveUserModal}
+              onOpenPasswordActions={openPasswordActions}
               currentUid={currentAdmin?.uid ?? ''}
             />
+
+            {passwordModalUser && (
+              <div
+                className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+                role="dialog"
+                aria-modal="true"
+              >
+                <div className="w-full max-w-md rounded-xl border border-slate-800 bg-slate-900 p-5 shadow-xl">
+                  <h3 className="text-sm font-semibold text-slate-100">Ações de senha</h3>
+                  <p className="mt-2 text-xs text-slate-400">
+                    Usuário: <span className="text-slate-200">{passwordModalUser.nome}</span> · {passwordModalUser.email}
+                  </p>
+
+                  <div className="mt-4 space-y-3">
+                    <button
+                      type="button"
+                      onClick={() => void handleResetPassword(passwordModalUser)}
+                      disabled={passwordActionLoading}
+                      className="w-full rounded-lg border border-amber-700/40 bg-amber-900/10 px-3 py-2 text-xs font-medium text-amber-200 hover:bg-amber-900/20 disabled:opacity-50"
+                    >
+                      Enviar e-mail para redefinição
+                    </button>
+
+                    <div className="rounded-lg border border-slate-800 bg-slate-950/60 p-3 space-y-2">
+                      <label className="text-[11px] text-slate-400">Definir nova senha direto no painel</label>
+                      <input
+                        type="password"
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                        placeholder="Nova senha (mínimo 6 caracteres)"
+                        className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 outline-none focus:border-amber-500"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => void handleSetPasswordDirect()}
+                        disabled={passwordActionLoading}
+                        className="w-full rounded-lg bg-emerald-600 px-3 py-2 text-xs font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
+                      >
+                        {passwordActionLoading ? 'Alterando...' : 'Alterar senha agora'}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 flex justify-end">
+                    <button
+                      type="button"
+                      onClick={closePasswordActions}
+                      className="rounded-lg border border-slate-700 bg-slate-950/80 px-3 py-2 text-xs font-medium text-slate-300 hover:bg-slate-800"
+                    >
+                      Fechar
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {removeModalUser && (
               <div
@@ -358,6 +580,14 @@ export const AdminPanel: React.FC = () => {
                       className="rounded-lg bg-red-600 px-3 py-2 text-xs font-medium text-white hover:bg-red-500 disabled:opacity-40 disabled:cursor-not-allowed"
                     >
                       {removeExecuting ? 'Excluindo…' : 'Excluir cadastro'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void forceRemoveUserWithCleanup()}
+                      disabled={removeExecuting || removeAuditLoading}
+                      className="rounded-lg bg-amber-600 px-3 py-2 text-xs font-medium text-white hover:bg-amber-500 disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      {removeExecuting ? 'Processando…' : 'Excluir usuário + limpar vínculos'}
                     </button>
                   </div>
                 </div>

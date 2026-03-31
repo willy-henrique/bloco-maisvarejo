@@ -40,7 +40,7 @@ export const AdminLogin: React.FC = () => {
           <div className="inline-flex h-12 w-12 items-center justify-center overflow-hidden rounded-lg border border-slate-700 bg-slate-950 mb-3">
             <img
               src="/mavo-logo.png"
-              alt="MAVO Participações"
+              alt="Mavo Gestão"
               className="h-14 w-14 shrink-0 object-contain object-center"
               width={56}
               height={56}

@@ -1192,11 +1192,13 @@ export const EstrategicoView: React.FC<EstrategicoViewProps> = (props) => {
     loggedUserRole === 'administrador' || caps.verTodosPlanos;
   const viewerSeesAllTarefasNoPlano =
     loggedUserRole === 'administrador' || caps.verTodosPlanos;
+  const [expandedByPrioridade, setExpandedByPrioridade] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     if (!focusPrioridadeId) return;
     const el = document.getElementById(`prioridade-card-${focusPrioridadeId}`);
     el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    setExpandedByPrioridade((prev) => ({ ...prev, [focusPrioridadeId]: true }));
   }, [focusPrioridadeId]);
 
   const myResponsavelIds = useMemo(
@@ -1251,6 +1253,19 @@ export const EstrategicoView: React.FC<EstrategicoViewProps> = (props) => {
     return list.filter((p) => p.id === onlyPrioridadeId);
   }, [filteredPrioridades, onlyPrioridadeId]);
 
+  useEffect(() => {
+    const ids = new Set(ativas.map((p) => p.id));
+    setExpandedByPrioridade((prev) => {
+      const next: Record<string, boolean> = {};
+      let changed = false;
+      for (const [id, val] of Object.entries(prev)) {
+        if (ids.has(id)) next[id] = val;
+        else changed = true;
+      }
+      return changed ? next : prev;
+    });
+  }, [ativas]);
+
   const blocksRef = useRef<HTMLDivElement>(null);
   const scrollToBlocks = () => {
     blocksRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -1292,12 +1307,8 @@ export const EstrategicoView: React.FC<EstrategicoViewProps> = (props) => {
               myResponsavelIds,
               responsaveis,
             );
-            /** Tático: quem criou/gravou o dono continua no dado; aqui quem pode redirecionar é admin/gerente ou o dono atual com prioridade_write. */
-            const canEditDonoNoTatico =
-              caps.prioridadeWrite &&
-              (loggedUserRole === 'administrador' ||
-                loggedUserRole === 'gerente' ||
-                souDonoDestaPrioridade);
+            /** Tático: com permissão de escrita na prioridade, pode ajustar o responsável (dono). */
+            const canEditDonoNoTatico = caps.prioridadeWrite;
             return (
               <div key={p.id} id={`prioridade-card-${p.id}`}>
                 <PrioridadeCard
@@ -1306,8 +1317,13 @@ export const EstrategicoView: React.FC<EstrategicoViewProps> = (props) => {
                   todasTarefas={tarefas}
                   responsaveis={responsaveis}
                   computeStatusPlano={computeStatusPlano}
-                  expanded={true}
-                  onToggle={() => {}}
+                  expanded={expandedByPrioridade[p.id] ?? true}
+                  onToggle={() =>
+                    setExpandedByPrioridade((prev) => ({
+                      ...prev,
+                      [p.id]: !(prev[p.id] ?? true),
+                    }))
+                  }
                   showDonoName
                   priorityOwnerNameOverride={priorityOwnerNameOverride}
                   lockPlanoWhoToPriorityDono={!isAdmin}

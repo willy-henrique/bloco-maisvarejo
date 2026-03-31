@@ -14,7 +14,9 @@ import {
   CornerDownLeft,
   Target,
   Archive,
+  ExternalLink,
 } from 'lucide-react';
+import { toExternalHttpUrl } from '../../utils/externalLink';
 
 export interface KanbanCapabilities {
   canCreate?: boolean;
@@ -177,6 +179,19 @@ const KanbanCard: React.FC<{
       )}
       {item.where && (
         <p className="text-[10px] text-slate-500 mb-1 line-clamp-1">Onde: {item.where}</p>
+      )}
+      {item.link && item.link.trim() && (
+        <a
+          href={toExternalHttpUrl(item.link)}
+          target="_blank"
+          rel="noreferrer noopener"
+          onClick={(e) => e.stopPropagation()}
+          className="mb-1 inline-flex items-center gap-1 text-[10px] text-blue-400 hover:text-blue-300 transition-colors"
+          title="Abrir link do documento"
+        >
+          <ExternalLink size={10} />
+          Abrir link
+        </a>
       )}
       <div className="flex flex-col gap-1 border-t border-slate-700/50 pt-2">
         <div className="flex items-center gap-1.5 text-[10px] text-slate-500">
@@ -359,6 +374,19 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
                     <h4 className="text-sm font-medium text-slate-100 line-clamp-1">{item.what}</h4>
                     {item.why && (
                       <p className="text-[11px] text-slate-500 line-clamp-1 mt-0.5">{item.why}</p>
+                    )}
+                    {item.link && item.link.trim() && (
+                      <a
+                        href={toExternalHttpUrl(item.link)}
+                        target="_blank"
+                        rel="noreferrer noopener"
+                        onClick={(e) => e.stopPropagation()}
+                        className="mt-1 inline-flex items-center gap-1 text-[11px] text-blue-400 hover:text-blue-300 transition-colors"
+                        title="Abrir link do documento"
+                      >
+                        <ExternalLink size={10} />
+                        Abrir link
+                      </a>
                     )}
                   </div>
                   <div className="shrink-0 flex flex-col items-end gap-1 text-[11px]">

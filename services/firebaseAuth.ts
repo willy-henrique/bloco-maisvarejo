@@ -67,6 +67,25 @@ export async function resetPassword(email: string): Promise<void> {
   await sendPasswordResetEmail(auth, email);
 }
 
+export async function adminSetUserPassword(uid: string, newPassword: string): Promise<void> {
+  const auth = getFirebaseAuth();
+  const current = auth?.currentUser;
+  if (!auth || !current) throw new Error('Sessão inválida. Faça login novamente.');
+  const idToken = await current.getIdToken();
+  const resp = await fetch('/api/admin-change-password', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${idToken}`,
+    },
+    body: JSON.stringify({ uid, newPassword }),
+  });
+  if (!resp.ok) {
+    const data = (await resp.json().catch(() => ({}))) as { error?: string };
+    throw new Error(data.error || 'Falha ao alterar senha');
+  }
+}
+
 export async function getUserProfile(uid: string): Promise<UserProfile | null> {
   const db = getDb();
   if (!db) return null;

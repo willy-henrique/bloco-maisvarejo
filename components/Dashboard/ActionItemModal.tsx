@@ -38,6 +38,7 @@ interface ActionItemModalProps {
 const emptyForm = (whoDefault: string): Omit<ActionItem, 'id' | 'createdAt' | 'updatedAt'> => ({
   what: '',
   why: '',
+  link: '',
   where: '',
   when: new Date().toISOString().split('T')[0],
   who: whoDefault,
@@ -89,6 +90,7 @@ export const ActionItemModal: React.FC<ActionItemModalProps> = ({
       setForm({
         what: item.what,
         why: item.why,
+        link: item.link ?? '',
         where: item.where,
         when: item.when,
         who: whoValue,
@@ -169,6 +171,20 @@ export const ActionItemModal: React.FC<ActionItemModalProps> = ({
               placeholder={isBacklogLike ? 'Descrição do backlog' : 'Justificativa estratégica'}
               rows={isBacklogLike ? 6 : 3}
               className="w-full bg-slate-800/50 border border-slate-700 rounded-lg px-3 py-2.5 text-sm text-slate-300 placeholder:text-slate-500 outline-none focus:border-slate-600 resize-y min-h-[140px] md:min-h-[180px] disabled:opacity-60"
+              readOnly={readOnly}
+              disabled={readOnly}
+            />
+          </div>
+          <div className="md:col-span-2">
+            <label className="block text-[10px] font-medium text-slate-500 uppercase tracking-wider mb-1.5">
+              Link (Google Docs, Drive, etc.)
+            </label>
+            <input
+              type="text"
+              value={form.link ?? ''}
+              onChange={(e) => update('link', e.target.value)}
+              placeholder="docs.google.com/... ou https://..."
+              className="w-full bg-slate-800/50 border border-slate-700 rounded-lg px-3 py-2.5 text-sm text-slate-100 placeholder:text-slate-500 outline-none focus:border-slate-600 disabled:opacity-60"
               readOnly={readOnly}
               disabled={readOnly}
             />

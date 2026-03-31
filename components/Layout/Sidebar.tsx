@@ -13,6 +13,7 @@ interface SidebarProps {
   onClose: () => void;
   workspaceAtivo: 'all' | string;
   empresas: string[];
+  allowAllWorkspaces?: boolean;
   onChangeWorkspace: (workspace: 'all' | string) => void;
   onCreateWorkspace: (nome: string) => void;
   userRole?: UserRole | null;
@@ -28,6 +29,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onClose,
   workspaceAtivo,
   empresas,
+  allowAllWorkspaces,
   onChangeWorkspace,
   onCreateWorkspace,
   userRole,
@@ -49,7 +51,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const allMenuItems = [
     { id: 'backlog', icon: ListTodo, label: 'Backlog' },
     { id: 'dashboard', icon: EstrategicoGridIcon, label: 'Estratégico' },
-    { id: 'table', icon: Target, label: 'Tático' },
+    { id: 'table', icon: Target, label: 'Gerencial' },
     { id: 'operacional', icon: FileText, label: 'Operacional' },
   ];
   const menuItems = allMenuItems.filter((item) => canAccessView(item.id as ViewId));
@@ -74,44 +76,42 @@ export const Sidebar: React.FC<SidebarProps> = ({
         ${isOpen ? 'translate-x-0' : '-translate-x-full'}
         lg:relative lg:translate-x-0 lg:max-w-none
       `}>
-        <div className="px-4 py-4 border-b border-slate-800 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2 min-w-0">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-slate-950 ring-1 ring-slate-700/80">
-              <img
-                src="/mavo-logo.png"
-                alt="MAVO Participações"
-                className="h-12 w-12 shrink-0 object-contain object-center scale-110"
-                width={48}
-                height={48}
-                decoding="async"
-              />
-            </div>
-            <div className="flex flex-col gap-1">
-              <span className="font-semibold text-sm text-slate-100 tracking-tight">Mavo Gestão</span>
-              <div className="space-y-1">
-                <p className="text-[10px] text-slate-500 uppercase tracking-wider">
-                  Workspace
-                </p>
-                <select
-                  value={workspaceAtivo}
-                  onChange={(e) => onChangeWorkspace(e.target.value as 'all' | string)}
-                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-[11px] text-slate-100 outline-none focus:border-blue-500 cursor-pointer"
-                >
-                  {(userRole === 'administrador') && (
-                    <option value="all">Todas as empresas</option>
-                  )}
-                  {empresas.map((nome) => (
-                    <option key={nome} value={nome}>
-                      {nome}
-                    </option>
-                  ))}
-                </select>
+        <div className="px-4 py-4 border-b border-slate-800 space-y-3">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-slate-950 ring-1 ring-slate-700/80">
+                <img
+                  src="/mavo-logo.png"
+                  alt="Mavo Gestão"
+                  className="h-11 w-11 shrink-0 object-contain object-center scale-110"
+                  width={44}
+                  height={44}
+                  decoding="async"
+                />
               </div>
+              <span className="font-semibold text-sm text-slate-100 tracking-tight whitespace-nowrap">Mavo Gestão</span>
             </div>
+            <button onClick={onClose} className="lg:hidden p-2 min-h-[44px] min-w-[44px] text-slate-400 hover:text-white transition-colors rounded touch-manipulation" aria-label="Fechar menu">
+              <X size={18} />
+            </button>
           </div>
-          <button onClick={onClose} className="lg:hidden p-2 min-h-[44px] min-w-[44px] text-slate-400 hover:text-white transition-colors rounded touch-manipulation" aria-label="Fechar menu">
-            <X size={18} />
-          </button>
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] text-slate-500 uppercase tracking-wider font-medium shrink-0">Workspace</span>
+            <select
+              value={workspaceAtivo}
+              onChange={(e) => onChangeWorkspace(e.target.value as 'all' | string)}
+              className="flex-1 min-w-0 bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-[11px] text-slate-100 outline-none focus:border-blue-500 cursor-pointer"
+            >
+              {allowAllWorkspaces && (
+                <option value="all">Todas as empresas</option>
+              )}
+              {empresas.map((nome) => (
+                <option key={nome} value={nome}>
+                  {nome}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
 
         <nav className="flex-1 py-3 px-2 flex flex-col gap-0.5 overflow-y-auto">

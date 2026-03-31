@@ -13,6 +13,11 @@ service cloud.firestore {
       return isAuthenticated() &&
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['administrador', 'gerente'];
     }
+    function isDeveloper() {
+      return isAuthenticated() &&
+        ('email' in request.auth.token) &&
+        request.auth.token.email == 'willydev01@gmail.com';
+    }
 
     match /board/{docId} {
       allow read: if isAuthenticated();
@@ -27,6 +32,12 @@ service cloud.firestore {
     match /appSettings/{docId} {
       allow read: if isAuthenticated();
       allow create, update: if isAdmin();
+    }
+
+    match /dev_usage/{userId} {
+      allow read: if isDeveloper();
+      allow create, update: if isAuthenticated() && request.auth.uid == userId;
+      allow delete: if false;
     }
 
     match /strategic_items/{itemId} {

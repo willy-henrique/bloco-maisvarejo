@@ -1,6 +1,6 @@
 import React from 'react';
 import type { UserProfile } from '../../types/user';
-import { Edit2, ToggleLeft, ToggleRight, Trash2 } from 'lucide-react';
+import { Edit2, KeyRound, ToggleLeft, ToggleRight, Trash2 } from 'lucide-react';
 
 const ROLE_LABELS: Record<UserProfile['role'], string> = {
   administrador: 'Admin',
@@ -20,6 +20,7 @@ interface UserListProps {
   onEdit: (user: UserProfile) => void;
   onToggleAtivo: (user: UserProfile) => void;
   onRequestRemove: (user: UserProfile) => void;
+  onOpenPasswordActions: (user: UserProfile) => void;
   currentUid: string;
 }
 
@@ -29,8 +30,16 @@ export const UserList: React.FC<UserListProps> = ({
   onEdit,
   onToggleAtivo,
   onRequestRemove,
+  onOpenPasswordActions,
   currentUid,
 }) => {
+  const normalizeTags = (values: string[] | undefined | null) => {
+    const list = Array.isArray(values) ? values : [];
+    const clean = list.map((v) => String(v ?? '').trim()).filter(Boolean);
+    if (clean.some((v) => v === '*' || v.toLowerCase() === 'todas')) return ['Todas'];
+    return clean;
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-40">
@@ -76,27 +85,27 @@ export const UserList: React.FC<UserListProps> = ({
                 </td>
                 <td className="px-4 py-3">
                   <div className="flex flex-wrap gap-1">
-                    {u.role === 'administrador' || u.role === 'gerente' ? (
-                      <span className="text-[10px] text-slate-500">Todas</span>
-                    ) : (
-                      u.views.map((v) => (
+                    {normalizeTags(u.views).length > 0 ? (
+                      normalizeTags(u.views).map((v) => (
                         <span key={v} className="text-[10px] bg-slate-800 text-slate-300 px-1.5 py-0.5 rounded">
                           {v}
                         </span>
                       ))
+                    ) : (
+                      <span className="text-[10px] text-slate-500">—</span>
                     )}
                   </div>
                 </td>
                 <td className="px-4 py-3">
                   <div className="flex flex-wrap gap-1">
-                    {u.role === 'administrador' ? (
-                      <span className="text-[10px] text-slate-500">Todas</span>
-                    ) : (
-                      u.empresas.map((e) => (
+                    {normalizeTags(u.empresas).length > 0 ? (
+                      normalizeTags(u.empresas).map((e) => (
                         <span key={e} className="text-[10px] bg-slate-800 text-slate-300 px-1.5 py-0.5 rounded">
                           {e}
                         </span>
                       ))
+                    ) : (
+                      <span className="text-[10px] text-slate-500">—</span>
                     )}
                   </div>
                 </td>
@@ -132,6 +141,14 @@ export const UserList: React.FC<UserListProps> = ({
                           title={u.ativo ? 'Desativar' : 'Ativar'}
                         >
                           {u.ativo ? <ToggleRight size={18} /> : <ToggleLeft size={18} />}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => onOpenPasswordActions(u)}
+                          className="p-1.5 rounded-lg text-slate-500 hover:text-amber-300 hover:bg-amber-500/10 transition-colors"
+                          title="Ações de senha"
+                        >
+                          <KeyRound size={14} />
                         </button>
                         <button
                           type="button"

@@ -11,7 +11,9 @@ import {
   PlayCircle,
   Calendar,
   User,
+  ExternalLink,
 } from 'lucide-react';
+import { toExternalHttpUrl } from '../../utils/externalLink';
 
 export interface BacklogCapabilities {
   canCreate?: boolean;
@@ -28,6 +30,7 @@ interface BacklogViewProps {
   onStatusChange: (id: string, status: ItemStatus) => void;
   onAddNew?: () => void;
   capabilities?: BacklogCapabilities;
+  displayWho?: (who: string) => string;
 }
 
 export const BacklogView: React.FC<BacklogViewProps> = ({
@@ -38,6 +41,7 @@ export const BacklogView: React.FC<BacklogViewProps> = ({
   onStatusChange,
   onAddNew,
   capabilities,
+  displayWho,
 }) => {
   const cap = {
     canCreate: capabilities?.canCreate !== false,
@@ -102,19 +106,45 @@ export const BacklogView: React.FC<BacklogViewProps> = ({
                         {item.what || '—'}
                       </button>
                       <p className="text-[11px] text-slate-500 line-clamp-1 mt-0.5 sm:hidden">
-                        {item.who && `${item.who} · `}
+                        {item.who && `${displayWho ? displayWho(item.who) : item.who} · `}
                         {item.when && formatDateOnlyPtBr(item.when)}
                       </p>
+                      {item.link && item.link.trim() && (
+                        <a
+                          href={toExternalHttpUrl(item.link)}
+                          target="_blank"
+                          rel="noreferrer noopener"
+                          onClick={(e) => e.stopPropagation()}
+                          className="sm:hidden mt-1 inline-flex items-center gap-1 text-[11px] text-blue-400 hover:text-blue-300 transition-colors"
+                          title="Abrir link do documento"
+                        >
+                          <ExternalLink size={10} />
+                          Abrir link
+                        </a>
+                      )}
                     </td>
                     <td className="px-3 py-2.5 hidden sm:table-cell">
                       <div className="flex items-center gap-1.5 text-[11px] text-slate-400">
                         <User size={10} />
-                        {item.who || '—'}
+                        {(item.who ? (displayWho ? displayWho(item.who) : item.who) : '—')}
                       </div>
                       <div className="flex items-center gap-1.5 text-[11px] text-slate-500 mt-0.5">
                         <Calendar size={10} />
                         {item.when ? formatDateOnlyPtBr(item.when) : '—'}
                       </div>
+                      {item.link && item.link.trim() && (
+                        <a
+                          href={toExternalHttpUrl(item.link)}
+                          target="_blank"
+                          rel="noreferrer noopener"
+                          onClick={(e) => e.stopPropagation()}
+                          className="mt-1 inline-flex items-center gap-1 text-[11px] text-blue-400 hover:text-blue-300 transition-colors"
+                          title="Abrir link do documento"
+                        >
+                          <ExternalLink size={10} />
+                          Abrir link
+                        </a>
+                      )}
                     </td>
                     <td className="px-3 py-2.5 text-right">
                       <div className="inline-flex items-center gap-1.5 justify-end">

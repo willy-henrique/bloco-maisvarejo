@@ -84,11 +84,17 @@ export function auditarAtividadeUsuarioNaPlataforma(
     }
   }
 
-  for (const pl of ritmo.planos ?? []) {
-    if (valueTouchesRefs(pl.who_id, refs) || valueTouchesRefs(pl.created_by, refs)) {
-      motivos.push('Existem planos de ataque vinculados a este usuário.');
-      break;
-    }
+  const planosVinculados = (ritmo.planos ?? []).filter(
+    (pl) => valueTouchesRefs(pl.who_id, refs) || valueTouchesRefs(pl.created_by, refs),
+  );
+  if (planosVinculados.length > 0) {
+    const nomes = planosVinculados
+      .map((pl) => (pl.titulo ?? '').trim())
+      .filter(Boolean)
+      .slice(0, 5);
+    const sufixo = planosVinculados.length > nomes.length ? ' ...' : '';
+    const lista = nomes.length > 0 ? ` (${nomes.join(' | ')}${sufixo})` : '';
+    motivos.push(`Existem planos de ataque vinculados a este usuário${lista}.`);
   }
 
   for (const t of ritmo.tarefas ?? []) {

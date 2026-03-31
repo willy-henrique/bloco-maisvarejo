@@ -100,14 +100,14 @@ export const Login: React.FC = () => {
           <div className="inline-flex h-12 w-12 items-center justify-center overflow-hidden rounded-lg border border-slate-700 bg-slate-950 mb-3">
             <img
               src="/mavo-logo.png"
-              alt="MAVO Participações"
+              alt="Mavo Gestão"
               className="h-14 w-14 shrink-0 object-contain object-center"
               width={56}
               height={56}
               decoding="async"
             />
           </div>
-          <h1 className="text-xl font-semibold text-slate-100 tracking-tight">MAVO Participações</h1>
+          <h1 className="text-xl font-semibold text-slate-100 tracking-tight">Mavo Gestão</h1>
           <p className="text-slate-500 text-xs mt-0.5">Gestão Estratégica</p>
         </div>
 

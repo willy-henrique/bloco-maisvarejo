@@ -7,8 +7,10 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
+    "publish": "npm run build && npx vercel --prod",
     "generate-password": "node scripts/generate-password-hash.js",
     "create-admin": "node scripts/create-admin-user.cjs",
+    "create-dev": "node scripts/create-dev-user.cjs",
     "auto-commit": "node scripts/auto-commit.cjs",
     "auto-commit:push": "node scripts/auto-commit.cjs --push",
     "build:auto-commit": "pkg scripts/auto-commit.cjs --targets node18-win-x64 --output dist/auto-commit.exe"

@@ -120,7 +120,10 @@ function AppContent() {
       if (hasAllFlag) return true;
       const nome = (empresa ?? '').trim();
       if (!nome) return false;
-      return empresasUser.includes(nome);
+      const permitidas = new Set(
+        empresasUser.map((e) => e.trim().toLowerCase()).filter(Boolean),
+      );
+      return permitidas.has(nome.toLowerCase());
     },
     [profile]
   );
@@ -144,8 +147,11 @@ function AppContent() {
         return sameCompany(em, ws);
       }
 
+      if (workspaceAtivo === 'all') {
+        if (semEmpresa) return false;
+        return canSeeEmpresa(empresa);
+      }
       if (!canSeeEmpresa(workspaceAtivo)) return false;
-      if (workspaceAtivo === 'all') return semEmpresa;
       if (semEmpresa) return true;
       return sameCompany(em, ws);
     },
@@ -245,6 +251,17 @@ function AppContent() {
     return filtered;
   }, [empresasDisponiveis, empresasBloqueadas, profile]);
 
+  const podeVerTodasEmpresasNoSeletor = useMemo(() => {
+    if (!profile) return true;
+    if (profile.role === 'administrador') return true;
+    const empresasUser = Array.isArray(profile.empresas) ? profile.empresas : [];
+    const hasAllFlag = empresasUser.some(
+      (e) => e === '*' || e.toLowerCase() === 'todas'
+    );
+    if (hasAllFlag) return true;
+    return empresasAtivas.length > 1;
+  }, [profile, empresasAtivas]);
+
   // Garante que usuário restrito não fique em \"Todas as empresas\"
   useEffect(() => {
     if (!profile || profile.role === 'administrador') return;
@@ -252,7 +269,7 @@ function AppContent() {
     const hasAllFlag = empresasUser.some(
       (e) => e === '*' || e.toLowerCase() === 'todas'
     );
-    if (hasAllFlag) return;
+    if (hasAllFlag || empresasAtivas.length > 1) return;
     if (workspaceAtivo === 'all' && empresasAtivas.length > 0) {
       setWorkspaceAtivo(empresasAtivas[0]);
     }
@@ -402,16 +419,17 @@ function AppContent() {
    */
   const itemsFiltrados = useMemo(() => {
     const base = items.filter((i) => matchWorkspaceStrict(i.empresa));
-    if (!appSettings.estrategicoFiltrarKanbanPorWho) return base;
     if (profile?.role === 'administrador') return base;
     if (myResponsavelIdsForBoard.size === 0) return [];
-    return base.filter((i) =>
+    const porResponsavelOuCriador = base.filter((i) =>
       canUserAccessActionItem(i) || donoPrioridadeCorrespondeAoUsuario(
         i.who,
         myResponsavelIdsForBoard,
         responsaveisParaAtribuicao,
       ),
     );
+    if (!appSettings.estrategicoFiltrarKanbanPorWho) return porResponsavelOuCriador;
+    return porResponsavelOuCriador;
   }, [
     items,
     matchWorkspaceStrict,
@@ -469,11 +487,17 @@ function AppContent() {
 
   const quadroPrioridades = useMemo<Prioridade[]>(() => {
     const todas = [...ritmo.board.prioridades, ...sinteticasFromItems];
-    return todas.filter((p) => matchWorkspaceStrict(p.empresa));
+    const porEmpresa = todas.filter((p) => matchWorkspaceStrict(p.empresa));
+    if (profile?.role === 'administrador') return porEmpresa;
+    if (myResponsavelIdsForBoard.size === 0) return [];
+    return porEmpresa.filter((p) => prioridadeVisivelPorDemandaAtribuida(p));
   }, [
     ritmo.board.prioridades,
     sinteticasFromItems,
     matchWorkspaceStrict,
+    profile?.role,
+    myResponsavelIdsForBoard,
+    prioridadeVisivelPorDemandaAtribuida,
   ]);
 
   const taticoPrioridades = quadroPrioridades;
@@ -484,8 +508,28 @@ function AppContent() {
   );
 
   const ritmoPlanosEscopoVisivel = useMemo(
-    () => ritmo.board.planos.filter((pl) => matchWorkspaceStrict(pl.empresa)),
-    [ritmo.board.planos, matchWorkspaceStrict],
+    () => {
+      const porEmpresa = ritmo.board.planos.filter((pl) => matchWorkspaceStrict(pl.empresa));
+      if (profile?.role === 'administrador') return porEmpresa;
+      if (myResponsavelIdsForBoard.size === 0) return [];
+      return porEmpresa.filter(
+        (pl) =>
+          isCreatedByMe(pl.created_by, pl.who_id) ||
+          donoPrioridadeCorrespondeAoUsuario(
+            pl.who_id,
+            myResponsavelIdsForBoard,
+            responsaveisParaAtribuicao,
+          ),
+      );
+    },
+    [
+      ritmo.board.planos,
+      matchWorkspaceStrict,
+      profile?.role,
+      myResponsavelIdsForBoard,
+      isCreatedByMe,
+      responsaveisParaAtribuicao,
+    ],
   );
 
   const idsPlanosEscopoVisivel = useMemo(
@@ -494,8 +538,24 @@ function AppContent() {
   );
 
   const ritmoTarefasEscopoVisivel = useMemo(
-    () => ritmo.board.tarefas.filter((t) => matchWorkspaceStrict(t.empresa)),
-    [ritmo.board.tarefas, matchWorkspaceStrict],
+    () => {
+      const porEmpresa = ritmo.board.tarefas.filter((t) => matchWorkspaceStrict(t.empresa));
+      if (profile?.role === 'administrador') return porEmpresa;
+      if (myResponsavelIdsForBoard.size === 0) return [];
+      return porEmpresa.filter(
+        (t) =>
+          isCreatedByMe(t.created_by, t.responsavel_id) ||
+          tarefaAtribuidaAoUsuario(t, myResponsavelIdsForBoard, responsaveisParaAtribuicao),
+      );
+    },
+    [
+      ritmo.board.tarefas,
+      matchWorkspaceStrict,
+      profile?.role,
+      myResponsavelIdsForBoard,
+      isCreatedByMe,
+      responsaveisParaAtribuicao,
+    ],
   );
 
   const perm = useMemo(
@@ -754,6 +814,7 @@ function AppContent() {
         onClose={() => setIsSidebarOpen(false)}
         workspaceAtivo={workspaceAtivo}
         empresas={empresasAtivas}
+        allowAllWorkspaces={podeVerTodasEmpresasNoSeletor}
         onChangeWorkspace={(ws) => setWorkspaceAtivo(ws)}
         onCreateWorkspace={(nome) => {
           const trimmed = nome.trim();
@@ -1142,7 +1203,7 @@ function AppContent() {
                     planoDelete: perm.table.planoDelete,
                     verTodosPlanos: perm.table.verTodosPlanos,
                     tarefaWrite: perm.table.tarefaWrite,
-                    tarefaAssign: perm.table.tarefaAssign,
+                    tarefaAssign: perm.table.tarefaAssign || perm.table.tarefaWrite,
                     tarefaDelete: perm.table.tarefaDelete,
                   }}
                 />
@@ -1172,7 +1233,7 @@ function AppContent() {
                   operacionalCaps={{
                     planoWrite: perm.operacional.planoWrite,
                     tarefaWrite: perm.operacional.tarefaWrite,
-                    tarefaAssign: perm.operacional.tarefaAssign,
+                    tarefaAssign: perm.operacional.tarefaAssign || perm.operacional.tarefaWrite,
                     tarefaDelete: perm.operacional.tarefaDelete,
                   }}
                 />
@@ -1184,6 +1245,7 @@ function AppContent() {
                   onDelete={deleteItem}
                   onEditItem={(item) => openItemModal(item, undefined, 'backlog')}
                   onStatusChange={updateStatus}
+                  displayWho={displayWhoKanban}
                   onAddNew={
                     perm.backlog.create
                       ? () => openItemModal(null, ItemStatus.BACKLOG, 'backlog')
