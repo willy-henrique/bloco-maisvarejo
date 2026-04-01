@@ -36,6 +36,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   allowedViews,
   userName,
 }) => {
+
   const isAdmin = userRole === 'administrador';
   /** Gerente sem views cadastradas = acesso a todas (compatível com perfis antigos). */
   const gerenteLegacyFull =

@@ -177,13 +177,29 @@ export const AdminPanel: React.FC = () => {
   const handleUpdate = async (uid: string, data: Partial<UserProfile>) => {
     setError('');
     setSuccess('');
+    if (
+      uid === currentAdmin?.uid &&
+      data.role != null &&
+      data.role !== 'administrador'
+    ) {
+      setError('Você não pode remover seu próprio perfil de administrador durante esta sessão.');
+      return;
+    }
     try {
       await updateUserProfile(uid, data);
       setSuccess('Usuário atualizado com sucesso.');
       setView('list');
       setEditingUser(null);
       await loadUsers();
-    } catch {
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : '';
+      if (
+        msg.includes('permission-denied') ||
+        msg.includes('Missing or insufficient permissions')
+      ) {
+        setError('Seu usuário não é mais administrador. Faça login com um administrador para continuar.');
+        return;
+      }
       setError('Erro ao atualizar usuário.');
     }
   };
@@ -713,6 +729,7 @@ export const AdminPanel: React.FC = () => {
             <UserForm
               mode={view === 'create' ? 'create' : 'edit'}
               user={editingUser}
+              currentUid={currentAdmin?.uid}
               empresasDisponiveis={ritmo.empresas ?? []}
               onCreate={handleCreate}
               onUpdate={handleUpdate}

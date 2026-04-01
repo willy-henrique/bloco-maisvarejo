@@ -606,6 +606,7 @@ export const OperacionalView: React.FC<OperacionalProps> = ({
   operacionalCaps,
 }) => {
   const [abaAtiva, setAbaAtiva] = useState<'planos' | 'tarefas'>('planos');
+  const [concluidasOpen, setConcluidasOpen] = useState(false);
   const oc = {
     planoWrite: operacionalCaps?.planoWrite !== false,
     tarefaWrite: operacionalCaps?.tarefaWrite !== false,
@@ -692,27 +693,27 @@ export const OperacionalView: React.FC<OperacionalProps> = ({
     if (viewerSeesAllTarefasNoPlano) {
       return [...tarefasBase].sort((a, b) => a.data_vencimento - b.data_vencimento);
     }
-    const prioridadesDono = new Set(
-      visiblePrioridades
-        .filter((p) => donoPrioridadeCorrespondeAoUsuario(p.dono_id, myResponsavelIds, responsaveis))
-        .map((p) => p.id),
+    const filtradas = tarefasBase.filter((t) =>
+      tarefaAtribuidaAoUsuario(t, myResponsavelIds, responsaveis),
     );
-    const filtradas = tarefasBase.filter((t) => {
-      const pl = planoById.get(t.plano_id);
-      if (!pl) return false;
-      if (prioridadesDono.has(pl.prioridade_id)) return true;
-      return tarefaAtribuidaAoUsuario(t, myResponsavelIds, responsaveis);
-    });
     return filtradas.sort((a, b) => a.data_vencimento - b.data_vencimento);
   }, [
     tarefas,
     visiblePlanos,
     viewerSeesAllTarefasNoPlano,
-    visiblePrioridades,
     myResponsavelIds,
     responsaveis,
-    planoById,
   ]);
+
+  const visibleTarefasAtivas = useMemo(
+    () => visibleTarefas.filter((t) => t.status_tarefa !== 'Concluida'),
+    [visibleTarefas],
+  );
+
+  const visibleTarefasConcluidas = useMemo(
+    () => visibleTarefas.filter((t) => t.status_tarefa === 'Concluida'),
+    [visibleTarefas],
+  );
 
   return (
     <section className="bg-slate-900/60 border border-slate-800 rounded-xl overflow-hidden">
@@ -796,88 +797,152 @@ export const OperacionalView: React.FC<OperacionalProps> = ({
               Nenhuma tarefa operacional disponível {seesAllPrioridades ? '' : 'para o seu usuário'}.
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-slate-800 text-[10px] font-semibold text-slate-500 uppercase tracking-wider">
-                    <th className="px-3 py-2 text-left">Status</th>
-                    <th className="px-3 py-2 text-left">Situação</th>
-                    <th className="px-3 py-2 text-left">Tarefa</th>
-                    <th className="px-3 py-2 text-left">Responsável</th>
-                    <th className="px-3 py-2 text-left">Prazo</th>
-                    <th className="px-3 py-2 text-left">Plano</th>
-                    <th className="px-2 py-2 text-right w-16">Ações</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-800/60">
-                  {visibleTarefas.map((t) => {
-                    const pl = planoById.get(t.plano_id);
-                    const respNome = displayNomeDonoPrioridade(t.responsavel_id, responsaveis) || t.responsavel_id;
-                    const cfg = TAREFA_CFG[t.status_tarefa] || TAREFA_CFG.Pendente;
-                    const StatusIcon = cfg.Icon;
-                    return (
-                      <tr key={t.id} className="hover:bg-slate-800/20 transition-colors">
-                        <td className="px-3 py-2">
-                          <button
-                            type="button"
-                            disabled={!oc.tarefaWrite}
-                            onClick={() => {
-                              const idx = TAREFA_ORDER.indexOf(t.status_tarefa);
-                              const next = TAREFA_ORDER[(idx + 1) % TAREFA_ORDER.length];
-                              onUpdateTarefa(t.id, { status_tarefa: next });
-                            }}
-                            className="text-slate-500 hover:text-slate-200 disabled:opacity-40 disabled:pointer-events-none"
-                            title="Alternar status"
-                          >
-                            <StatusIcon
-                              size={14}
-                              className={
-                                t.status_tarefa === 'Bloqueada'
-                                  ? 'text-red-400'
-                                  : t.status_tarefa === 'Concluida' || t.status_tarefa === 'EmExecucao'
-                                    ? 'text-emerald-400'
-                                    : 'text-slate-500'
-                              }
-                            />
-                          </button>
-                        </td>
-                        <td className="px-3 py-2">
-                          <select
-                            value={t.status_tarefa}
-                            onChange={(e) => onUpdateTarefa(t.id, { status_tarefa: e.target.value as StatusTarefa })}
-                            disabled={!oc.tarefaWrite}
-                            className="text-[10px] font-semibold px-2 py-1 rounded-sm uppercase bg-slate-800 border border-slate-700 text-slate-200 outline-none focus:border-slate-500 disabled:opacity-50"
-                          >
-                            <option value="Pendente">PENDENTE</option>
-                            <option value="EmExecucao">EM EXECUÇÃO</option>
-                            <option value="Bloqueada">BLOQUEADA</option>
-                            <option value="Concluida">CONCLUÍDA</option>
-                          </select>
-                        </td>
-                        <td className="px-3 py-2">
-                          <p className="text-slate-200 text-sm">{t.titulo}</p>
-                          {t.descricao ? <p className="text-[11px] text-slate-500 truncate">{t.descricao}</p> : null}
-                        </td>
-                        <td className="px-3 py-2 text-slate-300">{respNome || '—'}</td>
-                        <td className="px-3 py-2 text-slate-400">{fmtDate(t.data_vencimento)}</td>
-                        <td className="px-3 py-2 text-slate-400">{pl?.titulo ?? '—'}</td>
-                        <td className="px-2 py-2 text-right">
-                          {oc.tarefaDelete && (
+            <div className="space-y-3">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-slate-800 text-[10px] font-semibold text-slate-500 uppercase tracking-wider">
+                      <th className="px-3 py-2 text-left">Status</th>
+                      <th className="px-3 py-2 text-left">Situação</th>
+                      <th className="px-3 py-2 text-left">Tarefa</th>
+                      <th className="px-3 py-2 text-left">Responsável</th>
+                      <th className="px-3 py-2 text-left">Prazo</th>
+                      <th className="px-3 py-2 text-left">Plano</th>
+                      <th className="px-2 py-2 text-right w-16">Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800/60">
+                    {visibleTarefasAtivas.map((t) => {
+                      const pl = planoById.get(t.plano_id);
+                      const respNome = displayNomeDonoPrioridade(t.responsavel_id, responsaveis) || t.responsavel_id;
+                      const cfg = TAREFA_CFG[t.status_tarefa] || TAREFA_CFG.Pendente;
+                      const StatusIcon = cfg.Icon;
+                      return (
+                        <tr key={t.id} className="hover:bg-slate-800/20 transition-colors">
+                          <td className="px-3 py-2">
                             <button
                               type="button"
-                              onClick={() => onDeleteTarefa(t.id)}
-                              className="p-1.5 rounded text-slate-600 hover:text-red-400 hover:bg-red-500/10 transition-colors"
-                              title="Excluir"
+                              disabled={!oc.tarefaWrite}
+                              onClick={() => {
+                                const idx = TAREFA_ORDER.indexOf(t.status_tarefa);
+                                const next = TAREFA_ORDER[(idx + 1) % TAREFA_ORDER.length];
+                                onUpdateTarefa(t.id, { status_tarefa: next });
+                              }}
+                              className="text-slate-500 hover:text-slate-200 disabled:opacity-40 disabled:pointer-events-none"
+                              title="Alternar status"
                             >
-                              <Trash2 size={13} />
+                              <StatusIcon
+                                size={14}
+                                className={
+                                  t.status_tarefa === 'Bloqueada'
+                                    ? 'text-red-400'
+                                    : t.status_tarefa === 'Concluida' || t.status_tarefa === 'EmExecucao'
+                                      ? 'text-emerald-400'
+                                      : 'text-slate-500'
+                                }
+                              />
                             </button>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+                          </td>
+                          <td className="px-3 py-2">
+                            <select
+                              value={t.status_tarefa}
+                              onChange={(e) => onUpdateTarefa(t.id, { status_tarefa: e.target.value as StatusTarefa })}
+                              disabled={!oc.tarefaWrite}
+                              className="text-[10px] font-semibold px-2 py-1 rounded-sm uppercase bg-slate-800 border border-slate-700 text-slate-200 outline-none focus:border-slate-500 disabled:opacity-50"
+                            >
+                              <option value="Pendente">PENDENTE</option>
+                              <option value="EmExecucao">EM EXECUÇÃO</option>
+                              <option value="Bloqueada">BLOQUEADA</option>
+                              <option value="Concluida">CONCLUÍDA</option>
+                            </select>
+                          </td>
+                          <td className="px-3 py-2">
+                            <p className="text-slate-200 text-sm">{t.titulo}</p>
+                            {t.descricao ? <p className="text-[11px] text-slate-500 truncate">{t.descricao}</p> : null}
+                          </td>
+                          <td className="px-3 py-2 text-slate-300">{respNome || '—'}</td>
+                          <td className="px-3 py-2 text-slate-400">{fmtDate(t.data_vencimento)}</td>
+                          <td className="px-3 py-2 text-slate-400">{pl?.titulo ?? '—'}</td>
+                          <td className="px-2 py-2 text-right">
+                            {oc.tarefaDelete && (
+                              <button
+                                type="button"
+                                onClick={() => onDeleteTarefa(t.id)}
+                                className="p-1.5 rounded text-slate-600 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                                title="Excluir"
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {visibleTarefasConcluidas.length > 0 && (
+                <section className="bg-slate-900/30 border border-slate-800/80 rounded-lg overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => setConcluidasOpen((o) => !o)}
+                    className="w-full px-4 py-3 flex items-center justify-between text-left hover:bg-slate-800/30 transition-colors"
+                  >
+                    <div className="flex items-center gap-2 text-slate-400">
+                      {concluidasOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                      <CheckCircle size={14} className="text-emerald-500/80" />
+                      <span className="text-xs font-medium text-slate-300">Concluídas</span>
+                    </div>
+                    <span className="text-[10px] text-slate-600 bg-slate-800 px-2 py-0.5 rounded tabular-nums">
+                      {visibleTarefasConcluidas.length}
+                    </span>
+                  </button>
+                  {concluidasOpen && (
+                    <div className="overflow-x-auto border-t border-slate-800/80">
+                      <table className="w-full text-sm">
+                        <tbody className="divide-y divide-slate-800/60">
+                          {visibleTarefasConcluidas.map((t) => {
+                            const pl = planoById.get(t.plano_id);
+                            const respNome = displayNomeDonoPrioridade(t.responsavel_id, responsaveis) || t.responsavel_id;
+                            return (
+                              <tr key={t.id} className="hover:bg-slate-800/20 transition-colors">
+                                <td className="px-3 py-2 w-[90px]">
+                                  <CheckCircle size={14} className="text-emerald-400" />
+                                </td>
+                                <td className="px-3 py-2 w-[120px]">
+                                  <span className="text-[10px] font-semibold px-2 py-1 rounded-sm uppercase bg-slate-800 border border-slate-700 text-slate-300">
+                                    CONCLUÍDA
+                                  </span>
+                                </td>
+                                <td className="px-3 py-2">
+                                  <p className="text-slate-300 text-sm line-through">{t.titulo}</p>
+                                  {t.descricao ? <p className="text-[11px] text-slate-600 truncate">{t.descricao}</p> : null}
+                                </td>
+                                <td className="px-3 py-2 text-slate-400">{respNome || '—'}</td>
+                                <td className="px-3 py-2 text-slate-500">{fmtDate(t.data_vencimento)}</td>
+                                <td className="px-3 py-2 text-slate-500">{pl?.titulo ?? '—'}</td>
+                                <td className="px-2 py-2 text-right w-16">
+                                  {oc.tarefaDelete && (
+                                    <button
+                                      type="button"
+                                      onClick={() => onDeleteTarefa(t.id)}
+                                      className="p-1.5 rounded text-slate-600 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                                      title="Excluir"
+                                    >
+                                      <Trash2 size={13} />
+                                    </button>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </section>
+              )}
             </div>
           )}
         </div>

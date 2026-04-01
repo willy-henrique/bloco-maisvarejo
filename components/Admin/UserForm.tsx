@@ -31,6 +31,7 @@ const ROLES: { id: UserRole; label: string; hint: string }[] = [
 interface UserFormProps {
   mode: 'create' | 'edit';
   user: UserProfile | null;
+  currentUid?: string;
   empresasDisponiveis: string[];
   onCreate: (data: {
     nome: string;
@@ -48,6 +49,7 @@ interface UserFormProps {
 export const UserForm: React.FC<UserFormProps> = ({
   mode,
   user,
+  currentUid,
   empresasDisponiveis,
   onCreate,
   onUpdate,
@@ -188,6 +190,11 @@ export const UserForm: React.FC<UserFormProps> = ({
   };
 
   const hasAllEmpresas = empresas.includes('*');
+  const isEditingSelfAdmin =
+    mode === 'edit' &&
+    !!user &&
+    user.uid === currentUid &&
+    user.role === 'administrador';
 
   return (
     <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-5 max-w-3xl">
@@ -246,11 +253,12 @@ export const UserForm: React.FC<UserFormProps> = ({
                 key={r.id}
                 type="button"
                 onClick={() => handleRoleClick(r.id)}
+                disabled={isEditingSelfAdmin && r.id !== 'administrador'}
                 className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
                   role === r.id
                     ? 'bg-amber-600 border-amber-500 text-white'
                     : 'bg-slate-900 border-slate-700 text-slate-300 hover:border-slate-500'
-                }`}
+                } ${isEditingSelfAdmin && r.id !== 'administrador' ? 'opacity-50 cursor-not-allowed' : ''}`}
               >
                 {r.label}
               </button>
@@ -259,6 +267,11 @@ export const UserForm: React.FC<UserFormProps> = ({
           <p className="text-[10px] text-slate-500 mt-2 leading-relaxed">
             {ROLES.find((r) => r.id === role)?.hint}
           </p>
+          {isEditingSelfAdmin && (
+            <p className="text-[10px] text-amber-400/90 mt-2">
+              Você não pode remover seu próprio perfil de administrador nesta sessão.
+            </p>
+          )}
         </div>
 
         {showViewsAndActions && (
