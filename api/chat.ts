@@ -66,6 +66,24 @@ Use seu conhecimento em: O quê? Por quê? Onde? Quem? Quando? Como? Priorizaç�
 4. Ao final, quando for natural, sugira um próximo passo (ex.: cadastrar o próximo lead, enviar no mês corrente).
 5. Sempre em português; tom profissional e cordial.`;
 
+async function verifyFirebaseToken(authHeader: string | null): Promise<boolean> {
+  if (!authHeader || !authHeader.startsWith('Bearer ')) return false;
+  const idToken = authHeader.slice(7);
+  if (!idToken || idToken.length < 50) return false;
+  try {
+    const projectId = process.env.VITE_FIREBASE_PROJECT_ID || 'maisvarejo-39c6d';
+    const url = `https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${process.env.VITE_FIREBASE_API_KEY || ''}`;
+    const resp = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ idToken }),
+    });
+    return resp.ok;
+  } catch {
+    return false;
+  }
+}
+
 export default {
   async fetch(request: Request): Promise<Response> {
     if (request.method === 'OPTIONS') {
@@ -77,6 +95,12 @@ export default {
 
     if (request.method !== 'POST') {
       return json({ error: 'Método não permitido' }, 405, request);
+    }
+
+    const authHeader = request.headers.get('Authorization');
+    const isAuth = await verifyFirebaseToken(authHeader);
+    if (!isAuth) {
+      return json({ error: 'Não autorizado' }, 401, request);
     }
 
     const apiKey = process.env.GROQ_API_KEY;
@@ -148,11 +172,19 @@ function json(body: object, status: number, request: Request): Response {
   });
 }
 
+const ALLOWED_ORIGINS = [
+  'https://mavo-gestao.vercel.app',
+  'https://bloco-maisvarejo.vercel.app',
+  'http://localhost:3000',
+  'http://localhost:5173',
+];
+
 function corsHeaders(request: Request): Record<string, string> {
-  const origin = request.headers.get('Origin') || '*';
+  const origin = request.headers.get('Origin') || '';
+  const allowed = ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
   return {
-    'Access-Control-Allow-Origin': origin,
+    'Access-Control-Allow-Origin': allowed,
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
   };
 }

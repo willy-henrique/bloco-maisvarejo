@@ -26,8 +26,12 @@ const auth = admin.auth();
 const db = admin.firestore();
 
 async function main() {
-  const email = 'gustavoluis@diretoria.com';
-  const password = 'admin2026';
+  const email = process.env.ADMIN_EMAIL || 'gustavoluis@diretoria.com';
+  const password = process.env.ADMIN_PASSWORD;
+  if (!password) {
+    console.error('Defina ADMIN_PASSWORD. Ex.: $env:ADMIN_PASSWORD="SuaSenha123"');
+    process.exit(1);
+  }
 
   let userRecord;
   try {

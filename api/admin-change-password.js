@@ -34,7 +34,7 @@ module.exports = async (req, res) => {
     await admin.auth().updateUser(String(uid), { password: String(newPassword) });
     return res.status(200).json({ ok: true });
   } catch (err) {
-    const msg = err instanceof Error ? err.message : 'Erro interno';
-    return res.status(500).json({ error: msg });
+    console.error('admin-change-password error:', err);
+    return res.status(500).json({ error: 'Erro interno ao processar a solicitação.' });
   }
 };

@@ -1,7 +1,10 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Send, Loader2, Sparkles, MessageSquarePlus, Trash2, MessageCircle, ChevronRight } from 'lucide-react';
+import { getFirebaseAuth } from '../../services/firebase';
+import { encryptChat, decryptChat } from '../../services/chatCrypto';
 
 const STORAGE_KEY = '@Estrategico:ChatConversations';
+const STORAGE_KEY_ENC = '@Estrategico:ChatConversationsEnc';
 
 const ENV_URL = import.meta.env.VITE_5W2H_CHAT_API_URL as string | undefined;
 const API_URL =
@@ -23,8 +26,10 @@ interface Conversation {
   updatedAt: number;
 }
 
-function loadConversations(): Conversation[] {
+function loadConversationsSync(): Conversation[] {
   try {
+    const enc = localStorage.getItem(STORAGE_KEY_ENC);
+    if (enc) return [];
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw) as Conversation[];
@@ -34,9 +39,39 @@ function loadConversations(): Conversation[] {
   }
 }
 
-function saveConversations(conversations: Conversation[]) {
+async function loadConversationsAsync(): Promise<Conversation[]> {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(conversations));
+    const enc = localStorage.getItem(STORAGE_KEY_ENC);
+    if (enc) {
+      const data = await decryptChat<Conversation[]>(enc);
+      if (data && Array.isArray(data)) return data;
+    }
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as Conversation[];
+    if (Array.isArray(parsed) && parsed.length > 0) {
+      const cipher = await encryptChat(parsed);
+      if (cipher) {
+        localStorage.setItem(STORAGE_KEY_ENC, cipher);
+        localStorage.removeItem(STORAGE_KEY);
+      }
+      return parsed;
+    }
+    return [];
+  } catch {
+    return [];
+  }
+}
+
+async function saveConversationsAsync(conversations: Conversation[]) {
+  try {
+    const cipher = await encryptChat(conversations);
+    if (cipher) {
+      localStorage.setItem(STORAGE_KEY_ENC, cipher);
+      localStorage.removeItem(STORAGE_KEY);
+    } else {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(conversations));
+    }
   } catch {
     // quota or disabled
   }
@@ -57,7 +92,7 @@ interface ChatViewProps {
 }
 
 export const ChatView: React.FC<ChatViewProps> = ({ canSend = true }) => {
-  const [conversations, setConversations] = useState<Conversation[]>(() => loadConversations());
+  const [conversations, setConversations] = useState<Conversation[]>(() => loadConversationsSync());
   const [currentId, setCurrentId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
@@ -66,11 +101,17 @@ export const ChatView: React.FC<ChatViewProps> = ({ canSend = true }) => {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const listRef = useRef<HTMLDivElement>(null);
 
+  useEffect(() => {
+    loadConversationsAsync().then((loaded) => {
+      if (loaded.length > 0) setConversations(loaded);
+    });
+  }, []);
+
   const current = currentId ? conversations.find((c) => c.id === currentId) : null;
 
   const persistConversations = useCallback((next: Conversation[]) => {
     setConversations(next);
-    saveConversations(next);
+    saveConversationsAsync(next);
   }, []);
 
   useEffect(() => {
@@ -158,9 +199,14 @@ export const ChatView: React.FC<ChatViewProps> = ({ canSend = true }) => {
     saveCurrentMessages(nextMessages, newTitle);
 
     try {
+      const fbAuth = getFirebaseAuth();
+      const idToken = fbAuth?.currentUser ? await fbAuth.currentUser.getIdToken() : '';
       const res = await fetch(API_URL, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(idToken ? { Authorization: `Bearer ${idToken}` } : {}),
+        },
         body: JSON.stringify({
           message: text,
           messages: nextMessages.map((m) => ({ role: m.role, content: m.content })),

@@ -35,8 +35,12 @@ async function upsertAuthUser(email, password, displayName) {
 }
 
 async function main() {
-  const email = 'willydev01@gmail.com';
-  const password = 'Claro2014';
+  const email = process.env.DEV_EMAIL || 'willydev01@gmail.com';
+  const password = process.env.DEV_PASSWORD;
+  if (!password) {
+    console.error('Defina DEV_PASSWORD. Ex.: $env:DEV_PASSWORD="SuaSenha123"');
+    process.exit(1);
+  }
   const nome = 'Willy Dev';
 
   const uid = await upsertAuthUser(email, password, nome);

@@ -14,6 +14,7 @@ dist-ssr
 .env
 .env-old
 serviceAccountKey.json
+*firebase-adminsdk*.json
 
 # Editor directories and files
 .vscode/*
