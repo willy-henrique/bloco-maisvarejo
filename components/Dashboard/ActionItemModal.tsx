@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { ActionItem, ItemStatus, UrgencyLevel, Responsavel } from '../../types';
 import { Modal } from '../Shared/Modal';
-import { MapPin, User, Calendar } from 'lucide-react';
+import { MapPin, User, Calendar, ExternalLink } from 'lucide-react';
 import { ResponsavelAutocomplete } from './ResponsavelAutocomplete';
 import { resolveResponsavelDisplay } from './responsavelSearchUtils';
+import { toExternalHttpUrl } from '../../utils/externalLink';
 
 interface ActionItemModalProps {
   isOpen: boolean;
@@ -179,15 +180,31 @@ export const ActionItemModal: React.FC<ActionItemModalProps> = ({
             <label className="block text-[10px] font-medium text-slate-500 uppercase tracking-wider mb-1.5">
               Link (Google Docs, Drive, etc.)
             </label>
-            <input
-              type="text"
-              value={form.link ?? ''}
-              onChange={(e) => update('link', e.target.value)}
-              placeholder="docs.google.com/... ou https://..."
-              className="w-full bg-slate-800/50 border border-slate-700 rounded-lg px-3 py-2.5 text-sm text-slate-100 placeholder:text-slate-500 outline-none focus:border-slate-600 disabled:opacity-60"
-              readOnly={readOnly}
-              disabled={readOnly}
-            />
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                value={form.link ?? ''}
+                onChange={(e) => update('link', e.target.value)}
+                placeholder="docs.google.com/... ou https://..."
+                className="flex-1 min-w-0 bg-slate-800/50 border border-slate-700 rounded-lg px-3 py-2.5 text-sm text-slate-100 placeholder:text-slate-500 outline-none focus:border-slate-600 disabled:opacity-60"
+                readOnly={readOnly}
+                disabled={readOnly}
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  const url = toExternalHttpUrl(form.link);
+                  if (!url) return;
+                  window.open(url, '_blank', 'noopener,noreferrer');
+                }}
+                disabled={!toExternalHttpUrl(form.link)}
+                className="inline-flex items-center gap-1.5 px-3 py-2.5 rounded-lg border border-blue-500/40 bg-blue-500/10 text-blue-300 hover:bg-blue-500/20 disabled:opacity-40 disabled:cursor-not-allowed"
+                title="Abrir documento"
+              >
+                <ExternalLink size={14} />
+                <span className="text-xs font-medium">Abrir</span>
+              </button>
+            </div>
           </div>
           {!effectiveHideWhereEmpresa && (
             <>

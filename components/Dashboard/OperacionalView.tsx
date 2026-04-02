@@ -59,14 +59,14 @@ function fmtDate(ts: number): string {
 const STATUS_CFG: Record<StatusPlano, { label: string; cls: string }> = {
   Execucao: { label: 'Em Execucao', cls: 'text-blue-400 bg-blue-500/10 border border-blue-500/30' },
   Bloqueado: { label: 'Bloqueado', cls: 'text-red-400 bg-red-500/10 border border-red-500/30' },
-  Concluido: { label: 'Concluido', cls: 'text-emerald-400 bg-emerald-500/10 border border-emerald-500/30' },
+  Concluido: { label: 'Concluido', cls: 'text-blue-300 bg-blue-500/10 border border-blue-500/30' },
 };
 
 const TAREFA_ORDER: StatusTarefa[] = ['Pendente', 'EmExecucao', 'Bloqueada', 'Concluida'];
 
 const TAREFA_CFG: Record<StatusTarefa, { label: string; cls: string; Icon: React.ElementType }> = {
-  Concluida: { label: 'CONCLUÍDA', cls: 'text-emerald-400 bg-emerald-500/15', Icon: CheckCircle },
-  EmExecucao: { label: 'EM EXECUÇÃO', cls: 'text-emerald-400 bg-emerald-500/15', Icon: Play },
+  Concluida: { label: 'CONCLUÍDA', cls: 'text-blue-300 bg-blue-500/15', Icon: CheckCircle },
+  EmExecucao: { label: 'EM EXECUÇÃO', cls: 'text-blue-300 bg-blue-500/15', Icon: Play },
   Pendente: { label: 'PENDENTE', cls: 'text-slate-400 bg-slate-700/60', Icon: Circle },
   Bloqueada: { label: 'BLOQUEADA', cls: 'text-red-400 bg-red-500/15', Icon: AlertTriangle },
 };
@@ -137,7 +137,7 @@ const TarefaRow: React.FC<{
           className="text-slate-500 hover:text-slate-200 disabled:opacity-40 disabled:pointer-events-none"
           title="Alternar status"
         >
-          <StatusIcon size={14} className={tarefa.status_tarefa === 'Bloqueada' ? 'text-red-400' : tarefa.status_tarefa === 'Concluida' || tarefa.status_tarefa === 'EmExecucao' ? 'text-emerald-400' : 'text-slate-500'} />
+          <StatusIcon size={14} className={tarefa.status_tarefa === 'Bloqueada' ? 'text-red-400' : tarefa.status_tarefa === 'Concluida' || tarefa.status_tarefa === 'EmExecucao' ? 'text-blue-300' : 'text-slate-500'} />
         </button>
       </td>
       <td className="px-4 py-3">
@@ -249,6 +249,7 @@ const OperacionalPlanoCard: React.FC<{
 }) => {
   const [expanded, setExpanded] = useState(false);
   const [showAddTarefa, setShowAddTarefa] = useState(false);
+  const [concluidasNoPlanoOpen, setConcluidasNoPlanoOpen] = useState(false);
   const [novaTarefa, setNovaTarefa] = useState({
     titulo: '',
     responsavel_id: loggedUserResponsavelId ?? '',
@@ -280,6 +281,14 @@ const OperacionalPlanoCard: React.FC<{
     if (isAdmin || donoDestaPrioridade) return list;
     return list.filter((t) => tarefaAtribuidaAoUsuario(t, myResponsavelIds, responsaveis));
   }, [tarefas, plano.id, isAdmin, donoDestaPrioridade, myResponsavelIds, responsaveis]);
+  const tarefasDoPlanoAtivas = useMemo(
+    () => tarefasDoPlano.filter((t) => t.status_tarefa !== 'Concluida'),
+    [tarefasDoPlano],
+  );
+  const tarefasDoPlanoConcluidas = useMemo(
+    () => tarefasDoPlano.filter((t) => t.status_tarefa === 'Concluida'),
+    [tarefasDoPlano],
+  );
 
   const W2H: Array<{
     key: keyof PlanoDeAtaque;
@@ -337,7 +346,7 @@ const OperacionalPlanoCard: React.FC<{
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-4 flex-wrap">
             <div className="min-w-0">
-              <p className="text-[10px] font-semibold text-emerald-500 uppercase tracking-widest flex items-center gap-2">
+              <p className="text-[10px] font-semibold text-blue-400 uppercase tracking-widest flex items-center gap-2">
                 <Target size={9} /> PRIORIDADE
               </p>
               <p className="text-sm font-semibold text-slate-100 truncate">{prioridade.titulo}</p>
@@ -374,7 +383,7 @@ const OperacionalPlanoCard: React.FC<{
             {W2H.map(({ key, label, sub, type }) => (
               <React.Fragment key={key as string}>
                 <div className="pt-0.5">
-                  <p className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest whitespace-nowrap">{label}</p>
+                  <p className="text-[10px] font-bold text-blue-400 uppercase tracking-widest whitespace-nowrap">{label}</p>
                   <p className="text-[10px] text-slate-600">{sub}</p>
                 </div>
                 <div>
@@ -437,7 +446,7 @@ const OperacionalPlanoCard: React.FC<{
           {/* HOW section (igual ao Tático) */}
           <div className="px-6 pb-6">
             <div className="bg-slate-900/60 border border-slate-800 rounded-lg p-4">
-              <p className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest mb-0.5">HOW — EXECUÇÃO</p>
+              <p className="text-[10px] font-bold text-blue-400 uppercase tracking-widest mb-0.5">HOW — EXECUÇÃO</p>
               <p className="text-[10px] text-slate-600 mb-3">Como será feito</p>
               <textarea
                 key={`${plano.id}-how`}
@@ -458,33 +467,85 @@ const OperacionalPlanoCard: React.FC<{
               Nenhuma tarefa ainda. Clique em &quot;Nova Tarefa&quot; para começar.
             </div>
           ) : (
-            <div className="overflow-x-hidden">
-              <table className="w-full table-fixed border-collapse">
-                <thead>
-                  <tr className="border-b border-slate-800 text-[10px] font-semibold text-slate-500 uppercase tracking-wider">
-                    <th className="px-4 py-2 text-left">Status</th>
-                    <th className="px-4 py-2 text-left">Tarefa</th>
-                    <th className="px-4 py-2 text-left">Responsável</th>
-                    <th className="px-4 py-2 text-left">Prazo</th>
-                    <th className="px-4 py-2 text-left">Label</th>
-                    <th className="px-2 py-2 text-right w-16">Ações</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-800/60">
-                  {tarefasDoPlano.map((t) => (
-                    <TarefaRow
-                      key={t.id}
-                      tarefa={t}
-                      responsaveis={responsaveis}
-                      onUpdate={(u) => onUpdateTarefa(t.id, u)}
-                      onDelete={() => onDeleteTarefa(t.id)}
-                      canWriteTarefa={canWriteTarefa}
-                      canAssignTarefa={canAssignTarefa}
-                      canDeleteTarefa={canDeleteTarefa}
-                    />
-                  ))}
-                </tbody>
-              </table>
+            <div className="space-y-3">
+              {tarefasDoPlanoAtivas.length > 0 && (
+                <div className="overflow-x-hidden">
+                  <table className="w-full table-fixed border-collapse">
+                    <thead>
+                      <tr className="border-b border-slate-800 text-[10px] font-semibold text-slate-500 uppercase tracking-wider">
+                        <th className="px-4 py-2 text-left">Status</th>
+                        <th className="px-4 py-2 text-left">Tarefa</th>
+                        <th className="px-4 py-2 text-left">Responsável</th>
+                        <th className="px-4 py-2 text-left">Prazo</th>
+                        <th className="px-4 py-2 text-left">Label</th>
+                        <th className="px-2 py-2 text-right w-16">Ações</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800/60">
+                      {tarefasDoPlanoAtivas.map((t) => (
+                        <TarefaRow
+                          key={t.id}
+                          tarefa={t}
+                          responsaveis={responsaveis}
+                          onUpdate={(u) => onUpdateTarefa(t.id, u)}
+                          onDelete={() => onDeleteTarefa(t.id)}
+                          canWriteTarefa={canWriteTarefa}
+                          canAssignTarefa={canAssignTarefa}
+                          canDeleteTarefa={canDeleteTarefa}
+                        />
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              {tarefasDoPlanoConcluidas.length > 0 && (
+                <section className="bg-slate-900/30 border border-slate-800/80 rounded-lg overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => setConcluidasNoPlanoOpen((o) => !o)}
+                    className="w-full px-4 py-3 flex items-center justify-between text-left hover:bg-slate-800/30 transition-colors"
+                  >
+                    <div className="flex items-center gap-2 text-slate-400">
+                      {concluidasNoPlanoOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                      <CheckCircle size={14} className="text-blue-400/80" />
+                      <span className="text-xs font-medium text-slate-300">Concluídas</span>
+                    </div>
+                    <span className="text-[10px] text-slate-600 bg-slate-800 px-2 py-0.5 rounded tabular-nums">
+                      {tarefasDoPlanoConcluidas.length}
+                    </span>
+                  </button>
+                  {concluidasNoPlanoOpen && (
+                    <div className="overflow-x-hidden border-t border-slate-800/80">
+                      <table className="w-full table-fixed border-collapse">
+                        <thead>
+                          <tr className="border-b border-slate-800 text-[10px] font-semibold text-slate-500 uppercase tracking-wider">
+                            <th className="px-4 py-2 text-left">Status</th>
+                            <th className="px-4 py-2 text-left">Tarefa</th>
+                            <th className="px-4 py-2 text-left">Responsável</th>
+                            <th className="px-4 py-2 text-left">Prazo</th>
+                            <th className="px-4 py-2 text-left">Label</th>
+                            <th className="px-2 py-2 text-right w-16">Ações</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-800/60">
+                          {tarefasDoPlanoConcluidas.map((t) => (
+                            <TarefaRow
+                              key={t.id}
+                              tarefa={t}
+                              responsaveis={responsaveis}
+                              onUpdate={(u) => onUpdateTarefa(t.id, u)}
+                              onDelete={() => onDeleteTarefa(t.id)}
+                              canWriteTarefa={canWriteTarefa}
+                              canAssignTarefa={canAssignTarefa}
+                              canDeleteTarefa={canDeleteTarefa}
+                            />
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </section>
+              )}
             </div>
           )}
 
@@ -509,7 +570,7 @@ const OperacionalPlanoCard: React.FC<{
                     return next;
                   });
                 }}
-                className="flex items-center gap-1 text-[11px] font-medium text-emerald-400 hover:text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 px-3 py-2 rounded-lg transition-colors"
+                className="flex items-center gap-1 text-[11px] font-medium text-blue-300 hover:text-blue-200 bg-blue-500/10 hover:bg-blue-500/20 px-3 py-2 rounded-lg transition-colors"
               >
                 <Plus size={12} /> Nova Tarefa
               </button>
@@ -532,7 +593,7 @@ const OperacionalPlanoCard: React.FC<{
                       if (e.key === 'Escape') setShowAddTarefa(false);
                     }}
                     placeholder="Título da tarefa..."
-                    className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 outline-none focus:border-emerald-500/60 placeholder:text-slate-600"
+                    className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 outline-none focus:border-blue-500/60 placeholder:text-slate-600"
                   />
                 </div>
                 <div>
@@ -555,7 +616,7 @@ const OperacionalPlanoCard: React.FC<{
                     value={novaTarefa.data_vencimento}
                     onChange={(e) => setNovaTarefa((v) => ({ ...v, data_vencimento: e.target.value }))}
                     placeholder="dd/mm/yyyy"
-                    className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 outline-none focus:border-emerald-500/60 cursor-pointer appearance-none"
+                    className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 outline-none focus:border-blue-500/60 cursor-pointer appearance-none"
                   />
                 </div>
               </div>
@@ -575,7 +636,7 @@ const OperacionalPlanoCard: React.FC<{
                     !parseDateBR(novaTarefa.data_vencimento) ||
                     !novaTarefa.responsavel_id.trim()
                   }
-                  className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-medium transition-colors"
+                  className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-medium transition-colors"
                 >
                   Adicionar
                 </button>
@@ -605,8 +666,9 @@ export const OperacionalView: React.FC<OperacionalProps> = ({
   onUpdatePlano,
   operacionalCaps,
 }) => {
-  const [abaAtiva, setAbaAtiva] = useState<'planos' | 'tarefas'>('planos');
-  const [concluidasOpen, setConcluidasOpen] = useState(false);
+  const [abaAtiva, setAbaAtiva] = useState<'planos' | 'tarefas'>('tarefas');
+  const [tarefasConcluidasOpen, setTarefasConcluidasOpen] = useState(false);
+  const [planosConcluidosOpen, setPlanosConcluidosOpen] = useState(false);
   const oc = {
     planoWrite: operacionalCaps?.planoWrite !== false,
     tarefaWrite: operacionalCaps?.tarefaWrite !== false,
@@ -680,6 +742,14 @@ export const OperacionalView: React.FC<OperacionalProps> = ({
     list.sort((a, b) => a.when_fim - b.when_fim);
     return list;
   }, [planos, visiblePrioridades]);
+  const visiblePlanosAtivos = useMemo(
+    () => visiblePlanos.filter((pl) => ((computeStatusPlano(pl.id) || pl.status_plano) as StatusPlano) !== 'Concluido'),
+    [visiblePlanos, computeStatusPlano],
+  );
+  const visiblePlanosConcluidos = useMemo(
+    () => visiblePlanos.filter((pl) => ((computeStatusPlano(pl.id) || pl.status_plano) as StatusPlano) === 'Concluido'),
+    [visiblePlanos, computeStatusPlano],
+  );
 
   const planoById = useMemo(() => {
     const map = new Map<string, PlanoDeAtaque>();
@@ -725,17 +795,6 @@ export const OperacionalView: React.FC<OperacionalProps> = ({
           <div className="inline-flex rounded-lg border border-slate-700 bg-slate-900/60 p-0.5">
             <button
               type="button"
-              onClick={() => setAbaAtiva('planos')}
-              className={`px-2.5 py-1 text-[11px] rounded-md transition-colors ${
-                abaAtiva === 'planos'
-                  ? 'bg-blue-600 text-white'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              Plano de ataque
-            </button>
-            <button
-              type="button"
               onClick={() => setAbaAtiva('tarefas')}
               className={`px-2.5 py-1 text-[11px] rounded-md transition-colors ${
                 abaAtiva === 'tarefas'
@@ -744,6 +803,17 @@ export const OperacionalView: React.FC<OperacionalProps> = ({
               }`}
             >
               Tarefas
+            </button>
+            <button
+              type="button"
+              onClick={() => setAbaAtiva('planos')}
+              className={`px-2.5 py-1 text-[11px] rounded-md transition-colors ${
+                abaAtiva === 'planos'
+                  ? 'bg-blue-600 text-white'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              Plano de ataque
             </button>
           </div>
         </div>
@@ -761,32 +831,84 @@ export const OperacionalView: React.FC<OperacionalProps> = ({
       )}
 
       {abaAtiva === 'planos' && visiblePlanos.length > 0 && (
-        <div className="divide-y divide-slate-800/60 p-4 space-y-4">
-          {visiblePlanos.map((plano) => {
-            const prioridade = prioridadeById.get(plano.prioridade_id) ?? prioridades.find((p) => p.id === plano.prioridade_id) ?? null;
-            if (!prioridade) return null;
-            return (
-              <OperacionalPlanoCard
-                key={plano.id}
-                prioridade={prioridade}
-                plano={plano}
-                tarefas={tarefas}
-                responsaveis={responsaveis}
-                computeStatusPlano={computeStatusPlano}
-                onAddTarefa={onAddTarefa}
-                onUpdateTarefa={onUpdateTarefa}
-                onDeleteTarefa={onDeleteTarefa}
-                onUpdatePlano={onUpdatePlano}
-                loggedUserResponsavelId={loggedUserResponsavelId}
-                isAdmin={viewerSeesAllTarefasNoPlano}
-                myResponsavelIds={myResponsavelIds}
-                canWritePlano={oc.planoWrite}
-                canWriteTarefa={oc.tarefaWrite}
-                canAssignTarefa={oc.tarefaAssign}
-                canDeleteTarefa={oc.tarefaDelete}
-              />
-            );
-          })}
+        <div className="p-4 space-y-4">
+          {visiblePlanosAtivos.length > 0 && (
+            <div className="divide-y divide-slate-800/60 space-y-4">
+              {visiblePlanosAtivos.map((plano) => {
+                const prioridade = prioridadeById.get(plano.prioridade_id) ?? prioridades.find((p) => p.id === plano.prioridade_id) ?? null;
+                if (!prioridade) return null;
+                return (
+                  <OperacionalPlanoCard
+                    key={plano.id}
+                    prioridade={prioridade}
+                    plano={plano}
+                    tarefas={tarefas}
+                    responsaveis={responsaveis}
+                    computeStatusPlano={computeStatusPlano}
+                    onAddTarefa={onAddTarefa}
+                    onUpdateTarefa={onUpdateTarefa}
+                    onDeleteTarefa={onDeleteTarefa}
+                    onUpdatePlano={onUpdatePlano}
+                    loggedUserResponsavelId={loggedUserResponsavelId}
+                    isAdmin={viewerSeesAllTarefasNoPlano}
+                    myResponsavelIds={myResponsavelIds}
+                    canWritePlano={oc.planoWrite}
+                    canWriteTarefa={oc.tarefaWrite}
+                    canAssignTarefa={oc.tarefaAssign}
+                    canDeleteTarefa={oc.tarefaDelete}
+                  />
+                );
+              })}
+            </div>
+          )}
+
+          {visiblePlanosConcluidos.length > 0 && (
+            <section className="bg-slate-900/30 border border-slate-800/80 rounded-lg overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setPlanosConcluidosOpen((o) => !o)}
+                className="w-full px-4 py-3 flex items-center justify-between text-left hover:bg-slate-800/30 transition-colors"
+              >
+                <div className="flex items-center gap-2 text-slate-400">
+                  {planosConcluidosOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                  <CheckCircle size={14} className="text-blue-400/80" />
+                  <span className="text-xs font-medium text-slate-300">Planos concluídos</span>
+                </div>
+                <span className="text-[10px] text-slate-600 bg-slate-800 px-2 py-0.5 rounded tabular-nums">
+                  {visiblePlanosConcluidos.length}
+                </span>
+              </button>
+              {planosConcluidosOpen && (
+                <div className="border-t border-slate-800/80 p-4 space-y-4">
+                  {visiblePlanosConcluidos.map((plano) => {
+                    const prioridade = prioridadeById.get(plano.prioridade_id) ?? prioridades.find((p) => p.id === plano.prioridade_id) ?? null;
+                    if (!prioridade) return null;
+                    return (
+                      <OperacionalPlanoCard
+                        key={plano.id}
+                        prioridade={prioridade}
+                        plano={plano}
+                        tarefas={tarefas}
+                        responsaveis={responsaveis}
+                        computeStatusPlano={computeStatusPlano}
+                        onAddTarefa={onAddTarefa}
+                        onUpdateTarefa={onUpdateTarefa}
+                        onDeleteTarefa={onDeleteTarefa}
+                        onUpdatePlano={onUpdatePlano}
+                        loggedUserResponsavelId={loggedUserResponsavelId}
+                        isAdmin={viewerSeesAllTarefasNoPlano}
+                        myResponsavelIds={myResponsavelIds}
+                        canWritePlano={oc.planoWrite}
+                        canWriteTarefa={oc.tarefaWrite}
+                        canAssignTarefa={oc.tarefaAssign}
+                        canDeleteTarefa={oc.tarefaDelete}
+                      />
+                    );
+                  })}
+                </div>
+              )}
+            </section>
+          )}
         </div>
       )}
 
@@ -837,7 +959,7 @@ export const OperacionalView: React.FC<OperacionalProps> = ({
                                   t.status_tarefa === 'Bloqueada'
                                     ? 'text-red-400'
                                     : t.status_tarefa === 'Concluida' || t.status_tarefa === 'EmExecucao'
-                                      ? 'text-emerald-400'
+                                      ? 'text-blue-300'
                                       : 'text-slate-500'
                                 }
                               />
@@ -886,19 +1008,19 @@ export const OperacionalView: React.FC<OperacionalProps> = ({
                 <section className="bg-slate-900/30 border border-slate-800/80 rounded-lg overflow-hidden">
                   <button
                     type="button"
-                    onClick={() => setConcluidasOpen((o) => !o)}
+                    onClick={() => setTarefasConcluidasOpen((o) => !o)}
                     className="w-full px-4 py-3 flex items-center justify-between text-left hover:bg-slate-800/30 transition-colors"
                   >
                     <div className="flex items-center gap-2 text-slate-400">
-                      {concluidasOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-                      <CheckCircle size={14} className="text-emerald-500/80" />
+                      {tarefasConcluidasOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                      <CheckCircle size={14} className="text-blue-400/80" />
                       <span className="text-xs font-medium text-slate-300">Concluídas</span>
                     </div>
                     <span className="text-[10px] text-slate-600 bg-slate-800 px-2 py-0.5 rounded tabular-nums">
                       {visibleTarefasConcluidas.length}
                     </span>
                   </button>
-                  {concluidasOpen && (
+                  {tarefasConcluidasOpen && (
                     <div className="overflow-x-auto border-t border-slate-800/80">
                       <table className="w-full text-sm">
                         <tbody className="divide-y divide-slate-800/60">
@@ -908,7 +1030,7 @@ export const OperacionalView: React.FC<OperacionalProps> = ({
                             return (
                               <tr key={t.id} className="hover:bg-slate-800/20 transition-colors">
                                 <td className="px-3 py-2 w-[90px]">
-                                  <CheckCircle size={14} className="text-emerald-400" />
+                                  <CheckCircle size={14} className="text-blue-300" />
                                 </td>
                                 <td className="px-3 py-2 w-[120px]">
                                   <span className="text-[10px] font-semibold px-2 py-1 rounded-sm uppercase bg-slate-800 border border-slate-700 text-slate-300">
