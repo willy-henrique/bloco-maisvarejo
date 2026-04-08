@@ -8,7 +8,7 @@ import {
   donoPrioridadeCorrespondeAoUsuario,
   displayNomeDonoPrioridade,
 } from './responsavelSearchUtils';
-import { tarefaAtribuidaAoUsuario } from './taskAssignmentUtils';
+import { canViewByOwnershipOrObserver, tarefaAtribuidaAoUsuario } from './taskAssignmentUtils';
 
 // Utilidades
 function tsFromDateInput(v: string): number {
@@ -289,6 +289,18 @@ const OperacionalPlanoCard: React.FC<{
     () => tarefasDoPlano.filter((t) => t.status_tarefa === 'Concluida'),
     [tarefasDoPlano],
   );
+  const bloqueiosNaoVisiveis = useMemo(() => {
+    if (isAdmin || donoDestaPrioridade) return [];
+    const visiveis = new Set(tarefasDoPlano.map((t) => t.id));
+    return tarefas
+      .filter((t) => t.plano_id === plano.id && !visiveis.has(t.id) && t.status_tarefa === 'Bloqueada')
+      .map((t) => ({
+        id: t.id,
+        titulo: t.titulo,
+        responsavel: displayNomeDonoPrioridade(t.responsavel_id, responsaveis) || t.responsavel_id,
+        motivo: t.bloqueio_motivo || 'Motivo não informado',
+      }));
+  }, [isAdmin, donoDestaPrioridade, tarefasDoPlano, tarefas, plano.id, responsaveis]);
 
   const W2H: Array<{
     key: keyof PlanoDeAtaque;
@@ -468,6 +480,18 @@ const OperacionalPlanoCard: React.FC<{
             </div>
           ) : (
             <div className="space-y-3">
+              {bloqueiosNaoVisiveis.length > 0 && (
+                <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2">
+                  <p className="text-[11px] text-amber-300 font-medium">
+                    Plano bloqueado por tarefa não visível para você
+                  </p>
+                  {bloqueiosNaoVisiveis.slice(0, 3).map((b) => (
+                    <p key={b.id} className="text-[11px] text-amber-200/90 mt-1">
+                      {b.titulo} · {b.responsavel} · {b.motivo}
+                    </p>
+                  ))}
+                </div>
+              )}
               {tarefasDoPlanoAtivas.length > 0 && (
                 <div className="overflow-x-hidden">
                   <table className="w-full table-fixed border-collapse">
@@ -667,6 +691,7 @@ export const OperacionalView: React.FC<OperacionalProps> = ({
   operacionalCaps,
 }) => {
   const [abaAtiva, setAbaAtiva] = useState<'planos' | 'tarefas'>('tarefas');
+  const [visibilityMode, setVisibilityMode] = useState<'mine' | 'following'>('mine');
   const [tarefasConcluidasOpen, setTarefasConcluidasOpen] = useState(false);
   const [planosConcluidosOpen, setPlanosConcluidosOpen] = useState(false);
   const oc = {
@@ -709,17 +734,26 @@ export const OperacionalView: React.FC<OperacionalProps> = ({
     if (myResponsavelIds.size > 0) {
       const prioIds = new Set<string>();
       for (const p of prioridades) {
-        if (donoPrioridadeCorrespondeAoUsuario(p.dono_id, myResponsavelIds, responsaveis)) {
+        if (
+          donoPrioridadeCorrespondeAoUsuario(p.dono_id, myResponsavelIds, responsaveis) ||
+          canViewByOwnershipOrObserver([p.dono_id], p.observadores, myResponsavelIds, responsaveis)
+        ) {
           prioIds.add(p.id);
         }
       }
       for (const pl of planos) {
-        if (donoPrioridadeCorrespondeAoUsuario(pl.who_id, myResponsavelIds, responsaveis)) {
+        if (
+          donoPrioridadeCorrespondeAoUsuario(pl.who_id, myResponsavelIds, responsaveis) ||
+          canViewByOwnershipOrObserver([pl.who_id], pl.observadores, myResponsavelIds, responsaveis)
+        ) {
           prioIds.add(pl.prioridade_id);
         }
       }
       for (const t of tarefas) {
-        if (!tarefaAtribuidaAoUsuario(t, myResponsavelIds, responsaveis)) continue;
+        if (
+          !tarefaAtribuidaAoUsuario(t, myResponsavelIds, responsaveis) &&
+          !canViewByOwnershipOrObserver([t.responsavel_id], t.observadores, myResponsavelIds, responsaveis)
+        ) continue;
         const pl = planos.find((p) => p.id === t.plano_id);
         if (pl) prioIds.add(pl.prioridade_id);
       }
@@ -738,10 +772,17 @@ export const OperacionalView: React.FC<OperacionalProps> = ({
 
   const visiblePlanos = useMemo(() => {
     const allowedPriorityIds = new Set(visiblePrioridades.map((p) => p.id));
-    const list = planos.filter((pl) => allowedPriorityIds.has(pl.prioridade_id));
+    let list = planos.filter((pl) => allowedPriorityIds.has(pl.prioridade_id));
+    if (visibilityMode === 'following' && myResponsavelIds.size > 0) {
+      list = list.filter(
+        (pl) =>
+          Array.isArray(pl.observadores) &&
+          pl.observadores.some((o) => myResponsavelIds.has(normStr(o.user_id)))
+      );
+    }
     list.sort((a, b) => a.when_fim - b.when_fim);
     return list;
-  }, [planos, visiblePrioridades]);
+  }, [planos, visiblePrioridades, visibilityMode, myResponsavelIds]);
   const visiblePlanosAtivos = useMemo(
     () => visiblePlanos.filter((pl) => ((computeStatusPlano(pl.id) || pl.status_plano) as StatusPlano) !== 'Concluido'),
     [visiblePlanos, computeStatusPlano],
@@ -763,9 +804,13 @@ export const OperacionalView: React.FC<OperacionalProps> = ({
     if (viewerSeesAllTarefasNoPlano) {
       return [...tarefasBase].sort((a, b) => a.data_vencimento - b.data_vencimento);
     }
-    const filtradas = tarefasBase.filter((t) =>
-      tarefaAtribuidaAoUsuario(t, myResponsavelIds, responsaveis),
-    );
+    const filtradas = tarefasBase.filter((t) => {
+      const mine =
+        tarefaAtribuidaAoUsuario(t, myResponsavelIds, responsaveis) ||
+        canViewByOwnershipOrObserver([t.responsavel_id], t.observadores, myResponsavelIds, responsaveis);
+      if (visibilityMode === 'mine') return mine;
+      return Array.isArray(t.observadores) && t.observadores.some((o) => myResponsavelIds.has(normStr(o.user_id))) && !mine;
+    });
     return filtradas.sort((a, b) => a.data_vencimento - b.data_vencimento);
   }, [
     tarefas,
@@ -773,6 +818,7 @@ export const OperacionalView: React.FC<OperacionalProps> = ({
     viewerSeesAllTarefasNoPlano,
     myResponsavelIds,
     responsaveis,
+    visibilityMode,
   ]);
 
   const visibleTarefasAtivas = useMemo(
@@ -814,6 +860,26 @@ export const OperacionalView: React.FC<OperacionalProps> = ({
               }`}
             >
               Plano de ataque
+            </button>
+          </div>
+          <div className="inline-flex rounded-lg border border-slate-700 bg-slate-900/60 p-0.5">
+            <button
+              type="button"
+              onClick={() => setVisibilityMode('mine')}
+              className={`px-2.5 py-1 text-[11px] rounded-md transition-colors ${
+                visibilityMode === 'mine' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              Meus itens
+            </button>
+            <button
+              type="button"
+              onClick={() => setVisibilityMode('following')}
+              className={`px-2.5 py-1 text-[11px] rounded-md transition-colors ${
+                visibilityMode === 'following' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              Itens que sigo
             </button>
           </div>
         </div>

@@ -38,6 +38,13 @@ export interface ActionItem {
   created_by?: string;
 }
 
+export type ObserverRole = 'creator' | 'follower';
+
+export interface Observer {
+  user_id: string;
+  role: ObserverRole;
+}
+
 // ========== Ritmo de Gestão – entidades e enums ==========
 
 export type StatusBacklog = 'aberto' | 'analisado' | 'descartado' | 'promovido';
@@ -67,6 +74,12 @@ export interface Backlog {
   empresa?: string;
   /** Usuário que criou o registro (uid/nome), usado para visibilidade. */
   created_by?: string;
+  /** Usuários que acompanham o item sem assumir ownership. */
+  observadores?: Observer[];
+  /** Workspace atual do registro. */
+  workspace_id?: string;
+  /** Workspace de origem quando houver colaboração cruzada. */
+  workspace_origem?: string;
 }
 
 /** Priorizar (nível estratégico). Máx 3 priorizadas por quadro. */
@@ -85,6 +98,12 @@ export interface Prioridade {
   dono_atualizado_em?: number;
   /** Usuário que criou o registro (uid/nome), usado para visibilidade. */
   created_by?: string;
+  /** Usuários que acompanham o item sem assumir ownership. */
+  observadores?: Observer[];
+  /** Workspace atual do registro. */
+  workspace_id?: string;
+  /** Workspace de origem quando houver colaboração cruzada. */
+  workspace_origem?: string;
 }
 
 /** Plano de ataque (nível gerencial). 5W2H completo. */
@@ -105,6 +124,12 @@ export interface PlanoDeAtaque {
   empresa?: string;
   /** Usuário que criou o registro (uid/nome), usado para visibilidade. */
   created_by?: string;
+  /** Usuários que acompanham o item sem assumir ownership. */
+  observadores?: Observer[];
+  /** Workspace atual do registro. */
+  workspace_id?: string;
+  /** Workspace de origem quando houver colaboração cruzada. */
+  workspace_origem?: string;
 }
 
 /** Tarefa (nível operacional). Materialização do plano. */
@@ -118,10 +143,18 @@ export interface Tarefa {
   data_vencimento: number;
   status_tarefa: StatusTarefa;
   bloqueio_motivo?: string;
+  /** Momento em que a tarefa foi marcada como bloqueada. */
+  bloqueada_em?: number;
   /** Empresa / workspace associada a esta tarefa (opcional) */
   empresa?: string;
   /** Usuário que criou o registro (uid/nome), usado para visibilidade. */
   created_by?: string;
+  /** Usuários que acompanham o item sem assumir ownership. */
+  observadores?: Observer[];
+  /** Workspace atual do registro. */
+  workspace_id?: string;
+  /** Workspace de origem quando houver colaboração cruzada. */
+  workspace_origem?: string;
 }
 
 /** Payload único do board Ritmo de Gestão (persistência) */

@@ -42,7 +42,10 @@ import {
   donoPrioridadeCorrespondeAoUsuario,
   nomeExibicaoWhoParaItem,
 } from './components/Dashboard/responsavelSearchUtils';
-import { tarefaAtribuidaAoUsuario } from './components/Dashboard/taskAssignmentUtils';
+import {
+  canViewByOwnershipOrObserver,
+  tarefaAtribuidaAoUsuario,
+} from './components/Dashboard/taskAssignmentUtils';
 import { Toast, type ToastType } from './components/Shared/Toast';
 import { ChatView } from './components/Chat/ChatView';
 import { Modal } from './components/Shared/Modal';
@@ -211,6 +214,34 @@ function AppContent() {
     () => mergeResponsaveisComPerfis(ritmo.responsaveis, perfisCadastroUsuarios),
     [ritmo.responsaveis, perfisCadastroUsuarios],
   );
+
+  const responsaveisEscopoAtribuicao = useMemo(() => {
+    if (profile?.role === 'administrador') return responsaveisParaAtribuicao;
+    const canAssignCross =
+      hasModuleAction('table', 'cross_workspace_assign') ||
+      hasModuleAction('operacional', 'cross_workspace_assign');
+    if (canAssignCross) return responsaveisParaAtribuicao;
+
+    const minhasEmpresas = new Set((profile?.empresas ?? []).map((e) => e.trim().toLowerCase()).filter(Boolean));
+    const alvoWorkspace = workspaceAtivo === 'all' ? null : String(workspaceAtivo).trim().toLowerCase();
+    const byUid = new Map(perfisCadastroUsuarios.map((u) => [normKey(u.uid), u]));
+    const filtered = responsaveisParaAtribuicao.filter((r) => {
+      const user = byUid.get(normKey(r.id));
+      if (!user) return true;
+      const userEmpresas = (user.empresas ?? []).map((e) => e.trim().toLowerCase()).filter(Boolean);
+      if (userEmpresas.includes('*') || userEmpresas.includes('todas')) return true;
+      if (alvoWorkspace) return userEmpresas.includes(alvoWorkspace);
+      return userEmpresas.some((e) => minhasEmpresas.has(e));
+    });
+    return filtered;
+  }, [
+    profile?.role,
+    profile?.empresas,
+    workspaceAtivo,
+    hasModuleAction,
+    perfisCadastroUsuarios,
+    responsaveisParaAtribuicao,
+  ]);
 
   const displayWhoKanban = useCallback(
     (who: string) => nomeExibicaoWhoParaItem(who, responsaveisParaAtribuicao, perfisCadastroUsuarios),
@@ -398,6 +429,23 @@ function AppContent() {
     [workspaceAtivo, canSeeEmpresa, defaultEmpresaFallback],
   );
 
+  const canReadCrossWorkspaceGlobal = useMemo(() => {
+    if (profile?.role === 'administrador') return true;
+    return (
+      hasModuleAction('table', 'cross_workspace_view') ||
+      hasModuleAction('operacional', 'cross_workspace_view')
+    );
+  }, [profile?.role, hasModuleAction]);
+
+  const matchWorkspaceRitmo = useCallback(
+    (empresa?: string | null): boolean => {
+      if (workspaceAtivo !== 'all') return matchWorkspaceStrict(empresa);
+      if (canReadCrossWorkspaceGlobal) return true;
+      return matchWorkspaceStrict(empresa);
+    },
+    [workspaceAtivo, canReadCrossWorkspaceGlobal, matchWorkspaceStrict],
+  );
+
   const backlogViewItems = useMemo(
     () => items.filter((i) => matchWorkspaceStrict(i.empresa)),
     [items, matchWorkspaceStrict],
@@ -444,6 +492,9 @@ function AppContent() {
   const prioridadeVisivelPorDemandaAtribuida = useCallback(
     (p: Prioridade) => {
       if (myResponsavelIdsForBoard.size === 0) return false;
+      if (canViewByOwnershipOrObserver([p.dono_id], p.observadores, myResponsavelIdsForBoard, responsaveisParaAtribuicao)) {
+        return true;
+      }
       if (isCreatedByMe(p.created_by, p.dono_id)) return true;
       if (
         donoPrioridadeCorrespondeAoUsuario(
@@ -457,6 +508,9 @@ function AppContent() {
       for (const pl of ritmo.board.planos) {
         if (pl.prioridade_id !== p.id) continue;
         if (isCreatedByMe(pl.created_by, pl.who_id)) return true;
+        if (canViewByOwnershipOrObserver([pl.who_id], pl.observadores, myResponsavelIdsForBoard, responsaveisParaAtribuicao)) {
+          return true;
+        }
         if (
           donoPrioridadeCorrespondeAoUsuario(
             pl.who_id,
@@ -469,6 +523,9 @@ function AppContent() {
         for (const t of ritmo.board.tarefas) {
           if (t.plano_id !== pl.id) continue;
           if (isCreatedByMe(t.created_by, t.responsavel_id)) return true;
+          if (canViewByOwnershipOrObserver([t.responsavel_id], t.observadores, myResponsavelIdsForBoard, responsaveisParaAtribuicao)) {
+            return true;
+          }
           if (tarefaAtribuidaAoUsuario(t, myResponsavelIdsForBoard, responsaveisParaAtribuicao)) {
             return true;
           }
@@ -487,14 +544,14 @@ function AppContent() {
 
   const quadroPrioridades = useMemo<Prioridade[]>(() => {
     const todas = [...ritmo.board.prioridades, ...sinteticasFromItems];
-    const porEmpresa = todas.filter((p) => matchWorkspaceStrict(p.empresa));
+    const porEmpresa = todas.filter((p) => matchWorkspaceRitmo(p.empresa));
     if (profile?.role === 'administrador') return porEmpresa;
     if (myResponsavelIdsForBoard.size === 0) return [];
     return porEmpresa.filter((p) => prioridadeVisivelPorDemandaAtribuida(p));
   }, [
     ritmo.board.prioridades,
     sinteticasFromItems,
-    matchWorkspaceStrict,
+    matchWorkspaceRitmo,
     profile?.role,
     myResponsavelIdsForBoard,
     prioridadeVisivelPorDemandaAtribuida,
@@ -509,12 +566,13 @@ function AppContent() {
 
   const ritmoPlanosEscopoVisivel = useMemo(
     () => {
-      const porEmpresa = ritmo.board.planos.filter((pl) => matchWorkspaceStrict(pl.empresa));
+      const porEmpresa = ritmo.board.planos.filter((pl) => matchWorkspaceRitmo(pl.empresa));
       if (profile?.role === 'administrador') return porEmpresa;
       if (myResponsavelIdsForBoard.size === 0) return [];
       return porEmpresa.filter(
         (pl) =>
           isCreatedByMe(pl.created_by, pl.who_id) ||
+          canViewByOwnershipOrObserver([pl.who_id], pl.observadores, myResponsavelIdsForBoard, responsaveisParaAtribuicao) ||
           donoPrioridadeCorrespondeAoUsuario(
             pl.who_id,
             myResponsavelIdsForBoard,
@@ -524,7 +582,7 @@ function AppContent() {
     },
     [
       ritmo.board.planos,
-      matchWorkspaceStrict,
+      matchWorkspaceRitmo,
       profile?.role,
       myResponsavelIdsForBoard,
       isCreatedByMe,
@@ -539,18 +597,19 @@ function AppContent() {
 
   const ritmoTarefasEscopoVisivel = useMemo(
     () => {
-      const porEmpresa = ritmo.board.tarefas.filter((t) => matchWorkspaceStrict(t.empresa));
+      const porEmpresa = ritmo.board.tarefas.filter((t) => matchWorkspaceRitmo(t.empresa));
       if (profile?.role === 'administrador') return porEmpresa;
       if (myResponsavelIdsForBoard.size === 0) return [];
       return porEmpresa.filter(
         (t) =>
           isCreatedByMe(t.created_by, t.responsavel_id) ||
+          canViewByOwnershipOrObserver([t.responsavel_id], t.observadores, myResponsavelIdsForBoard, responsaveisParaAtribuicao) ||
           tarefaAtribuidaAoUsuario(t, myResponsavelIdsForBoard, responsaveisParaAtribuicao),
       );
     },
     [
       ritmo.board.tarefas,
-      matchWorkspaceStrict,
+      matchWorkspaceRitmo,
       profile?.role,
       myResponsavelIdsForBoard,
       isCreatedByMe,
@@ -581,6 +640,8 @@ function AppContent() {
         tarefaWrite: hasModuleAction('table', 'tarefa_write'),
         tarefaAssign: hasModuleAction('table', 'tarefa_assign'),
         tarefaDelete: hasModuleAction('table', 'tarefa_delete'),
+        crossWorkspaceView: hasModuleAction('table', 'cross_workspace_view'),
+        crossWorkspaceAssign: hasModuleAction('table', 'cross_workspace_assign'),
       },
       operacional: {
         // Regra de produto: Operacional edita apenas tarefas.
@@ -588,6 +649,8 @@ function AppContent() {
         tarefaWrite: hasModuleAction('operacional', 'tarefa_write'),
         tarefaAssign: hasModuleAction('operacional', 'tarefa_assign'),
         tarefaDelete: hasModuleAction('operacional', 'tarefa_delete'),
+        crossWorkspaceView: hasModuleAction('operacional', 'cross_workspace_view'),
+        crossWorkspaceAssign: hasModuleAction('operacional', 'cross_workspace_assign'),
       },
       roadmap: {
         edit: hasModuleAction('roadmap', 'edit'),
@@ -598,6 +661,20 @@ function AppContent() {
     }),
     [hasModuleAction, profile]
   );
+
+  const canCrossWorkspaceViewCurrent = useMemo(() => {
+    if (profile?.role === 'administrador') return true;
+    if (activeView === 'table') return perm.table.crossWorkspaceView;
+    if (activeView === 'operacional') return perm.operacional.crossWorkspaceView;
+    return false;
+  }, [profile?.role, activeView, perm.table.crossWorkspaceView, perm.operacional.crossWorkspaceView]);
+
+  const canCrossWorkspaceAssignCurrent = useMemo(() => {
+    if (profile?.role === 'administrador') return true;
+    if (activeView === 'table') return perm.table.crossWorkspaceAssign;
+    if (activeView === 'operacional') return perm.operacional.crossWorkspaceAssign;
+    return false;
+  }, [profile?.role, activeView, perm.table.crossWorkspaceAssign, perm.operacional.crossWorkspaceAssign]);
 
   const handleGoToTaticoPriority = useCallback(
     (item: ActionItem) => {
@@ -1170,7 +1247,7 @@ function AppContent() {
                   prioridades={taticoPrioridades}
                   planos={ritmoPlanosEscopoVisivel}
                   tarefas={ritmoTarefasEscopoVisivel}
-                  responsaveis={responsaveisParaAtribuicao}
+                  responsaveis={responsaveisEscopoAtribuicao}
                   computeStatusPlano={ritmo.computeStatusPlano}
                   onUpdatePrioridade={handleUpdatePrioridadeTatico}
                   onDeletePrioridade={handleDeletePrioridade}
@@ -1185,6 +1262,8 @@ function AppContent() {
                     ritmo.addPlano({
                       ...p,
                       created_by: profile?.uid || profile?.nome || profile?.email || '',
+                      workspace_id: p.empresa || '',
+                      workspace_origem: workspaceAtivo === 'all' ? '' : workspaceAtivo,
                     })
                   }
                   onUpdatePlano={ritmo.updatePlano}
@@ -1193,6 +1272,8 @@ function AppContent() {
                     ritmo.addTarefa({
                       ...t,
                       created_by: profile?.uid || profile?.nome || profile?.email || '',
+                      workspace_id: t.empresa || '',
+                      workspace_origem: workspaceAtivo === 'all' ? '' : workspaceAtivo,
                     })
                   }
                   onUpdateTarefa={ritmo.updateTarefa}
@@ -1213,7 +1294,7 @@ function AppContent() {
                   prioridades={taticoPrioridades}
                   planos={ritmoPlanosEscopoVisivel}
                   tarefas={ritmoTarefasEscopoVisivel}
-                  responsaveis={responsaveisParaAtribuicao}
+                  responsaveis={responsaveisEscopoAtribuicao}
                   computeStatusPlano={ritmo.computeStatusPlano}
                   loggedUserUid={profile?.uid}
                   loggedUserName={profile?.nome}
@@ -1226,6 +1307,8 @@ function AppContent() {
                     ritmo.addTarefa({
                       ...t,
                       created_by: profile?.uid || profile?.nome || profile?.email || '',
+                      workspace_id: t.empresa || '',
+                      workspace_origem: workspaceAtivo === 'all' ? '' : workspaceAtivo,
                     })
                   }
                   onUpdateTarefa={ritmo.updateTarefa}
@@ -1272,7 +1355,7 @@ function AppContent() {
                   prioridades={quadroPrioridades}
                   planos={ritmoPlanosEscopoVisivel}
                   tarefas={ritmoTarefasEscopoVisivel}
-                  responsaveis={responsaveisParaAtribuicao}
+                  responsaveis={responsaveisEscopoAtribuicao}
                   computeStatusPlano={ritmo.computeStatusPlano}
                   onStatusChange={(id, status) => ritmo.updatePrioridade(id, { status_prioridade: status })}
                   onOpenPrioridade={handleOpenPrioridade}
@@ -1291,7 +1374,7 @@ function AppContent() {
             prioridade={selectedPrioridade}
             planos={ritmo.board.planos}
             tarefas={ritmo.board.tarefas}
-            responsaveis={responsaveisParaAtribuicao}
+            responsaveis={responsaveisEscopoAtribuicao}
             computeStatusPlano={ritmo.computeStatusPlano}
             onClose={() => setSelectedPrioridade(null)}
             onUpdatePrioridade={async (id, updates) => {
@@ -1368,7 +1451,7 @@ function AppContent() {
         <PrioridadeModal
           isOpen={prioridadeModalOpen}
           onClose={() => setPrioridadeModalOpen(false)}
-          responsaveis={responsaveisParaAtribuicao}
+          responsaveis={responsaveisEscopoAtribuicao}
           defaultEmpresa={workspaceAtivo === 'all' ? '' : workspaceAtivo}
           empresaSuggestions={empresasAtivas}
           onSave={(item) => {
@@ -1386,6 +1469,8 @@ function AppContent() {
               dono_id: donoCanon,
               empresa: empresaParaDemandaDoDono(assigneeNova, wsClass),
               created_by: profile?.uid || profile?.nome || profile?.email || '',
+              workspace_id: wsClass || item.empresa || '',
+              workspace_origem: wsClass,
             };
             const ok = ritmo.addPrioridade(itemNorm);
             if (!ok) {
@@ -1436,7 +1521,7 @@ function AppContent() {
           loggedUserName={profile?.nome}
           lockWhoToLoggedUser={true}
           canEditWho={profile?.role === 'administrador'}
-          responsaveis={responsaveisParaAtribuicao}
+          responsaveis={responsaveisEscopoAtribuicao}
           hideWhereEmpresa={modalContext === 'backlog'}
           hideStatusUrgency={modalContext === 'backlog'}
           itemModalContext={modalContext}

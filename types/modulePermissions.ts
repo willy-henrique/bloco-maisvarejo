@@ -38,6 +38,14 @@ export const MODULE_ACTIONS: Record<ViewId, { id: string; label: string }[]> = {
       label: 'Atribuir tarefas a outras pessoas',
     },
     { id: 'tarefa_delete', label: 'Excluir tarefas' },
+    {
+      id: 'cross_workspace_view',
+      label: 'Visualizar itens compartilhados entre workspaces',
+    },
+    {
+      id: 'cross_workspace_assign',
+      label: 'Atribuir entre workspaces',
+    },
   ],
   operacional: [
     { id: 'read', label: 'Visualizar' },
@@ -47,6 +55,14 @@ export const MODULE_ACTIONS: Record<ViewId, { id: string; label: string }[]> = {
       label: 'Atribuir tarefas a outras pessoas',
     },
     { id: 'tarefa_delete', label: 'Excluir tarefas' },
+    {
+      id: 'cross_workspace_view',
+      label: 'Visualizar itens compartilhados entre workspaces',
+    },
+    {
+      id: 'cross_workspace_assign',
+      label: 'Atribuir entre workspaces',
+    },
   ],
   performance: [{ id: 'read', label: 'Visualizar' }],
   roadmap: [

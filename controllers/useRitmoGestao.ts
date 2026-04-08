@@ -15,6 +15,7 @@ import type {
   StatusPlano,
   StatusTarefa,
   StatusBacklog,
+  Observer,
 } from '../types';
 import { StorageService } from '../services/storageService';
 import {
@@ -23,6 +24,7 @@ import {
   saveRitmoBoard as saveRitmoBoardFirestore,
   subscribeRitmoBoard,
 } from '../services/firestoreSync';
+import { apiAddObserver, apiGetBlockContext, apiRemoveObserver } from '../services/ritmoCollabApi';
 
 const MAX_PRIORIDADES_ATIVAS = 3;
 
@@ -44,11 +46,41 @@ function defaultBoard(): RitmoGestaoBoard {
 function normalizeBoard(raw: RitmoGestaoBoard | undefined | null): RitmoGestaoBoard {
   const base = defaultBoard();
   if (!raw || typeof raw !== 'object') return base;
+  const normalizeObservers = (v: unknown): Observer[] => {
+    if (!Array.isArray(v)) return [];
+    const parsed: Observer[] = [];
+    for (const item of v) {
+      if (typeof item === 'string') {
+        const uid = item.trim();
+        if (uid) parsed.push({ user_id: uid, role: 'follower' });
+        continue;
+      }
+      const obj = item as Partial<Observer>;
+      const uid = String(obj.user_id ?? '').trim();
+      if (!uid) continue;
+      const role = obj.role === 'creator' ? 'creator' : 'follower';
+      parsed.push({ user_id: uid, role });
+    }
+    const uniq = new Map<string, Observer>();
+    for (const o of parsed) {
+      const prev = uniq.get(o.user_id);
+      if (!prev || o.role === 'creator') uniq.set(o.user_id, o);
+    }
+    return Array.from(uniq.values());
+  };
   return {
-    backlog: Array.isArray(raw.backlog) ? raw.backlog : base.backlog,
-    prioridades: Array.isArray(raw.prioridades) ? raw.prioridades : base.prioridades,
-    planos: Array.isArray(raw.planos) ? raw.planos : base.planos,
-    tarefas: Array.isArray(raw.tarefas) ? raw.tarefas : base.tarefas,
+    backlog: Array.isArray(raw.backlog)
+      ? raw.backlog.map((b) => ({ ...b, observadores: normalizeObservers((b as Backlog).observadores) }))
+      : base.backlog,
+    prioridades: Array.isArray(raw.prioridades)
+      ? raw.prioridades.map((p) => ({ ...p, observadores: normalizeObservers((p as Prioridade).observadores) }))
+      : base.prioridades,
+    planos: Array.isArray(raw.planos)
+      ? raw.planos.map((pl) => ({ ...pl, observadores: normalizeObservers((pl as PlanoDeAtaque).observadores) }))
+      : base.planos,
+    tarefas: Array.isArray(raw.tarefas)
+      ? raw.tarefas.map((t) => ({ ...t, observadores: normalizeObservers((t as Tarefa).observadores) }))
+      : base.tarefas,
     responsaveis:
       Array.isArray(raw.responsaveis) && raw.responsaveis.length > 0
         ? raw.responsaveis
@@ -173,6 +205,39 @@ export function computeStatusPrioridade(prioridadeId: string, planos: PlanoDeAta
   });
   if (todasConcluidas) return 'Concluido';
   return 'Execucao';
+}
+
+export interface BlockingReason {
+  tarefa_id: string;
+  tarefa_titulo: string;
+  responsavel_id: string;
+  bloqueio_motivo: string;
+  bloqueada_em?: number;
+}
+
+export function getBlockingReasonsForPlano(planoId: string, tarefas: Tarefa[]): BlockingReason[] {
+  return tarefas
+    .filter((t) => t.plano_id === planoId && t.status_tarefa === 'Bloqueada')
+    .map((t) => ({
+      tarefa_id: t.id,
+      tarefa_titulo: t.titulo,
+      responsavel_id: t.responsavel_id,
+      bloqueio_motivo: t.bloqueio_motivo ?? '',
+      bloqueada_em: t.bloqueada_em,
+    }));
+}
+
+function ensureCreatorObserver(
+  observers: Observer[] | undefined,
+  creatorRaw: string | undefined,
+): Observer[] {
+  const creator = String(creatorRaw ?? '').trim();
+  const list = Array.isArray(observers) ? [...observers] : [];
+  if (!creator) return list;
+  const idx = list.findIndex((o) => o.user_id.trim().toLowerCase() === creator.toLowerCase());
+  if (idx === -1) return [...list, { user_id: creator, role: 'creator' }];
+  list[idx] = { ...list[idx], role: 'creator' };
+  return list;
 }
 
 export function useRitmoGestao(encryptionKey: CryptoKey | null) {
@@ -312,10 +377,12 @@ export function useRitmoGestao(encryptionKey: CryptoKey | null) {
   // --- Backlog
   const addBacklog = useCallback(
     (item: Omit<Backlog, 'id' | 'data_criacao'>) => {
+      const creator = String(item.created_by ?? '').trim();
       const newItem: Backlog = {
         ...item,
         id: crypto.randomUUID(),
         data_criacao: Date.now(),
+        observadores: ensureCreatorObserver(item.observadores, creator),
       };
       saveBoard((prev) => ({
         ...prev,
@@ -362,6 +429,10 @@ export function useRitmoGestao(encryptionKey: CryptoKey | null) {
           data_alvo: Date.now() + 90 * 24 * 60 * 60 * 1000,
           status_prioridade: 'Execucao',
           origem_backlog_id: backlogId,
+          created_by: it.created_by,
+          observadores: ensureCreatorObserver(it.observadores, it.created_by),
+          workspace_id: it.workspace_id,
+          workspace_origem: it.workspace_origem,
         };
         return {
           ...prev,
@@ -380,9 +451,14 @@ export function useRitmoGestao(encryptionKey: CryptoKey | null) {
   const addPrioridade = useCallback(
     (item: Omit<Prioridade, 'id'>) => {
       if (prioridadesAtivas(board.prioridades).length >= MAX_PRIORIDADES_ATIVAS) return false;
+      const creator = String(item.created_by ?? '').trim();
       saveBoard((prev) => {
         if (prioridadesAtivas(prev.prioridades).length >= MAX_PRIORIDADES_ATIVAS) return prev;
-        const nova: Prioridade = { ...item, id: crypto.randomUUID() };
+        const nova: Prioridade = {
+          ...item,
+          id: crypto.randomUUID(),
+          observadores: ensureCreatorObserver(item.observadores, creator),
+        };
         return { ...prev, prioridades: [nova, ...prev.prioridades] };
       });
       return true;
@@ -451,7 +527,12 @@ export function useRitmoGestao(encryptionKey: CryptoKey | null) {
   // --- Plano
   const addPlano = useCallback(
     (item: Omit<PlanoDeAtaque, 'id'>) => {
-      const nova: PlanoDeAtaque = { ...item, id: crypto.randomUUID() };
+      const creator = String(item.created_by ?? '').trim();
+      const nova: PlanoDeAtaque = {
+        ...item,
+        id: crypto.randomUUID(),
+        observadores: ensureCreatorObserver(item.observadores, creator),
+      };
       saveBoard((prev) => ({ ...prev, planos: [...prev.planos, nova] }));
     },
     [saveBoard]
@@ -481,7 +562,13 @@ export function useRitmoGestao(encryptionKey: CryptoKey | null) {
   // --- Tarefa
   const addTarefa = useCallback(
     (item: Omit<Tarefa, 'id'>) => {
-      const nova: Tarefa = { ...item, id: crypto.randomUUID() };
+      const creator = String(item.created_by ?? '').trim();
+      const nova: Tarefa = {
+        ...item,
+        id: crypto.randomUUID(),
+        observadores: ensureCreatorObserver(item.observadores, creator),
+        bloqueada_em: item.status_tarefa === 'Bloqueada' ? (item.bloqueada_em ?? Date.now()) : undefined,
+      };
       saveBoard((prev) => ({ ...prev, tarefas: [...prev.tarefas, nova] }));
     },
     [saveBoard]
@@ -491,7 +578,17 @@ export function useRitmoGestao(encryptionKey: CryptoKey | null) {
     (id: string, updates: Partial<Tarefa>) => {
       saveBoard((prev) => ({
         ...prev,
-        tarefas: prev.tarefas.map((t) => (t.id === id ? { ...t, ...updates } : t)),
+        tarefas: prev.tarefas.map((t) => {
+          if (t.id !== id) return t;
+          const next: Tarefa = { ...t, ...updates };
+          if (updates.status_tarefa === 'Bloqueada' && !t.bloqueada_em) {
+            next.bloqueada_em = Date.now();
+          }
+          if (updates.status_tarefa && updates.status_tarefa !== 'Bloqueada') {
+            next.bloqueada_em = undefined;
+          }
+          return next;
+        }),
       }));
     },
     [saveBoard]
@@ -500,6 +597,150 @@ export function useRitmoGestao(encryptionKey: CryptoKey | null) {
   const deleteTarefa = useCallback(
     (id: string) => {
       saveBoard((prev) => ({ ...prev, tarefas: prev.tarefas.filter((t) => t.id !== id) }));
+    },
+    [saveBoard]
+  );
+
+  // --- Observadores
+  const addObserver = useCallback(
+    (
+      entity: 'prioridade' | 'plano' | 'tarefa',
+      entityId: string,
+      userId: string,
+      role: Observer['role'] = 'follower'
+    ) => {
+      const uid = userId.trim();
+      if (!uid) return;
+      saveBoard((prev) => {
+        if (entity === 'prioridade') {
+          return {
+            ...prev,
+            prioridades: prev.prioridades.map((p) => {
+              if (p.id !== entityId) return p;
+              const current = Array.isArray(p.observadores) ? [...p.observadores] : [];
+              const idx = current.findIndex((o) => o.user_id.trim().toLowerCase() === uid.toLowerCase());
+              let fallback = current;
+              if (idx >= 0) fallback[idx] = { ...fallback[idx], role: fallback[idx].role === 'creator' ? 'creator' : role };
+              else fallback = [...fallback, { user_id: uid, role }];
+              void apiAddObserver(current, uid, role).then((remote) => {
+                if (!remote) return;
+                saveBoard((pp) => ({
+                  ...pp,
+                  prioridades: pp.prioridades.map((x) => (x.id === entityId ? { ...x, observadores: remote } : x)),
+                }));
+              });
+              return { ...p, observadores: fallback };
+            }),
+          };
+        }
+        if (entity === 'plano') {
+          return {
+            ...prev,
+            planos: prev.planos.map((p) => {
+              if (p.id !== entityId) return p;
+              const current = Array.isArray(p.observadores) ? [...p.observadores] : [];
+              const idx = current.findIndex((o) => o.user_id.trim().toLowerCase() === uid.toLowerCase());
+              let fallback = current;
+              if (idx >= 0) fallback[idx] = { ...fallback[idx], role: fallback[idx].role === 'creator' ? 'creator' : role };
+              else fallback = [...fallback, { user_id: uid, role }];
+              void apiAddObserver(current, uid, role).then((remote) => {
+                if (!remote) return;
+                saveBoard((pp) => ({
+                  ...pp,
+                  planos: pp.planos.map((x) => (x.id === entityId ? { ...x, observadores: remote } : x)),
+                }));
+              });
+              return { ...p, observadores: fallback };
+            }),
+          };
+        }
+        return {
+          ...prev,
+          tarefas: prev.tarefas.map((t) => {
+            if (t.id !== entityId) return t;
+            const current = Array.isArray(t.observadores) ? [...t.observadores] : [];
+            const idx = current.findIndex((o) => o.user_id.trim().toLowerCase() === uid.toLowerCase());
+            let fallback = current;
+            if (idx >= 0) fallback[idx] = { ...fallback[idx], role: fallback[idx].role === 'creator' ? 'creator' : role };
+            else fallback = [...fallback, { user_id: uid, role }];
+            void apiAddObserver(current, uid, role).then((remote) => {
+              if (!remote) return;
+              saveBoard((pp) => ({
+                ...pp,
+                tarefas: pp.tarefas.map((x) => (x.id === entityId ? { ...x, observadores: remote } : x)),
+              }));
+            });
+            return { ...t, observadores: fallback };
+          }),
+        };
+      });
+    },
+    [saveBoard]
+  );
+
+  const removeObserver = useCallback(
+    (entity: 'prioridade' | 'plano' | 'tarefa', entityId: string, userId: string) => {
+      const uid = userId.trim().toLowerCase();
+      if (!uid) return;
+      saveBoard((prev) => {
+        const keepNonCreator = (list: Observer[] | undefined) =>
+          (Array.isArray(list) ? list : []).filter((o) => {
+            if (o.role === 'creator') return true;
+            return o.user_id.trim().toLowerCase() !== uid;
+          });
+        if (entity === 'prioridade') {
+          return {
+            ...prev,
+            prioridades: prev.prioridades.map((p) => {
+              if (p.id !== entityId) return p;
+              const current = Array.isArray(p.observadores) ? p.observadores : [];
+              const fallback = keepNonCreator(current);
+              void apiRemoveObserver(current, userId).then((remote) => {
+                if (!remote) return;
+                saveBoard((pp) => ({
+                  ...pp,
+                  prioridades: pp.prioridades.map((x) => (x.id === entityId ? { ...x, observadores: remote } : x)),
+                }));
+              });
+              return { ...p, observadores: fallback };
+            }),
+          };
+        }
+        if (entity === 'plano') {
+          return {
+            ...prev,
+            planos: prev.planos.map((p) => {
+              if (p.id !== entityId) return p;
+              const current = Array.isArray(p.observadores) ? p.observadores : [];
+              const fallback = keepNonCreator(current);
+              void apiRemoveObserver(current, userId).then((remote) => {
+                if (!remote) return;
+                saveBoard((pp) => ({
+                  ...pp,
+                  planos: pp.planos.map((x) => (x.id === entityId ? { ...x, observadores: remote } : x)),
+                }));
+              });
+              return { ...p, observadores: fallback };
+            }),
+          };
+        }
+        return {
+          ...prev,
+          tarefas: prev.tarefas.map((t) => {
+            if (t.id !== entityId) return t;
+            const current = Array.isArray(t.observadores) ? t.observadores : [];
+            const fallback = keepNonCreator(current);
+            void apiRemoveObserver(current, userId).then((remote) => {
+              if (!remote) return;
+              saveBoard((pp) => ({
+                ...pp,
+                tarefas: pp.tarefas.map((x) => (x.id === entityId ? { ...x, observadores: remote } : x)),
+              }));
+            });
+            return { ...t, observadores: fallback };
+          }),
+        };
+      });
     },
     [saveBoard]
   );
@@ -593,6 +834,20 @@ export function useRitmoGestao(encryptionKey: CryptoKey | null) {
     addTarefa,
     updateTarefa,
     deleteTarefa,
+    addObserver,
+    removeObserver,
+    getBlockContext: async (planoId: string) => {
+      const remote = await apiGetBlockContext(planoId, board.tarefas);
+      if (remote) {
+        return remote.map((r) => ({
+          tarefa_id: r.task_id,
+          tarefa_titulo: r.task_title,
+          responsavel_id: r.task_owner,
+          bloqueio_motivo: r.block_reason,
+        }));
+      }
+      return getBlockingReasonsForPlano(planoId, board.tarefas);
+    },
     // Responsáveis
     responsaveis: board.responsaveis,
     addResponsavel,

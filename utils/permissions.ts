@@ -36,6 +36,17 @@ export function userCanAssignTarefasToOthers(
   return false;
 }
 
+/** Pode atuar em colaboração entre workspaces no módulo informado. */
+export function userCanCrossWorkspace(
+  profile: UserProfile | null | undefined,
+  view: ViewId,
+  action: 'cross_workspace_view' | 'cross_workspace_assign'
+): boolean {
+  if (!profile) return false;
+  if (profile.role === 'administrador') return true;
+  return userHasModuleAction(profile, view, action);
+}
+
 /**
  * Ações granulares por módulo. Legado: sem `modulePermissions` = todas as ações nas views permitidas.
  * Se a view existir no mapa com array vazio: somente `read` (modo leitura).

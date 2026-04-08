@@ -125,6 +125,23 @@ const RITMO_BOARD_EMPTY: RitmoGestaoBoard = {
   empresas: [],
 };
 
+function normalizeObservers(v: unknown): { user_id: string; role: 'creator' | 'follower' }[] {
+  if (!Array.isArray(v)) return [];
+  const out: { user_id: string; role: 'creator' | 'follower' }[] = [];
+  for (const item of v) {
+    if (typeof item === 'string') {
+      const uid = item.trim();
+      if (uid) out.push({ user_id: uid, role: 'follower' });
+      continue;
+    }
+    const uid = String((item as any)?.user_id ?? '').trim();
+    if (!uid) continue;
+    const role = (item as any)?.role === 'creator' ? 'creator' : 'follower';
+    out.push({ user_id: uid, role });
+  }
+  return out;
+}
+
 /** Carrega o board Ritmo de Gestão uma vez. */
 export async function getRitmoBoardOnce(encryptionKey: CryptoKey): Promise<RitmoGestaoBoard | null> {
   const ref = getBoardRef();
@@ -136,10 +153,18 @@ export async function getRitmoBoardOnce(encryptionKey: CryptoKey): Promise<Ritmo
     const dec = await EncryptionService.decrypt<RitmoGestaoBoard>(data.ritmoEncrypted, encryptionKey);
     if (!dec || typeof dec !== 'object') return RITMO_BOARD_EMPTY;
     return {
-      backlog: Array.isArray(dec.backlog) ? dec.backlog : [],
-      prioridades: Array.isArray(dec.prioridades) ? dec.prioridades : [],
-      planos: Array.isArray(dec.planos) ? dec.planos : [],
-      tarefas: Array.isArray(dec.tarefas) ? dec.tarefas : [],
+      backlog: Array.isArray(dec.backlog)
+        ? dec.backlog.map((b) => ({ ...b, observadores: normalizeObservers((b as any).observadores) }))
+        : [],
+      prioridades: Array.isArray(dec.prioridades)
+        ? dec.prioridades.map((p) => ({ ...p, observadores: normalizeObservers((p as any).observadores) }))
+        : [],
+      planos: Array.isArray(dec.planos)
+        ? dec.planos.map((pl) => ({ ...pl, observadores: normalizeObservers((pl as any).observadores) }))
+        : [],
+      tarefas: Array.isArray(dec.tarefas)
+        ? dec.tarefas.map((t) => ({ ...t, observadores: normalizeObservers((t as any).observadores) }))
+        : [],
       responsaveis: Array.isArray(dec.responsaveis) ? dec.responsaveis : [],
       empresas: Array.isArray(dec.empresas) ? dec.empresas : [],
     };
@@ -175,10 +200,18 @@ export function subscribeRitmoBoard(
       const board = await EncryptionService.decrypt<RitmoGestaoBoard>(data.ritmoEncrypted, encryptionKey);
       if (board && typeof board === 'object')
         onRitmo({
-          backlog: Array.isArray(board.backlog) ? board.backlog : [],
-          prioridades: Array.isArray(board.prioridades) ? board.prioridades : [],
-          planos: Array.isArray(board.planos) ? board.planos : [],
-          tarefas: Array.isArray(board.tarefas) ? board.tarefas : [],
+          backlog: Array.isArray(board.backlog)
+            ? board.backlog.map((b) => ({ ...b, observadores: normalizeObservers((b as any).observadores) }))
+            : [],
+          prioridades: Array.isArray(board.prioridades)
+            ? board.prioridades.map((p) => ({ ...p, observadores: normalizeObservers((p as any).observadores) }))
+            : [],
+          planos: Array.isArray(board.planos)
+            ? board.planos.map((pl) => ({ ...pl, observadores: normalizeObservers((pl as any).observadores) }))
+            : [],
+          tarefas: Array.isArray(board.tarefas)
+            ? board.tarefas.map((t) => ({ ...t, observadores: normalizeObservers((t as any).observadores) }))
+            : [],
           responsaveis: Array.isArray(board.responsaveis) ? board.responsaveis : [],
           empresas: Array.isArray(board.empresas) ? board.empresas : [],
         });
