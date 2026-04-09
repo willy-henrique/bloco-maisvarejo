@@ -1261,7 +1261,7 @@ function AppContent() {
                   onAddPlano={(p) =>
                     ritmo.addPlano({
                       ...p,
-                      created_by: profile?.uid || profile?.nome || profile?.email || '',
+                      created_by: profile?.nome || profile?.email || profile?.uid || '',
                       workspace_id: p.empresa || '',
                       workspace_origem: workspaceAtivo === 'all' ? '' : workspaceAtivo,
                     })
@@ -1271,13 +1271,19 @@ function AppContent() {
                   onAddTarefa={(t) =>
                     ritmo.addTarefa({
                       ...t,
-                      created_by: profile?.uid || profile?.nome || profile?.email || '',
+                      created_by: profile?.nome || profile?.email || profile?.uid || '',
                       workspace_id: t.empresa || '',
                       workspace_origem: workspaceAtivo === 'all' ? '' : workspaceAtivo,
                     })
                   }
                   onUpdateTarefa={ritmo.updateTarefa}
                   onDeleteTarefa={ritmo.deleteTarefa}
+                  onAddObserver={(entity, entityId, userId) =>
+                    ritmo.addObserver(entity, entityId, userId, 'follower')
+                  }
+                  onRemoveObserver={(entity, entityId, userId) =>
+                    ritmo.removeObserver(entity, entityId, userId)
+                  }
                   estrategicoCaps={{
                     prioridadeWrite: perm.table.prioridadeWrite,
                     planoWrite: perm.table.planoWrite,
@@ -1306,13 +1312,19 @@ function AppContent() {
                   onAddTarefa={(t) =>
                     ritmo.addTarefa({
                       ...t,
-                      created_by: profile?.uid || profile?.nome || profile?.email || '',
+                      created_by: profile?.nome || profile?.email || profile?.uid || '',
                       workspace_id: t.empresa || '',
                       workspace_origem: workspaceAtivo === 'all' ? '' : workspaceAtivo,
                     })
                   }
                   onUpdateTarefa={ritmo.updateTarefa}
                   onDeleteTarefa={ritmo.deleteTarefa}
+                  onAddObserver={(entity, entityId, userId) =>
+                    ritmo.addObserver(entity, entityId, userId, 'follower')
+                  }
+                  onRemoveObserver={(entity, entityId, userId) =>
+                    ritmo.removeObserver(entity, entityId, userId)
+                  }
                   operacionalCaps={{
                     planoWrite: perm.operacional.planoWrite,
                     tarefaWrite: perm.operacional.tarefaWrite,
@@ -1468,7 +1480,7 @@ function AppContent() {
               ...item,
               dono_id: donoCanon,
               empresa: empresaParaDemandaDoDono(assigneeNova, wsClass),
-              created_by: profile?.uid || profile?.nome || profile?.email || '',
+              created_by: profile?.nome || profile?.email || profile?.uid || '',
               workspace_id: wsClass || item.empresa || '',
               workspace_origem: wsClass,
             };
@@ -1512,7 +1524,7 @@ function AppContent() {
             addItem({
               ...item,
               empresa,
-              created_by: profile?.uid || profile?.nome || profile?.email || '',
+              created_by: profile?.nome || profile?.email || profile?.uid || '',
             });
           }}
           onUpdate={updateItem}
@@ -1540,7 +1552,7 @@ function AppContent() {
             <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
             Conectado
           </div>
-          <span>MAVO 1.2</span>
+          <span>MAVO 1.7</span>
         </footer>
       </main>
     </div>

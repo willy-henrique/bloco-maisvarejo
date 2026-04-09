@@ -33,6 +33,8 @@ import {
   displayNomeDonoPrioridade,
 } from './responsavelSearchUtils';
 import { canViewByOwnershipOrObserver, tarefaAtribuidaAoUsuario } from './taskAssignmentUtils';
+import { ObserversPanel } from './ObserversPanel';
+import { apiGetBlockContext } from '../../services/ritmoCollabApi';
 
 const EMPTY_ID_SET = new Set<string>();
 
@@ -134,6 +136,8 @@ interface EstrategicoViewProps {
   onAddTarefa: (t: Omit<Tarefa, 'id'>) => void;
   onUpdateTarefa: (id: string, u: Partial<Tarefa>) => void;
   onDeleteTarefa: (id: string) => void;
+  onAddObserver?: (entity: 'prioridade' | 'plano' | 'tarefa', entityId: string, userId: string) => void;
+  onRemoveObserver?: (entity: 'prioridade' | 'plano' | 'tarefa', entityId: string, userId: string) => void;
   loggedUserUid?: string;
   loggedUserRole?: 'administrador' | 'gerente' | 'usuario' | null;
   loggedUserName?: string | null;
@@ -306,6 +310,10 @@ const PlanoCard: React.FC<{
   prioridadeDonoId?: string;
   viewerIsAdmin?: boolean;
   viewerMyResponsavelIds?: Set<string>;
+  allUsers: string[];
+  onAddObserver?: (entity: 'prioridade' | 'plano' | 'tarefa', entityId: string, userId: string) => void;
+  onRemoveObserver?: (entity: 'prioridade' | 'plano' | 'tarefa', entityId: string, userId: string) => void;
+  canEditObservers?: boolean;
 }> = ({
   plano,
   tarefas,
@@ -328,11 +336,18 @@ const PlanoCard: React.FC<{
   prioridadeDonoId = '',
   viewerIsAdmin = true,
   viewerMyResponsavelIds,
+  allUsers,
+  onAddObserver,
+  onRemoveObserver,
+  canEditObservers = true,
 }) => {
   const myViewerIds = viewerMyResponsavelIds ?? EMPTY_ID_SET;
 
   const [expanded, setExpanded] = useState(false);
   const [showAddTarefa, setShowAddTarefa] = useState(false);
+  const [blockContext, setBlockContext] = useState<
+    { task_id: string; task_title: string; task_owner: string; block_reason: string }[]
+  >([]);
   const [novaTarefa, setNovaTarefa] = useState({
     titulo: '',
     responsavel_id: loggedUserResponsavelId ?? '',
@@ -379,6 +394,18 @@ const PlanoCard: React.FC<{
   const concluidas = tarefasVisiveis.filter((t) => t.status_tarefa === 'Concluida').length;
   const totalTarefas = tarefasVisiveis.length;
   const progresso = totalTarefas > 0 ? (concluidas / totalTarefas) * 100 : 0;
+
+  useEffect(() => {
+    if (!expanded || status !== 'Bloqueado') return;
+    let mounted = true;
+    void apiGetBlockContext(plano.id, tarefas).then((ctx) => {
+      if (!mounted || !ctx) return;
+      setBlockContext(ctx);
+    });
+    return () => {
+      mounted = false;
+    };
+  }, [expanded, status, plano.id, tarefas]);
 
   const handleAddTarefa = () => {
     if (!novaTarefa.titulo.trim()) return;
@@ -543,6 +570,17 @@ const PlanoCard: React.FC<{
               </React.Fragment>
             ))}
           </div>
+          <div className="px-6 pb-3">
+            <ObserversPanel
+              entity="plano"
+              entityId={plano.id}
+              observers={plano.observadores ?? []}
+              allUsers={allUsers}
+              onAdd={(userId) => onAddObserver?.('plano', plano.id, userId)}
+              onRemove={(userId) => onRemoveObserver?.('plano', plano.id, userId)}
+              canEdit={canEditObservers}
+            />
+          </div>
 
           {/* Tasks section */}
           <div className="border-t border-slate-800">
@@ -624,6 +662,18 @@ const PlanoCard: React.FC<{
                       </p>
                     ))}
                   </div>
+                </div>
+              </div>
+            )}
+            {status === 'Bloqueado' && blockContext.length > 0 && (
+              <div className="px-4 pb-3">
+                <div className="rounded-lg border border-red-500/35 bg-red-500/10 px-3 py-2">
+                  <p className="text-[11px] text-red-300 font-medium">Causa do Bloqueio</p>
+                  {blockContext.map((c) => (
+                    <p key={c.task_id} className="text-[11px] text-red-200/90 mt-1">
+                      ⛔ Tarefa: "{c.task_title}" · 👤 Responsável: {c.task_owner} · 📝 Motivo: {c.block_reason || '—'}
+                    </p>
+                  ))}
                 </div>
               </div>
             )}
@@ -819,6 +869,7 @@ const DetalhePrioridade: React.FC<{
             lockWhoToOverrideName={false}
             prioridadeDonoId={prioridade.dono_id}
             viewerIsAdmin={true}
+            allUsers={responsaveis.map((r) => r.nome)}
           />
         ))}
       </div>
@@ -864,6 +915,9 @@ const PrioridadeCard: React.FC<{
   canTarefaDelete?: boolean;
   viewerIsAdmin?: boolean;
   viewerMyResponsavelIds?: Set<string>;
+  allUsers: string[];
+  onAddObserver?: (entity: 'prioridade' | 'plano' | 'tarefa', entityId: string, userId: string) => void;
+  onRemoveObserver?: (entity: 'prioridade' | 'plano' | 'tarefa', entityId: string, userId: string) => void;
 }> = ({
   prioridade,
   planos,
@@ -894,6 +948,9 @@ const PrioridadeCard: React.FC<{
   canTarefaDelete = true,
   viewerIsAdmin = true,
   viewerMyResponsavelIds,
+  allUsers,
+  onAddObserver,
+  onRemoveObserver,
 }) => {
   const myViewerIds = viewerMyResponsavelIds ?? EMPTY_ID_SET;
 
@@ -1153,6 +1210,15 @@ const PrioridadeCard: React.FC<{
           )}
 
           <div className="space-y-3 pt-1">
+            <ObserversPanel
+              entity="prioridade"
+              entityId={prioridade.id}
+              observers={prioridade.observadores ?? []}
+              allUsers={allUsers}
+              onAdd={(userId) => onAddObserver?.('prioridade', prioridade.id, userId)}
+              onRemove={(userId) => onRemoveObserver?.('prioridade', prioridade.id, userId)}
+              canEdit={canPrioridadeWrite}
+            />
             {planos.map((plano) => (
               <PlanoCard
                 key={plano.id}
@@ -1177,6 +1243,10 @@ const PrioridadeCard: React.FC<{
                 prioridadeDonoId={prioridade.dono_id}
                 viewerIsAdmin={viewerIsAdmin}
                 viewerMyResponsavelIds={myViewerIds}
+                allUsers={allUsers}
+                onAddObserver={onAddObserver}
+                onRemoveObserver={onRemoveObserver}
+                canEditObservers={canPlanoWrite}
               />
             ))}
           </div>
@@ -1202,6 +1272,8 @@ export const EstrategicoView: React.FC<EstrategicoViewProps> = (props) => {
     onAddTarefa,
     onUpdateTarefa,
     onDeleteTarefa,
+    onAddObserver,
+    onRemoveObserver,
     loggedUserUid,
     loggedUserRole,
     loggedUserName,
@@ -1327,7 +1399,7 @@ export const EstrategicoView: React.FC<EstrategicoViewProps> = (props) => {
       const next: Record<string, boolean> = {};
       let changed = false;
       for (const [id, val] of Object.entries(prev)) {
-        if (ids.has(id)) next[id] = val;
+        if (ids.has(id)) next[id] = Boolean(val);
         else changed = true;
       }
       return changed ? next : prev;
@@ -1397,6 +1469,7 @@ export const EstrategicoView: React.FC<EstrategicoViewProps> = (props) => {
             );
             /** Tático: com permissão de escrita na prioridade, pode ajustar o responsável (dono). */
             const canEditDonoNoTatico = caps.prioridadeWrite;
+            const isLegacyPrioridade = p.id.startsWith('legacy-');
             return (
               <div key={p.id} id={`prioridade-card-${p.id}`}>
                 <PrioridadeCard
@@ -1417,14 +1490,14 @@ export const EstrategicoView: React.FC<EstrategicoViewProps> = (props) => {
                   lockPlanoWhoToPriorityDono={!isAdmin}
                   loggedUserResponsavelId={loggedUserResponsavelId}
                   loggedUserResponsavelNomeDisplay={loggedUserResponsavelNomeDisplay}
-                  canEditResponsavel={canEditDonoNoTatico}
+                  canEditResponsavel={canEditDonoNoTatico && !isLegacyPrioridade}
                   onUpdatePrioridadeOwner={
-                    onUpdatePrioridade
+                    onUpdatePrioridade && !isLegacyPrioridade
                       ? (ownerId) => onUpdatePrioridade(p.id, { dono_id: ownerId })
                       : undefined
                   }
                   onArchive={
-                    onUpdatePrioridade
+                    onUpdatePrioridade && !isLegacyPrioridade
                       ? () => onUpdatePrioridade(p.id, { status_prioridade: 'Concluido' })
                       : undefined
                   }
@@ -1436,7 +1509,7 @@ export const EstrategicoView: React.FC<EstrategicoViewProps> = (props) => {
                   onAddTarefa={onAddTarefa}
                   onUpdateTarefa={onUpdateTarefa}
                   onDeleteTarefa={onDeleteTarefa}
-                  canPrioridadeWrite={caps.prioridadeWrite}
+                  canPrioridadeWrite={caps.prioridadeWrite && !isLegacyPrioridade}
                   canPlanoWrite={caps.planoWrite}
                   canPlanoDelete={caps.planoDelete}
                   canTarefaWrite={caps.tarefaWrite}
@@ -1444,6 +1517,9 @@ export const EstrategicoView: React.FC<EstrategicoViewProps> = (props) => {
                   canTarefaDelete={caps.tarefaDelete}
                   viewerIsAdmin={viewerSeesAllTarefasNoPlano}
                   viewerMyResponsavelIds={myResponsavelIds}
+                  allUsers={responsaveis.map((r) => r.nome)}
+                  onAddObserver={onAddObserver}
+                  onRemoveObserver={onRemoveObserver}
                 />
               </div>
             );

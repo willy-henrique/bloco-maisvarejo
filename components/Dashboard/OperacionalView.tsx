@@ -9,6 +9,8 @@ import {
   displayNomeDonoPrioridade,
 } from './responsavelSearchUtils';
 import { canViewByOwnershipOrObserver, tarefaAtribuidaAoUsuario } from './taskAssignmentUtils';
+import { ObserversPanel } from './ObserversPanel';
+import { apiGetBlockContext } from '../../services/ritmoCollabApi';
 
 // Utilidades
 function tsFromDateInput(v: string): number {
@@ -92,6 +94,8 @@ type OperacionalProps = {
   onAddTarefa: (t: Omit<Tarefa, 'id'>) => void;
   onUpdateTarefa: (id: string, u: Partial<Tarefa>) => void;
   onDeleteTarefa: (id: string) => void;
+  onAddObserver?: (entity: 'prioridade' | 'plano' | 'tarefa', entityId: string, userId: string) => void;
+  onRemoveObserver?: (entity: 'prioridade' | 'plano' | 'tarefa', entityId: string, userId: string) => void;
   onUpdatePlano: (id: string, u: Partial<PlanoDeAtaque>) => void;
   onDeletePlano: (id: string) => void;
   operacionalCaps?: OperacionalCaps;
@@ -105,6 +109,9 @@ const TarefaRow: React.FC<{
   canWriteTarefa?: boolean;
   canAssignTarefa?: boolean;
   canDeleteTarefa?: boolean;
+  allUsers: string[];
+  onAddObserver?: (entity: 'prioridade' | 'plano' | 'tarefa', entityId: string, userId: string) => void;
+  onRemoveObserver?: (entity: 'prioridade' | 'plano' | 'tarefa', entityId: string, userId: string) => void;
 }> = ({
   tarefa,
   responsaveis,
@@ -113,7 +120,11 @@ const TarefaRow: React.FC<{
   canWriteTarefa = true,
   canAssignTarefa = true,
   canDeleteTarefa = true,
+  allUsers,
+  onAddObserver,
+  onRemoveObserver,
 }) => {
+  const [showObservers, setShowObservers] = useState(false);
   const resp = responsaveis.find(
     (r) =>
       normStr(r.id) === normStr(tarefa.responsavel_id) ||
@@ -124,6 +135,7 @@ const TarefaRow: React.FC<{
   const StatusIcon = cfg.Icon;
 
   return (
+    <>
     <tr className="hover:bg-slate-800/20 transition-colors">
       <td className="px-4 py-3">
         <button
@@ -209,6 +221,29 @@ const TarefaRow: React.FC<{
         )}
       </td>
     </tr>
+    <tr className="bg-slate-900/40">
+      <td colSpan={6} className="px-4 pb-2">
+        <button
+          type="button"
+          onClick={() => setShowObservers((v) => !v)}
+          className="text-[11px] text-slate-400 hover:text-slate-200"
+        >
+          👁 {(tarefa.observadores ?? []).length} observadores
+        </button>
+        {showObservers && (
+          <ObserversPanel
+            entity="tarefa"
+            entityId={tarefa.id}
+            observers={tarefa.observadores ?? []}
+            allUsers={allUsers}
+            onAdd={(userId) => onAddObserver?.('tarefa', tarefa.id, userId)}
+            onRemove={(userId) => onRemoveObserver?.('tarefa', tarefa.id, userId)}
+            canEdit={canWriteTarefa}
+          />
+        )}
+      </td>
+    </tr>
+    </>
   );
 };
 
@@ -229,6 +264,9 @@ const OperacionalPlanoCard: React.FC<{
   canWriteTarefa?: boolean;
   canAssignTarefa?: boolean;
   canDeleteTarefa?: boolean;
+  allUsers: string[];
+  onAddObserver?: (entity: 'prioridade' | 'plano' | 'tarefa', entityId: string, userId: string) => void;
+  onRemoveObserver?: (entity: 'prioridade' | 'plano' | 'tarefa', entityId: string, userId: string) => void;
 }> = ({
   prioridade,
   plano,
@@ -246,6 +284,9 @@ const OperacionalPlanoCard: React.FC<{
   canWriteTarefa = true,
   canAssignTarefa = true,
   canDeleteTarefa = true,
+  allUsers,
+  onAddObserver,
+  onRemoveObserver,
 }) => {
   const [expanded, setExpanded] = useState(false);
   const [showAddTarefa, setShowAddTarefa] = useState(false);
@@ -301,6 +342,21 @@ const OperacionalPlanoCard: React.FC<{
         motivo: t.bloqueio_motivo || 'Motivo não informado',
       }));
   }, [isAdmin, donoDestaPrioridade, tarefasDoPlano, tarefas, plano.id, responsaveis]);
+  const [blockContext, setBlockContext] = useState<
+    { task_id: string; task_title: string; task_owner: string; block_reason: string }[]
+  >([]);
+
+  useEffect(() => {
+    if (!expanded || status !== 'Bloqueado') return;
+    let mounted = true;
+    void apiGetBlockContext(plano.id, tarefas.filter((t) => t.plano_id === plano.id)).then((ctx) => {
+      if (!mounted || !ctx) return;
+      setBlockContext(ctx);
+    });
+    return () => {
+      mounted = false;
+    };
+  }, [expanded, status, plano.id, tarefas]);
 
   const W2H: Array<{
     key: keyof PlanoDeAtaque;
@@ -472,6 +528,17 @@ const OperacionalPlanoCard: React.FC<{
               />
             </div>
           </div>
+          <div className="px-6 pb-3">
+            <ObserversPanel
+              entity="plano"
+              entityId={plano.id}
+              observers={plano.observadores ?? []}
+              allUsers={allUsers}
+              onAdd={(userId) => onAddObserver?.('plano', plano.id, userId)}
+              onRemove={(userId) => onRemoveObserver?.('plano', plano.id, userId)}
+              canEdit={canWritePlano}
+            />
+          </div>
 
           {/* Tasks (mantém o comportamento atual do Operacional) */}
           {tarefasDoPlano.length === 0 ? (
@@ -488,6 +555,16 @@ const OperacionalPlanoCard: React.FC<{
                   {bloqueiosNaoVisiveis.slice(0, 3).map((b) => (
                     <p key={b.id} className="text-[11px] text-amber-200/90 mt-1">
                       {b.titulo} · {b.responsavel} · {b.motivo}
+                    </p>
+                  ))}
+                </div>
+              )}
+              {status === 'Bloqueado' && blockContext.length > 0 && (
+                <div className="rounded-lg border border-red-500/35 bg-red-500/10 px-3 py-2">
+                  <p className="text-[11px] text-red-300 font-medium">Causa do Bloqueio</p>
+                  {blockContext.map((c) => (
+                    <p key={c.task_id} className="text-[11px] text-red-200/90 mt-1">
+                      ⛔ Tarefa: "{c.task_title}" · 👤 Responsável: {c.task_owner} · 📝 Motivo: {c.block_reason || '—'}
                     </p>
                   ))}
                 </div>
@@ -516,6 +593,9 @@ const OperacionalPlanoCard: React.FC<{
                           canWriteTarefa={canWriteTarefa}
                           canAssignTarefa={canAssignTarefa}
                           canDeleteTarefa={canDeleteTarefa}
+                          allUsers={allUsers}
+                          onAddObserver={onAddObserver}
+                          onRemoveObserver={onRemoveObserver}
                         />
                       ))}
                     </tbody>
@@ -562,6 +642,9 @@ const OperacionalPlanoCard: React.FC<{
                               canWriteTarefa={canWriteTarefa}
                               canAssignTarefa={canAssignTarefa}
                               canDeleteTarefa={canDeleteTarefa}
+                              allUsers={allUsers}
+                              onAddObserver={onAddObserver}
+                              onRemoveObserver={onRemoveObserver}
                             />
                           ))}
                         </tbody>
@@ -687,6 +770,8 @@ export const OperacionalView: React.FC<OperacionalProps> = ({
   onAddTarefa,
   onUpdateTarefa,
   onDeleteTarefa,
+  onAddObserver,
+  onRemoveObserver,
   onUpdatePlano,
   operacionalCaps,
 }) => {
@@ -922,6 +1007,9 @@ export const OperacionalView: React.FC<OperacionalProps> = ({
                     canWriteTarefa={oc.tarefaWrite}
                     canAssignTarefa={oc.tarefaAssign}
                     canDeleteTarefa={oc.tarefaDelete}
+                    allUsers={responsaveis.map((r) => r.nome)}
+                    onAddObserver={onAddObserver}
+                    onRemoveObserver={onRemoveObserver}
                   />
                 );
               })}
@@ -968,6 +1056,9 @@ export const OperacionalView: React.FC<OperacionalProps> = ({
                         canWriteTarefa={oc.tarefaWrite}
                         canAssignTarefa={oc.tarefaAssign}
                         canDeleteTarefa={oc.tarefaDelete}
+                        allUsers={responsaveis.map((r) => r.nome)}
+                        onAddObserver={onAddObserver}
+                        onRemoveObserver={onRemoveObserver}
                       />
                     );
                   })}
@@ -1006,64 +1097,79 @@ export const OperacionalView: React.FC<OperacionalProps> = ({
                       const cfg = TAREFA_CFG[t.status_tarefa] || TAREFA_CFG.Pendente;
                       const StatusIcon = cfg.Icon;
                       return (
-                        <tr key={t.id} className="hover:bg-slate-800/20 transition-colors">
-                          <td className="px-3 py-2">
-                            <button
-                              type="button"
-                              disabled={!oc.tarefaWrite}
-                              onClick={() => {
-                                const idx = TAREFA_ORDER.indexOf(t.status_tarefa);
-                                const next = TAREFA_ORDER[(idx + 1) % TAREFA_ORDER.length];
-                                onUpdateTarefa(t.id, { status_tarefa: next });
-                              }}
-                              className="text-slate-500 hover:text-slate-200 disabled:opacity-40 disabled:pointer-events-none"
-                              title="Alternar status"
-                            >
-                              <StatusIcon
-                                size={14}
-                                className={
-                                  t.status_tarefa === 'Bloqueada'
-                                    ? 'text-red-400'
-                                    : t.status_tarefa === 'Concluida' || t.status_tarefa === 'EmExecucao'
-                                      ? 'text-blue-300'
-                                      : 'text-slate-500'
-                                }
-                              />
-                            </button>
-                          </td>
-                          <td className="px-3 py-2">
-                            <select
-                              value={t.status_tarefa}
-                              onChange={(e) => onUpdateTarefa(t.id, { status_tarefa: e.target.value as StatusTarefa })}
-                              disabled={!oc.tarefaWrite}
-                              className="text-[10px] font-semibold px-2 py-1 rounded-sm uppercase bg-slate-800 border border-slate-700 text-slate-200 outline-none focus:border-slate-500 disabled:opacity-50"
-                            >
-                              <option value="Pendente">PENDENTE</option>
-                              <option value="EmExecucao">EM EXECUÇÃO</option>
-                              <option value="Bloqueada">BLOQUEADA</option>
-                              <option value="Concluida">CONCLUÍDA</option>
-                            </select>
-                          </td>
-                          <td className="px-3 py-2">
-                            <p className="text-slate-200 text-sm">{t.titulo}</p>
-                            {t.descricao ? <p className="text-[11px] text-slate-500 truncate">{t.descricao}</p> : null}
-                          </td>
-                          <td className="px-3 py-2 text-slate-300">{respNome || '—'}</td>
-                          <td className="px-3 py-2 text-slate-400">{fmtDate(t.data_vencimento)}</td>
-                          <td className="px-3 py-2 text-slate-400">{pl?.titulo ?? '—'}</td>
-                          <td className="px-2 py-2 text-right">
-                            {oc.tarefaDelete && (
+                        <React.Fragment key={t.id}>
+                          <tr className="hover:bg-slate-800/20 transition-colors">
+                            <td className="px-3 py-2">
                               <button
                                 type="button"
-                                onClick={() => onDeleteTarefa(t.id)}
-                                className="p-1.5 rounded text-slate-600 hover:text-red-400 hover:bg-red-500/10 transition-colors"
-                                title="Excluir"
+                                disabled={!oc.tarefaWrite}
+                                onClick={() => {
+                                  const idx = TAREFA_ORDER.indexOf(t.status_tarefa);
+                                  const next = TAREFA_ORDER[(idx + 1) % TAREFA_ORDER.length];
+                                  onUpdateTarefa(t.id, { status_tarefa: next });
+                                }}
+                                className="text-slate-500 hover:text-slate-200 disabled:opacity-40 disabled:pointer-events-none"
+                                title="Alternar status"
                               >
-                                <Trash2 size={13} />
+                                <StatusIcon
+                                  size={14}
+                                  className={
+                                    t.status_tarefa === 'Bloqueada'
+                                      ? 'text-red-400'
+                                      : t.status_tarefa === 'Concluida' || t.status_tarefa === 'EmExecucao'
+                                        ? 'text-blue-300'
+                                        : 'text-slate-500'
+                                  }
+                                />
                               </button>
-                            )}
-                          </td>
-                        </tr>
+                            </td>
+                            <td className="px-3 py-2">
+                              <select
+                                value={t.status_tarefa}
+                                onChange={(e) => onUpdateTarefa(t.id, { status_tarefa: e.target.value as StatusTarefa })}
+                                disabled={!oc.tarefaWrite}
+                                className="text-[10px] font-semibold px-2 py-1 rounded-sm uppercase bg-slate-800 border border-slate-700 text-slate-200 outline-none focus:border-slate-500 disabled:opacity-50"
+                              >
+                                <option value="Pendente">PENDENTE</option>
+                                <option value="EmExecucao">EM EXECUÇÃO</option>
+                                <option value="Bloqueada">BLOQUEADA</option>
+                                <option value="Concluida">CONCLUÍDA</option>
+                              </select>
+                            </td>
+                            <td className="px-3 py-2">
+                              <p className="text-slate-200 text-sm">{t.titulo}</p>
+                              {t.descricao ? <p className="text-[11px] text-slate-500 truncate">{t.descricao}</p> : null}
+                            </td>
+                            <td className="px-3 py-2 text-slate-300">{respNome || '—'}</td>
+                            <td className="px-3 py-2 text-slate-400">{fmtDate(t.data_vencimento)}</td>
+                            <td className="px-3 py-2 text-slate-400">{pl?.titulo ?? '—'}</td>
+                            <td className="px-2 py-2 text-right">
+                              {oc.tarefaDelete && (
+                                <button
+                                  type="button"
+                                  onClick={() => onDeleteTarefa(t.id)}
+                                  className="p-1.5 rounded text-slate-600 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                                  title="Excluir"
+                                >
+                                  <Trash2 size={13} />
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                          <tr className="bg-slate-900/40">
+                            <td colSpan={7} className="px-3 pb-2">
+                              <ObserversPanel
+                                entity="tarefa"
+                                entityId={t.id}
+                                observers={t.observadores ?? []}
+                                allUsers={responsaveis.map((r) => r.nome)}
+                                onAdd={(userId) => onAddObserver?.('tarefa', t.id, userId)}
+                                onRemove={(userId) => onRemoveObserver?.('tarefa', t.id, userId)}
+                                canEdit={oc.tarefaWrite}
+                              />
+                            </td>
+                          </tr>
+                        </React.Fragment>
                       );
                     })}
                   </tbody>

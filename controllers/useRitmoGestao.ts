@@ -109,7 +109,10 @@ function mergePrioridadesPreservandoDonoMaisRecente(
   const localById = new Map(local.map((p) => [p.id, p]));
   return remote.map((rp) => {
     const lp = localById.get(rp.id);
-    if (!lp) return rp;
+    if (!lp) return { ...rp, observadores: Array.isArray(rp.observadores) ? rp.observadores : [] };
+    const localObs = Array.isArray(lp.observadores) ? lp.observadores : [];
+    const remoteObs = Array.isArray(rp.observadores) ? rp.observadores : [];
+    const observadores = localObs.length >= remoteObs.length ? localObs : remoteObs;
     const rTs = rp.dono_atualizado_em ?? 0;
     const lTs = lp.dono_atualizado_em ?? 0;
     const donoDiffers = normDonoCmp(lp.dono_id) !== normDonoCmp(rp.dono_id);
@@ -120,9 +123,10 @@ function mergePrioridadesPreservandoDonoMaisRecente(
         dono_id: lp.dono_id,
         dono_atualizado_em: lp.dono_atualizado_em ?? rp.dono_atualizado_em,
         empresa: lp.empresa ?? rp.empresa,
+        observadores,
       };
     }
-    return rp;
+    return { ...rp, observadores };
   });
 }
 
@@ -340,13 +344,28 @@ export function useRitmoGestao(encryptionKey: CryptoKey | null) {
           const raw = next as RitmoGestaoBoard;
           const remotePrios = Array.isArray(raw.prioridades) ? raw.prioridades : [];
           const remotePlanos = Array.isArray(raw.planos) ? raw.planos : [];
+          const remoteTarefas = Array.isArray(raw.tarefas) ? raw.tarefas : [];
           const mergedPrios = mergePrioridadesPreservandoDonoMaisRecente(remotePrios, prev.prioridades);
-          const mergedPlanos = alinharPlanosWhoAoDonoMesclado(remotePlanos, mergedPrios, remotePrios);
+          const mergedPlanos = alinharPlanosWhoAoDonoMesclado(remotePlanos, mergedPrios, remotePrios).map((rpl) => {
+            const lpl = prev.planos.find((p) => p.id === rpl.id);
+            if (!lpl) return rpl;
+            const localObs = Array.isArray(lpl.observadores) ? lpl.observadores : [];
+            const remoteObs = Array.isArray(rpl.observadores) ? rpl.observadores : [];
+            return { ...rpl, observadores: localObs.length >= remoteObs.length ? localObs : remoteObs };
+          });
+          const mergedTarefas = remoteTarefas.map((rt) => {
+            const lt = prev.tarefas.find((t) => t.id === rt.id);
+            if (!lt) return rt;
+            const localObs = Array.isArray(lt.observadores) ? lt.observadores : [];
+            const remoteObs = Array.isArray(rt.observadores) ? rt.observadores : [];
+            return { ...rt, observadores: localObs.length >= remoteObs.length ? localObs : remoteObs };
+          });
           return normalizeBoard({
             ...raw,
             empresas: Array.isArray(raw.empresas) ? raw.empresas : prev.empresas,
             prioridades: mergedPrios,
             planos: mergedPlanos,
+            tarefas: mergedTarefas,
           });
         })
       );
@@ -377,12 +396,10 @@ export function useRitmoGestao(encryptionKey: CryptoKey | null) {
   // --- Backlog
   const addBacklog = useCallback(
     (item: Omit<Backlog, 'id' | 'data_criacao'>) => {
-      const creator = String(item.created_by ?? '').trim();
       const newItem: Backlog = {
         ...item,
         id: crypto.randomUUID(),
         data_criacao: Date.now(),
-        observadores: ensureCreatorObserver(item.observadores, creator),
       };
       saveBoard((prev) => ({
         ...prev,
