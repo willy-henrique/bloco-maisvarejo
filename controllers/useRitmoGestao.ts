@@ -7,7 +7,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import type {
   Backlog,
   Prioridade,
-  PlanoDeAtaque,
+  PlanoDeAcao,
   Tarefa,
   Responsavel,
   RitmoGestaoBoard,
@@ -76,7 +76,7 @@ function normalizeBoard(raw: RitmoGestaoBoard | undefined | null): RitmoGestaoBo
       ? raw.prioridades.map((p) => ({ ...p, observadores: normalizeObservers((p as Prioridade).observadores) }))
       : base.prioridades,
     planos: Array.isArray(raw.planos)
-      ? raw.planos.map((pl) => ({ ...pl, observadores: normalizeObservers((pl as PlanoDeAtaque).observadores) }))
+      ? raw.planos.map((pl) => ({ ...pl, observadores: normalizeObservers((pl as PlanoDeAcao).observadores) }))
       : base.planos,
     tarefas: Array.isArray(raw.tarefas)
       ? raw.tarefas.map((t) => ({ ...t, observadores: normalizeObservers((t as Tarefa).observadores) }))
@@ -132,10 +132,10 @@ function mergePrioridadesPreservandoDonoMaisRecente(
 
 /** Quando o dono da prioridade veio do merge local, alinha who_id dos planos (evita snapshot antigo com WHO errado). */
 function alinharPlanosWhoAoDonoMesclado(
-  planos: PlanoDeAtaque[],
+  planos: PlanoDeAcao[],
   prioridadesMescladas: Prioridade[],
   prioridadesRemotas: Prioridade[],
-): PlanoDeAtaque[] {
+): PlanoDeAcao[] {
   const remoteDono = new Map(prioridadesRemotas.map((p) => [p.id, p.dono_id]));
   const mergedDono = new Map(prioridadesMescladas.map((p) => [p.id, p.dono_id]));
   return planos.map((pl) => {
@@ -195,7 +195,7 @@ export function computeStatusPlano(planoId: string, tarefas: Tarefa[]): StatusPl
   return 'Execucao';
 }
 
-export function computeStatusPrioridade(prioridadeId: string, planos: PlanoDeAtaque[], tarefas: Tarefa[]): StatusPrioridade | null {
+export function computeStatusPrioridade(prioridadeId: string, planos: PlanoDeAcao[], tarefas: Tarefa[]): StatusPrioridade | null {
   const doPrioridade = planos.filter((p) => p.prioridade_id === prioridadeId);
   if (doPrioridade.length === 0) return null;
   const algumPlanoBloqueado = doPrioridade.some((p) => {
@@ -432,13 +432,14 @@ export function useRitmoGestao(encryptionKey: CryptoKey | null) {
       const item = board.backlog.find((b) => b.id === backlogId);
       if (!item || item.status_backlog === 'promovido') return false;
       if (prioridadesAtivas(board.prioridades).length >= MAX_PRIORIDADES_ATIVAS) return false;
+      const novaId = crypto.randomUUID();
       saveBoard((prev) => {
         const it = prev.backlog.find((b) => b.id === backlogId);
         if (!it || it.status_backlog === 'promovido') return prev;
         if (prioridadesAtivas(prev.prioridades).length >= MAX_PRIORIDADES_ATIVAS) return prev;
         const donoId = prev.responsaveis[0]?.id ?? 'r1';
         const nova: Prioridade = {
-          id: crypto.randomUUID(),
+          id: novaId,
           titulo: it.titulo,
           descricao: it.descricao,
           dono_id: donoId,
@@ -459,7 +460,7 @@ export function useRitmoGestao(encryptionKey: CryptoKey | null) {
           prioridades: [nova, ...prev.prioridades],
         };
       });
-      return true;
+      return novaId;
     },
     [board.backlog, board.prioridades, saveBoard]
   );
@@ -485,16 +486,17 @@ export function useRitmoGestao(encryptionKey: CryptoKey | null) {
 
   const updatePrioridade = useCallback(
     (id: string, updates: Partial<Prioridade>) => {
+      const { created_by: _ignored, ...safeUpdates } = updates as Partial<Prioridade> & { created_by?: string };
       saveBoard((prev) => {
         const atual = prev.prioridades.find((p) => p.id === id);
         const novoDonoRaw =
-          updates.dono_id !== undefined ? String(updates.dono_id).trim() : '';
+          safeUpdates.dono_id !== undefined ? String(safeUpdates.dono_id).trim() : '';
         /** Sempre que o Tático manda `dono_id`, grava carimbo e alinha planos — evita skip quando string legada ≡ uid canônico. */
-        const aplicarDono = updates.dono_id !== undefined && !!novoDonoRaw;
+        const aplicarDono = safeUpdates.dono_id !== undefined && !!novoDonoRaw;
 
         const nextPrioridades = prev.prioridades.map((p) => {
           if (p.id !== id) return p;
-          const merged: Prioridade = { ...p, ...updates };
+          const merged: Prioridade = { ...p, ...safeUpdates };
           if (aplicarDono) merged.dono_atualizado_em = Date.now();
           return merged;
         });
@@ -507,8 +509,8 @@ export function useRitmoGestao(encryptionKey: CryptoKey | null) {
             : prev.planos;
 
         let nextTarefas = prev.tarefas;
-        if (updates.empresa !== undefined) {
-          const em = String(updates.empresa ?? '').trim();
+        if (safeUpdates.empresa !== undefined) {
+          const em = String(safeUpdates.empresa ?? '').trim();
           nextPlanos = nextPlanos.map((pl) =>
             pl.prioridade_id === id ? { ...pl, empresa: em } : pl
           );
@@ -543,9 +545,9 @@ export function useRitmoGestao(encryptionKey: CryptoKey | null) {
 
   // --- Plano
   const addPlano = useCallback(
-    (item: Omit<PlanoDeAtaque, 'id'>) => {
+    (item: Omit<PlanoDeAcao, 'id'>) => {
       const creator = String(item.created_by ?? '').trim();
-      const nova: PlanoDeAtaque = {
+      const nova: PlanoDeAcao = {
         ...item,
         id: crypto.randomUUID(),
         observadores: ensureCreatorObserver(item.observadores, creator),
@@ -556,10 +558,11 @@ export function useRitmoGestao(encryptionKey: CryptoKey | null) {
   );
 
   const updatePlano = useCallback(
-    (id: string, updates: Partial<PlanoDeAtaque>) => {
+    (id: string, updates: Partial<PlanoDeAcao>) => {
+      const { created_by: _ignored, ...safeUpdates } = updates as Partial<PlanoDeAcao> & { created_by?: string };
       saveBoard((prev) => ({
         ...prev,
-        planos: prev.planos.map((p) => (p.id === id ? { ...p, ...updates } : p)),
+        planos: prev.planos.map((p) => (p.id === id ? { ...p, ...safeUpdates } : p)),
       }));
     },
     [saveBoard]
@@ -593,15 +596,16 @@ export function useRitmoGestao(encryptionKey: CryptoKey | null) {
 
   const updateTarefa = useCallback(
     (id: string, updates: Partial<Tarefa>) => {
+      const { created_by: _ignored, ...safeUpdates } = updates as Partial<Tarefa> & { created_by?: string };
       saveBoard((prev) => ({
         ...prev,
         tarefas: prev.tarefas.map((t) => {
           if (t.id !== id) return t;
-          const next: Tarefa = { ...t, ...updates };
-          if (updates.status_tarefa === 'Bloqueada' && !t.bloqueada_em) {
+          const next: Tarefa = { ...t, ...safeUpdates };
+          if (safeUpdates.status_tarefa === 'Bloqueada' && !t.bloqueada_em) {
             next.bloqueada_em = Date.now();
           }
-          if (updates.status_tarefa && updates.status_tarefa !== 'Bloqueada') {
+          if (safeUpdates.status_tarefa && safeUpdates.status_tarefa !== 'Bloqueada') {
             next.bloqueada_em = undefined;
           }
           return next;

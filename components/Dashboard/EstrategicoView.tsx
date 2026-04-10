@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type {
   Prioridade,
-  PlanoDeAtaque,
+  PlanoDeAcao,
   Tarefa,
   Responsavel,
   StatusPlano,
@@ -35,6 +35,8 @@ import {
 import { canViewByOwnershipOrObserver, tarefaAtribuidaAoUsuario } from './taskAssignmentUtils';
 import { ObserversPanel } from './ObserversPanel';
 import { apiGetBlockContext } from '../../services/ritmoCollabApi';
+import { Modal } from '../Shared/Modal';
+import { VisibilityFilterBar, type VisibilityFilter } from '../Shared/VisibilityFilterBar';
 
 const EMPTY_ID_SET = new Set<string>();
 
@@ -124,14 +126,14 @@ export interface EstrategicoCaps {
 
 interface EstrategicoViewProps {
   prioridades: Prioridade[];
-  planos: PlanoDeAtaque[];
+  planos: PlanoDeAcao[];
   tarefas: Tarefa[];
   responsaveis: Responsavel[];
   computeStatusPlano: (id: string) => StatusPlano | null;
   onUpdatePrioridade: (id: string, u: Partial<Prioridade>) => void;
   onDeletePrioridade: (p: Prioridade) => void;
-  onAddPlano: (p: Omit<PlanoDeAtaque, 'id'>) => void;
-  onUpdatePlano: (id: string, u: Partial<PlanoDeAtaque>) => void;
+  onAddPlano: (p: Omit<PlanoDeAcao, 'id'>) => void;
+  onUpdatePlano: (id: string, u: Partial<PlanoDeAcao>) => void;
   onDeletePlano: (id: string) => void;
   onAddTarefa: (t: Omit<Tarefa, 'id'>) => void;
   onUpdateTarefa: (id: string, u: Partial<Tarefa>) => void;
@@ -146,6 +148,8 @@ interface EstrategicoViewProps {
   loggedUserDisplayName?: string | null;
   /** Quando definido, faz scroll até o bloco da prioridade no Tático */
   focusPrioridadeId?: string | null;
+  focusCardId?: string | null;
+  onFocusConsumed?: () => void;
   /** Quando definido, mostra somente esta prioridade no Tático */
   onlyPrioridadeId?: string | null;
   estrategicoCaps?: EstrategicoCaps;
@@ -170,6 +174,7 @@ const TarefaRow: React.FC<{
   canAssignTarefa = true,
   canDeleteTarefa = true,
 }) => {
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const resp = responsaveis.find(
     (r) =>
       normStr(r.id) === normStr(tarefa.responsavel_id) ||
@@ -181,6 +186,7 @@ const TarefaRow: React.FC<{
   const isOverdue = tarefa.data_vencimento < Date.now() && tarefa.status_tarefa !== 'Concluida';
 
   return (
+    <>
     <tr className="hover:bg-slate-800/20 transition-colors">
       <td className="px-4 py-3">
         <div className="flex items-start gap-2.5">
@@ -269,7 +275,7 @@ const TarefaRow: React.FC<{
         {canDeleteTarefa && (
           <button
             type="button"
-            onClick={onDeleteTarefa}
+            onClick={() => setConfirmDelete(true)}
             className="p-1.5 rounded text-slate-600 hover:text-red-400 hover:bg-red-500/10 transition-colors"
             title="Excluir tarefa"
           >
@@ -278,17 +284,33 @@ const TarefaRow: React.FC<{
         )}
       </td>
     </tr>
+    {confirmDelete && (
+      <Modal isOpen onClose={() => setConfirmDelete(false)} title="Remover item" maxWidth="sm">
+        <div className="space-y-4 text-sm text-slate-200">
+          <p>Tem certeza que deseja excluir este item? Esta ação não pode ser desfeita.</p>
+          <div className="flex justify-end gap-2 pt-2">
+            <button type="button" onClick={() => setConfirmDelete(false)} className="px-4 py-2 text-xs font-medium text-slate-300 border border-slate-600 rounded-lg hover:bg-slate-800">
+              Cancelar
+            </button>
+            <button type="button" onClick={() => { onDeleteTarefa(); setConfirmDelete(false); }} className="px-4 py-2 text-xs font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg">
+              Remover
+            </button>
+          </div>
+        </div>
+      </Modal>
+    )}
+    </>
   );
 };
 
 // ── PlanoCard ────────────────────────────────────────────────────────────────
 
 const PlanoCard: React.FC<{
-  plano: PlanoDeAtaque;
+  plano: PlanoDeAcao;
   tarefas: Tarefa[];
   responsaveis: Responsavel[];
   computeStatusPlano: (id: string) => StatusPlano | null;
-  onUpdate: (u: Partial<PlanoDeAtaque>) => void;
+  onUpdate: (u: Partial<PlanoDeAcao>) => void;
   onDelete: () => void;
   onAddTarefa: (t: Omit<Tarefa, 'id'>) => void;
   onUpdateTarefa: (id: string, u: Partial<Tarefa>) => void;
@@ -345,6 +367,7 @@ const PlanoCard: React.FC<{
 
   const [expanded, setExpanded] = useState(false);
   const [showAddTarefa, setShowAddTarefa] = useState(false);
+  const [confirmDeletePlano, setConfirmDeletePlano] = useState(false);
   const [blockContext, setBlockContext] = useState<
     { task_id: string; task_title: string; task_owner: string; block_reason: string }[]
   >([]);
@@ -423,6 +446,7 @@ const PlanoCard: React.FC<{
       data_inicio: Date.now(),
       data_vencimento: parsedVenc,
       status_tarefa: 'Pendente',
+      created_by: loggedUserResponsavelId ?? '',
       empresa: plano.empresa,
     });
     setNovaTarefa({
@@ -434,7 +458,7 @@ const PlanoCard: React.FC<{
     setShowAddTarefa(false);
   };
 
-  const W2H: Array<{ key: keyof PlanoDeAtaque; label: string; sub: string; type: 'textarea' | 'input' | 'date' | 'resp' }> = [
+  const W2H: Array<{ key: keyof PlanoDeAcao; label: string; sub: string; type: 'textarea' | 'input' | 'date' | 'resp' }> = [
     { key: 'what', label: 'WHAT', sub: 'O que', type: 'textarea' },
     { key: 'why', label: 'WHY', sub: 'Por que', type: 'textarea' },
     { key: 'who_id', label: 'WHO', sub: 'Quem', type: 'resp' },
@@ -498,7 +522,7 @@ const PlanoCard: React.FC<{
           </button>
         </div>
         {canDeletePlano && (
-          <button type="button" onClick={onDelete} className="p-1.5 text-slate-600 hover:text-red-400 hover:bg-red-500/10 rounded transition-colors shrink-0" title="Excluir plano">
+          <button type="button" onClick={() => setConfirmDeletePlano(true)} className="p-1.5 text-slate-600 hover:text-red-400 hover:bg-red-500/10 rounded transition-colors shrink-0" title="Excluir plano">
             <Trash2 size={13} />
           </button>
         )}
@@ -724,6 +748,17 @@ const PlanoCard: React.FC<{
           </div>
         </div>
       )}
+      {confirmDeletePlano && (
+        <Modal isOpen onClose={() => setConfirmDeletePlano(false)} title="Remover item" maxWidth="sm">
+          <div className="space-y-4 text-sm text-slate-200">
+            <p>Tem certeza que deseja excluir este item? Esta ação não pode ser desfeita.</p>
+            <div className="flex justify-end gap-2 pt-2">
+              <button type="button" onClick={() => setConfirmDeletePlano(false)} className="px-4 py-2 text-xs font-medium text-slate-300 border border-slate-600 rounded-lg hover:bg-slate-800">Cancelar</button>
+              <button type="button" onClick={() => { onDelete(); setConfirmDeletePlano(false); }} className="px-4 py-2 text-xs font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg">Remover</button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 };
@@ -732,14 +767,14 @@ const PlanoCard: React.FC<{
 
 const DetalhePrioridade: React.FC<{
   prioridade: Prioridade;
-  planos: PlanoDeAtaque[];
+  planos: PlanoDeAcao[];
   todasTarefas: Tarefa[];
   responsaveis: Responsavel[];
   computeStatusPlano: (id: string) => StatusPlano | null;
   onBack: () => void;
   onUpdatePrioridade: (u: Partial<Prioridade>) => void;
-  onAddPlano: (p: Omit<PlanoDeAtaque, 'id' | 'prioridade_id'>) => void;
-  onUpdatePlano: (id: string, u: Partial<PlanoDeAtaque>) => void;
+  onAddPlano: (p: Omit<PlanoDeAcao, 'id' | 'prioridade_id'>) => void;
+  onUpdatePlano: (id: string, u: Partial<PlanoDeAcao>) => void;
   onDeletePlano: (id: string) => void;
   onAddTarefa: (t: Omit<Tarefa, 'id'>) => void;
   onUpdateTarefa: (id: string, u: Partial<Tarefa>) => void;
@@ -779,6 +814,7 @@ const DetalhePrioridade: React.FC<{
       when_inicio: Date.now(),
       when_fim: novoPlano.when_fim ? tsFromDateInput(novoPlano.when_fim) : Date.now() + 30 * 86400000,
       how: '', status_plano: 'Execucao',
+      created_by: prioridade.created_by ?? '',
     });
     setNovoPlano({ titulo: '', who_id: responsaveis[0]?.id ?? '', when_fim: '' });
     setShowAddPlano(false);
@@ -810,7 +846,7 @@ const DetalhePrioridade: React.FC<{
 
       <div className="space-y-3">
         <div className="flex items-center justify-between">
-          <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Planos de Ataque</p>
+          <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Planos de Ação</p>
           <button type="button" onClick={() => setShowAddPlano((v) => !v)}
             className="flex items-center gap-1.5 text-xs font-medium text-white bg-emerald-600 hover:bg-emerald-700 px-3 py-1.5 rounded-lg transition-colors">
             <Plus size={13} /> Novo Plano
@@ -850,7 +886,7 @@ const DetalhePrioridade: React.FC<{
         )}
 
         {planos.length === 0 && !showAddPlano && (
-          <div className="py-10 text-center text-slate-500 text-sm border border-dashed border-slate-800 rounded-xl">Nenhum plano de ataque ainda. Clique em &quot;Novo Plano&quot; para começar.</div>
+                  <div className="py-10 text-center text-slate-500 text-sm border border-dashed border-slate-800 rounded-xl">Nenhum plano de ação ainda. Clique em &quot;Novo Plano&quot; para começar.</div>
         )}
 
         {planos.map((plano) => (
@@ -881,7 +917,7 @@ const DetalhePrioridade: React.FC<{
 
 const PrioridadeCard: React.FC<{
   prioridade: Prioridade;
-  planos: PlanoDeAtaque[];
+  planos: PlanoDeAcao[];
   todasTarefas: Tarefa[];
   responsaveis: Responsavel[];
   computeStatusPlano: (id: string) => StatusPlano | null;
@@ -901,8 +937,8 @@ const PrioridadeCard: React.FC<{
   onUpdatePrioridadeOwner?: (ownerId: string) => void;
   /** Ação para arquivar a prioridade (status Concluido) */
   onArchive?: () => void;
-  onAddPlano: (p: Omit<PlanoDeAtaque, 'id' | 'prioridade_id'>) => void;
-  onUpdatePlano: (id: string, u: Partial<PlanoDeAtaque>) => void;
+  onAddPlano: (p: Omit<PlanoDeAcao, 'id' | 'prioridade_id'>) => void;
+  onUpdatePlano: (id: string, u: Partial<PlanoDeAcao>) => void;
   onDeletePlano: (id: string) => void;
   onAddTarefa: (t: Omit<Tarefa, 'id'>) => void;
   onUpdateTarefa: (id: string, u: Partial<Tarefa>) => void;
@@ -918,6 +954,7 @@ const PrioridadeCard: React.FC<{
   allUsers: string[];
   onAddObserver?: (entity: 'prioridade' | 'plano' | 'tarefa', entityId: string, userId: string) => void;
   onRemoveObserver?: (entity: 'prioridade' | 'plano' | 'tarefa', entityId: string, userId: string) => void;
+  onOpenDetalhe?: (p: Prioridade) => void;
 }> = ({
   prioridade,
   planos,
@@ -951,6 +988,7 @@ const PrioridadeCard: React.FC<{
   allUsers,
   onAddObserver,
   onRemoveObserver,
+  onOpenDetalhe,
 }) => {
   const myViewerIds = viewerMyResponsavelIds ?? EMPTY_ID_SET;
 
@@ -1010,6 +1048,7 @@ const PrioridadeCard: React.FC<{
       when_fim: parsedWhenFim,
       how: '',
       status_plano: 'Execucao',
+      created_by: prioridade.created_by ?? '',
     });
     setNovoPlano({
       titulo: '',
@@ -1035,7 +1074,17 @@ const PrioridadeCard: React.FC<{
               <p className="text-[10px] font-semibold text-emerald-500 uppercase tracking-widest flex items-center gap-1">
                 <Target size={9} /> PRIORIDADE ATIVA
               </p>
-              <h3 className="text-lg font-bold text-slate-100">{prioridade.titulo}</h3>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onOpenDetalhe?.(prioridade);
+                }}
+                className="text-left text-lg font-bold text-slate-100 hover:text-blue-300 transition-colors cursor-pointer"
+                title="Ver descrição"
+              >
+                {prioridade.titulo}
+              </button>
               <div className="flex items-center gap-3 mt-1.5 text-[12px] text-slate-400 flex-wrap">
                 {showDonoName && (
                   canPrioridadeWrite && canEditResponsavel && onUpdatePrioridadeOwner ? (
@@ -1091,7 +1140,7 @@ const PrioridadeCard: React.FC<{
                 <p className="text-2xl font-bold text-slate-100 tabular-nums">
                   {planos.length}
                 </p>
-                <p className="text-[11px] text-slate-500">planos de ataque</p>
+                <p className="text-[11px] text-slate-500">planos de ação</p>
               </div>
               {onArchive && canPrioridadeWrite && (
                 <button
@@ -1116,7 +1165,7 @@ const PrioridadeCard: React.FC<{
         <div className="border-t border-slate-800 p-4 pt-3 space-y-3">
           <div className="flex items-center justify-between">
             <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">
-              Planos de Ataque
+              Planos de Ação
             </p>
             {canPlanoWrite && (
               <button
@@ -1205,7 +1254,7 @@ const PrioridadeCard: React.FC<{
 
           {planos.length === 0 && !showAddPlano && (
             <div className="py-6 text-center text-slate-500 text-sm border border-dashed border-slate-800 rounded-xl">
-              Nenhum plano de ataque ainda. Clique em &quot;Novo Plano&quot; para começar.
+              Nenhum plano de ação ainda. Clique em &quot;Novo Plano&quot; para começar.
             </div>
           )}
 
@@ -1280,6 +1329,8 @@ export const EstrategicoView: React.FC<EstrategicoViewProps> = (props) => {
     loggedUserEmail,
     loggedUserDisplayName,
     focusPrioridadeId,
+    focusCardId,
+    onFocusConsumed,
     onlyPrioridadeId,
     estrategicoCaps,
   } = props;
@@ -1303,13 +1354,26 @@ export const EstrategicoView: React.FC<EstrategicoViewProps> = (props) => {
     loggedUserRole === 'administrador' || caps.verTodosPlanos;
   const [expandedByPrioridade, setExpandedByPrioridade] = useState<Record<string, boolean>>({});
   const [visibilityMode, setVisibilityMode] = useState<'mine' | 'following'>('mine');
+  const [visFilters, setVisFilters] = useState<VisibilityFilter[]>([]);
+  const [detalheAberto, setDetalheAberto] = useState<Prioridade | null>(null);
 
   useEffect(() => {
-    if (!focusPrioridadeId) return;
-    const el = document.getElementById(`prioridade-card-${focusPrioridadeId}`);
-    el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    setExpandedByPrioridade((prev) => ({ ...prev, [focusPrioridadeId]: true }));
-  }, [focusPrioridadeId]);
+    const targetId = focusCardId || focusPrioridadeId;
+    if (!targetId) return;
+    const doFocus = () => {
+      const el = document.querySelector(`[data-prioridade-id="${targetId}"]`) as HTMLElement | null;
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        el.classList.add('ring-2', 'ring-blue-400');
+        setTimeout(() => el.classList.remove('ring-2', 'ring-blue-400'), 2000);
+      }
+      setExpandedByPrioridade((prev) => ({ ...prev, [targetId]: true }));
+      onFocusConsumed?.();
+    };
+    // Delay to allow React state update (new prioridade) to render before querying DOM
+    const t = setTimeout(doFocus, 300);
+    return () => clearTimeout(t);
+  }, [focusPrioridadeId, focusCardId, onFocusConsumed]);
 
   const myResponsavelIds = useMemo(
     () =>
@@ -1390,8 +1454,20 @@ export const EstrategicoView: React.FC<EstrategicoViewProps> = (props) => {
       });
     }
     if (!onlyPrioridadeId) return list;
-    return list.filter((p) => p.id === onlyPrioridadeId);
-  }, [filteredPrioridades, onlyPrioridadeId, myResponsavelIds, responsaveis, planos, tarefas, visibilityMode]);
+    list = list.filter((p) => p.id === onlyPrioridadeId);
+    if (isAdmin || visFilters.length === 0) return list;
+    const currentUid = loggedUserUid ?? '';
+    return list.filter((p) => {
+      const isCreator = p.created_by === currentUid;
+      const isOwner = p.dono_id === currentUid;
+      const isObserver = (p.observadores ?? []).some((o) => o.user_id === currentUid);
+      return (
+        (visFilters.includes('created') && isCreator) ||
+        (visFilters.includes('assigned') && isOwner) ||
+        (visFilters.includes('observing') && isObserver)
+      );
+    });
+  }, [filteredPrioridades, onlyPrioridadeId, myResponsavelIds, responsaveis, planos, tarefas, visibilityMode, isAdmin, visFilters, loggedUserUid]);
 
   useEffect(() => {
     const ids = new Set(ativas.map((p) => p.id));
@@ -1450,6 +1526,7 @@ export const EstrategicoView: React.FC<EstrategicoViewProps> = (props) => {
           <EstrategicoGridIcon size={18} strokeWidth={2} />
         </button>
       </div>
+      {!isAdmin && <VisibilityFilterBar active={visFilters} onChange={setVisFilters} />}
 
       <div ref={blocksRef} className="space-y-4">
         {ativas.length === 0 ? (
@@ -1471,7 +1548,7 @@ export const EstrategicoView: React.FC<EstrategicoViewProps> = (props) => {
             const canEditDonoNoTatico = caps.prioridadeWrite;
             const isLegacyPrioridade = p.id.startsWith('legacy-');
             return (
-              <div key={p.id} id={`prioridade-card-${p.id}`}>
+              <div key={p.id} id={`prioridade-card-${p.id}`} data-prioridade-id={p.id}>
                 <PrioridadeCard
                   prioridade={p}
                   planos={planos.filter((pl) => pl.prioridade_id === p.id)}
@@ -1520,12 +1597,53 @@ export const EstrategicoView: React.FC<EstrategicoViewProps> = (props) => {
                   allUsers={responsaveis.map((r) => r.nome)}
                   onAddObserver={onAddObserver}
                   onRemoveObserver={onRemoveObserver}
+                  onOpenDetalhe={setDetalheAberto}
                 />
               </div>
             );
           })
         )}
       </div>
+      {detalheAberto && (
+        <Modal
+          isOpen
+          onClose={() => setDetalheAberto(null)}
+          title={detalheAberto.titulo}
+          maxWidth="lg"
+        >
+          <div className="space-y-4">
+            <div>
+              <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Descrição</p>
+              <p className="text-sm text-slate-200 whitespace-pre-wrap leading-relaxed">
+                {detalheAberto.descricao || 'Sem descrição cadastrada.'}
+              </p>
+            </div>
+            {detalheAberto.dono_id && (
+              <div>
+                <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Dono</p>
+                <p className="text-sm text-slate-200">
+                  {displayNomeDonoPrioridade(detalheAberto.dono_id, responsaveis) || detalheAberto.dono_id}
+                </p>
+              </div>
+            )}
+            <div>
+              <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Prazo</p>
+              <p className="text-sm text-slate-200">
+                {new Date(detalheAberto.data_alvo).toLocaleDateString('pt-BR')}
+              </p>
+            </div>
+            <ObserversPanel
+              entity="prioridade"
+              entityId={detalheAberto.id}
+              observers={detalheAberto.observadores ?? []}
+              allUsers={responsaveis.map((r) => r.nome)}
+              onAdd={(userId) => onAddObserver?.('prioridade', detalheAberto.id, userId)}
+              onRemove={(userId) => onRemoveObserver?.('prioridade', detalheAberto.id, userId)}
+              canEdit={caps.prioridadeWrite}
+            />
+          </div>
+        </Modal>
+      )}
     </div>
   );
 };

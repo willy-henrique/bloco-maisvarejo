@@ -103,6 +103,7 @@ function AppContent() {
   const [backlogOpenConcluidas, setBacklogOpenConcluidas] = useState(false);
   const [quadroVerConcluidas, setQuadroVerConcluidas] = useState(false);
   const [focusPrioridadeId, setFocusPrioridadeId] = useState<string | null>(null);
+  const focusedPrioridadeId = useRef<string | null>(null);
   const [tableOnlyPrioridadeId, setTableOnlyPrioridadeId] = useState<string | null>(null);
   const { items, loading, addItem, updateItem, deleteItem, updateStatus } = useStrategicBoard(encryptionKey ?? null);
   const ritmo = useRitmoGestao(encryptionKey ?? null);
@@ -333,6 +334,7 @@ function AppContent() {
             : item.status === ItemStatus.COMPLETED
             ? 'Concluido'
             : 'Execucao',
+        created_by: item.created_by ?? '',
         empresa: item.empresa,
       }));
   }, [items, ritmo.board.prioridades]);
@@ -925,12 +927,12 @@ function AppContent() {
                 />
               )}
               {activeView === 'table' && <Target size={18} className="text-blue-500 shrink-0" />}
-              {activeView === 'backlog' && <ListTodo size={18} className="text-emerald-500 shrink-0" />}
+              {activeView === 'backlog' && <ListTodo size={18} className="text-blue-500 shrink-0" />}
               {activeView === 'performance' && <PieChart size={18} className="text-violet-500 shrink-0" />}
               {activeView === 'roadmap' && <Briefcase size={18} className="text-cyan-500 shrink-0" />}
               {activeView === 'ia' && <Bot size={18} className="text-blue-400 shrink-0" />}
               {activeView === 'workspace' && <ShieldCheck size={18} className="text-blue-400 shrink-0" />}
-              {activeView === 'operacional' && <FileText size={18} className="text-emerald-400 shrink-0" />}
+              {activeView === 'operacional' && <FileText size={18} className="text-blue-500 shrink-0" />}
               <h2 className="text-base font-semibold text-slate-100 tracking-tight">
                 {activeView === 'workspace' && 'Workspaces'}
                 {activeView === 'dashboard' && 'Estratégico'}
@@ -1257,11 +1259,15 @@ function AppContent() {
                   loggedUserEmail={profile?.email}
                   loggedUserDisplayName={firebaseUser?.displayName ?? undefined}
                   focusPrioridadeId={focusPrioridadeId}
+                  focusCardId={focusedPrioridadeId.current}
+                  onFocusConsumed={() => {
+                    focusedPrioridadeId.current = null;
+                  }}
                   onlyPrioridadeId={tableOnlyPrioridadeId}
                   onAddPlano={(p) =>
                     ritmo.addPlano({
                       ...p,
-                      created_by: profile?.nome || profile?.email || profile?.uid || '',
+                      created_by: firebaseUser?.uid ?? '',
                       workspace_id: p.empresa || '',
                       workspace_origem: workspaceAtivo === 'all' ? '' : workspaceAtivo,
                     })
@@ -1271,7 +1277,7 @@ function AppContent() {
                   onAddTarefa={(t) =>
                     ritmo.addTarefa({
                       ...t,
-                      created_by: profile?.nome || profile?.email || profile?.uid || '',
+                      created_by: firebaseUser?.uid ?? '',
                       workspace_id: t.empresa || '',
                       workspace_origem: workspaceAtivo === 'all' ? '' : workspaceAtivo,
                     })
@@ -1312,7 +1318,7 @@ function AppContent() {
                   onAddTarefa={(t) =>
                     ritmo.addTarefa({
                       ...t,
-                      created_by: profile?.nome || profile?.email || profile?.uid || '',
+                      created_by: firebaseUser?.uid ?? '',
                       workspace_id: t.empresa || '',
                       workspace_origem: workspaceAtivo === 'all' ? '' : workspaceAtivo,
                     })
@@ -1339,8 +1345,24 @@ function AppContent() {
                   onUpdate={updateItem}
                   onDelete={deleteItem}
                   onEditItem={(item) => openItemModal(item, undefined, 'backlog')}
-                  onStatusChange={updateStatus}
+                  onStatusChange={(id, status) => {
+                    if (status === ItemStatus.ACTIVE && ritmo.board.backlog.some((b) => b.id === id)) {
+                      const novaId = ritmo.promoverBacklogAPrioridade(id);
+                      if (novaId) {
+                        focusedPrioridadeId.current = novaId;
+                        setActiveView('table');
+                        return;
+                      }
+                    }
+                    updateStatus(id, status);
+                    if (status === ItemStatus.ACTIVE) {
+                      setActiveView('dashboard');
+                    }
+                  }}
                   displayWho={displayWhoKanban}
+                  responsaveis={responsaveisEscopoAtribuicao}
+                  currentUserId={firebaseUser?.uid}
+                  isAdmin={profile?.role === 'administrador'}
                   onAddNew={
                     perm.backlog.create
                       ? () => openItemModal(null, ItemStatus.BACKLOG, 'backlog')
@@ -1480,7 +1502,7 @@ function AppContent() {
               ...item,
               dono_id: donoCanon,
               empresa: empresaParaDemandaDoDono(assigneeNova, wsClass),
-              created_by: profile?.nome || profile?.email || profile?.uid || '',
+              created_by: firebaseUser?.uid ?? '',
               workspace_id: wsClass || item.empresa || '',
               workspace_origem: wsClass,
             };
@@ -1524,7 +1546,7 @@ function AppContent() {
             addItem({
               ...item,
               empresa,
-              created_by: profile?.nome || profile?.email || profile?.uid || '',
+              created_by: firebaseUser?.uid ?? '',
             });
           }}
           onUpdate={updateItem}
@@ -1552,7 +1574,7 @@ function AppContent() {
             <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
             Conectado
           </div>
-          <span>MAVO 1.7</span>
+          <span>MAVO 1.8</span>
         </footer>
       </main>
     </div>

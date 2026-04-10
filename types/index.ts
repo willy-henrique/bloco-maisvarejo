@@ -73,7 +73,7 @@ export interface Backlog {
   /** Empresa / workspace à qual esta dor pertence (opcional) */
   empresa?: string;
   /** Usuário que criou o registro (uid/nome), usado para visibilidade. */
-  created_by?: string;
+  created_by: string;
   /** Usuários que acompanham o item sem assumir ownership. */
   observadores?: Observer[];
   /** Workspace atual do registro. */
@@ -97,7 +97,7 @@ export interface Prioridade {
   /** Última alteração de dono (ms); usado para não sobrescrever troca local com snapshot atrasado do Firestore */
   dono_atualizado_em?: number;
   /** Usuário que criou o registro (uid/nome), usado para visibilidade. */
-  created_by?: string;
+  created_by: string;
   /** Usuários que acompanham o item sem assumir ownership. */
   observadores?: Observer[];
   /** Workspace atual do registro. */
@@ -106,8 +106,8 @@ export interface Prioridade {
   workspace_origem?: string;
 }
 
-/** Plano de ataque (nível gerencial). 5W2H completo. */
-export interface PlanoDeAtaque {
+/** Plano de ação (nível gerencial). 5W2H completo. */
+export interface PlanoDeAcao {
   id: string;
   prioridade_id: string;
   titulo: string;
@@ -123,7 +123,7 @@ export interface PlanoDeAtaque {
   /** Empresa / workspace associada a este plano (opcional) */
   empresa?: string;
   /** Usuário que criou o registro (uid/nome), usado para visibilidade. */
-  created_by?: string;
+  created_by: string;
   /** Usuários que acompanham o item sem assumir ownership. */
   observadores?: Observer[];
   /** Workspace atual do registro. */
@@ -148,7 +148,7 @@ export interface Tarefa {
   /** Empresa / workspace associada a esta tarefa (opcional) */
   empresa?: string;
   /** Usuário que criou o registro (uid/nome), usado para visibilidade. */
-  created_by?: string;
+  created_by: string;
   /** Usuários que acompanham o item sem assumir ownership. */
   observadores?: Observer[];
   /** Workspace atual do registro. */
@@ -161,7 +161,7 @@ export interface Tarefa {
 export interface RitmoGestaoBoard {
   backlog: Backlog[];
   prioridades: Prioridade[];
-  planos: PlanoDeAtaque[];
+  planos: PlanoDeAcao[];
   tarefas: Tarefa[];
   responsaveis: Responsavel[];
   /** Empresas / workspaces cadastrados no board */

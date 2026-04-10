@@ -5,7 +5,7 @@
  */
 
 import React, { useMemo, useState, useEffect } from 'react';
-import type { Prioridade, PlanoDeAtaque, Tarefa, Responsavel, StatusPrioridade } from '../../types';
+import type { Prioridade, PlanoDeAcao, Tarefa, Responsavel, StatusPrioridade } from '../../types';
 import { ChevronDown, ChevronRight, AlertCircle, ListTodo, X, Trash2 } from 'lucide-react';
 import { EstrategicoGridIcon } from '../icons/EstrategicoGridIcon';
 
@@ -17,7 +17,7 @@ function nomeResponsavel(id: string, responsaveis: Responsavel[]): string {
 
 interface QuadroEstrategicoProps {
   prioridades: Prioridade[];
-  planos: PlanoDeAtaque[];
+  planos: PlanoDeAcao[];
   tarefas: Tarefa[];
   responsaveis: Responsavel[];
   computeStatusPlano: (planoId: string) => 'Execucao' | 'Bloqueado' | 'Concluido' | null;
@@ -265,7 +265,7 @@ export const QuadroEstrategico: React.FC<QuadroEstrategicoProps> = ({
 /** Modal de detalhe da prioridade: planos de ataque, tarefas bloqueadas, estado consolidado */
 interface DetalhePrioridadeModalProps {
   prioridade: Prioridade;
-  planos: PlanoDeAtaque[];
+  planos: PlanoDeAcao[];
   tarefas: Tarefa[];
   responsaveis: Responsavel[];
   computeStatusPlano: (planoId: string) => 'Execucao' | 'Bloqueado' | 'Concluido' | null;
@@ -282,6 +282,7 @@ export const DetalhePrioridadeModal: React.FC<DetalhePrioridadeModalProps> = ({
   computeStatusPlano,
   onClose,
   onStatusPlano,
+  onUpdatePrioridade,
 }) => {
   const planosDaPrioridade = useMemo(
     () => planos.filter((pl) => pl.prioridade_id === prioridade.id),
@@ -412,11 +413,11 @@ export const DetalhePrioridadeModal: React.FC<DetalhePrioridadeModalProps> = ({
           <div>
             <h4 className="text-sm font-medium text-slate-300 mb-2 flex items-center gap-2">
               <ListTodo size={14} />
-              Planos de ataque
+              Planos de ação
             </h4>
             <ul className="space-y-2">
               {planosDaPrioridade.length === 0 ? (
-                <li className="text-xs text-slate-500">Nenhum plano de ataque ainda.</li>
+                <li className="text-xs text-slate-500">Nenhum plano de ação ainda.</li>
               ) : (
                 planosDaPrioridade.map((pl) => {
                   const computed = computeStatusPlano(pl.id);

@@ -3,8 +3,8 @@
  * Itens em demanda (não concluídos) em lista profissional; concluídos em seção colapsada.
  */
 
-import React, { useMemo } from 'react';
-import { ActionItem, ItemStatus } from '../../types';
+import React, { useMemo, useState } from 'react';
+import { ActionItem, ItemStatus, type Responsavel } from '../../types';
 import { formatDateOnlyPtBr } from '../../utils/date';
 import {
   Trash2,
@@ -14,6 +14,9 @@ import {
   ExternalLink,
 } from 'lucide-react';
 import { toExternalHttpUrl } from '../../utils/externalLink';
+import { Modal } from '../Shared/Modal';
+import { ResponsavelAutocomplete } from './ResponsavelAutocomplete';
+import { VisibilityFilterBar, type VisibilityFilter } from '../Shared/VisibilityFilterBar';
 
 export interface BacklogCapabilities {
   canCreate?: boolean;
@@ -31,6 +34,9 @@ interface BacklogViewProps {
   onAddNew?: () => void;
   capabilities?: BacklogCapabilities;
   displayWho?: (who: string) => string;
+  responsaveis?: Responsavel[];
+  currentUserId?: string | null;
+  isAdmin?: boolean;
 }
 
 export const BacklogView: React.FC<BacklogViewProps> = ({
@@ -42,7 +48,12 @@ export const BacklogView: React.FC<BacklogViewProps> = ({
   onAddNew,
   capabilities,
   displayWho,
+  responsaveis = [],
+  currentUserId,
+  isAdmin = false,
 }) => {
+  const [itemToDelete, setItemToDelete] = useState<string | null>(null);
+  const [visFilters, setVisFilters] = useState<VisibilityFilter[]>([]);
   const cap = {
     canCreate: capabilities?.canCreate !== false,
     canEdit: capabilities?.canEdit !== false,
@@ -54,13 +65,25 @@ export const BacklogView: React.FC<BacklogViewProps> = ({
     const backlog = items
       .filter((i) => i.status === ItemStatus.BACKLOG)
       .sort((a, b) => (a.createdAt ?? 0) - (b.createdAt ?? 0));
-    return backlog;
-  }, [items]);
+    if (isAdmin || visFilters.length === 0) return backlog;
+    const uid = (currentUserId ?? '').trim();
+    return backlog.filter((item) => {
+      const isCreator = (item.created_by ?? '') === uid;
+      const isOwner = (item.who ?? '') === uid;
+      const isObserver = false;
+      return (
+        (visFilters.includes('created') && isCreator) ||
+        (visFilters.includes('assigned') && isOwner) ||
+        (visFilters.includes('observing') && isObserver)
+      );
+    });
+  }, [items, isAdmin, visFilters, currentUserId]);
 
   const moveToPrioridade = (id: string) => onStatusChange(id, ItemStatus.ACTIVE);
 
   return (
     <div className="max-w-5xl mx-auto space-y-6 w-full min-w-0">
+      {!isAdmin && <VisibilityFilterBar active={visFilters} onChange={setVisFilters} />}
       {/* Backlog (não concluídos) */}
       <section className="bg-slate-900/50 border border-slate-800 rounded-lg overflow-hidden">
         <div className="px-4 py-3 border-b border-slate-800 flex items-center justify-between bg-slate-900/80">
@@ -128,6 +151,17 @@ export const BacklogView: React.FC<BacklogViewProps> = ({
                         <User size={10} />
                         {(item.who ? (displayWho ? displayWho(item.who) : item.who) : '—')}
                       </div>
+                      {cap.canEdit && (
+                        <div className="mt-1 max-w-[240px]">
+                          <ResponsavelAutocomplete
+                            responsaveis={responsaveis}
+                            valueId={item.who}
+                            onCommit={(id) => onUpdate(item.id, { who: id })}
+                            variant="compact"
+                            placeholder="Responsável..."
+                          />
+                        </div>
+                      )}
                       <div className="flex items-center gap-1.5 text-[11px] text-slate-500 mt-0.5">
                         <Calendar size={10} />
                         {item.when ? formatDateOnlyPtBr(item.when) : '—'}
@@ -162,7 +196,7 @@ export const BacklogView: React.FC<BacklogViewProps> = ({
                         {cap.canDelete && (
                           <button
                             type="button"
-                            onClick={() => onDelete(item.id)}
+                            onClick={() => setItemToDelete(item.id)}
                             className="inline-flex items-center justify-center p-2 rounded-full text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition-colors"
                             title="Excluir iniciativa do Backlog"
                           >
@@ -178,6 +212,32 @@ export const BacklogView: React.FC<BacklogViewProps> = ({
           )}
         </div>
       </section>
+      {itemToDelete && (
+        <Modal isOpen onClose={() => setItemToDelete(null)} title="Remover item" maxWidth="sm">
+          <div className="space-y-4 text-sm text-slate-200">
+            <p>Tem certeza que deseja excluir este item? Esta ação não pode ser desfeita.</p>
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setItemToDelete(null)}
+                className="px-4 py-2 text-xs font-medium text-slate-300 border border-slate-600 rounded-lg hover:bg-slate-800"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  onDelete(itemToDelete);
+                  setItemToDelete(null);
+                }}
+                className="px-4 py-2 text-xs font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg"
+              >
+                Remover
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 };

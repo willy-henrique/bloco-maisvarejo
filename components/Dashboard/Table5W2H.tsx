@@ -3,6 +3,7 @@ import React, { useMemo, useState, useEffect } from 'react';
 import { ActionItem, ItemStatus } from '../../types';
 import { formatDateOnlyPtBr } from '../../utils/date';
 import { Trash2, Pencil, ShieldAlert, Calendar, User, Info, MapPin, FileText, ChevronDown, ChevronRight, CheckCircle, Activity } from 'lucide-react';
+import { VisibilityFilterBar, type VisibilityFilter } from '../Shared/VisibilityFilterBar';
 
 interface Table5W2HProps {
   items: ActionItem[];
@@ -19,6 +20,8 @@ interface Table5W2HProps {
   isInOperacional?: (id: string) => boolean;
   /** Remover item da visão Operacional (voltar para Tático visualmente) */
   onRemoveFromOperacional?: (id: string) => void;
+  currentUserId?: string | null;
+  isAdmin?: boolean;
 }
 
 export const Table5W2H: React.FC<Table5W2HProps> = ({
@@ -31,8 +34,11 @@ export const Table5W2H: React.FC<Table5W2HProps> = ({
   onSendToOperacional,
   isInOperacional,
   onRemoveFromOperacional,
+  currentUserId,
+  isAdmin = false,
 }) => {
   const [concluidosOpen, setConcluidosOpen] = useState(false);
+  const [visFilters, setVisFilters] = useState<VisibilityFilter[]>([]);
 
   useEffect(() => {
     if (forceOpenConcluidos) {
@@ -44,11 +50,26 @@ export const Table5W2H: React.FC<Table5W2HProps> = ({
     const completed = items.filter((i) => i.status === ItemStatus.COMPLETED);
     const active = items.filter((i) => i.status !== ItemStatus.COMPLETED);
     completed.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+    if (!isAdmin && visFilters.length > 0) {
+      const uid = currentUserId ?? '';
+      const match = (item: ActionItem) => {
+        const isCreator = (item.created_by ?? '') === uid;
+        const isOwner = (item.who ?? '') === uid;
+        const isObserver = false;
+        return (
+          (visFilters.includes('created') && isCreator) ||
+          (visFilters.includes('assigned') && isOwner) ||
+          (visFilters.includes('observing') && isObserver)
+        );
+      };
+      return { activeItems: active.filter(match), completedItems: completed.filter(match) };
+    }
     return { activeItems: active, completedItems: completed };
-  }, [items]);
+  }, [items, isAdmin, visFilters, currentUserId]);
 
   return (
     <div className="space-y-6">
+      {!isAdmin && <VisibilityFilterBar active={visFilters} onChange={setVisFilters} />}
       <div className="w-full overflow-x-auto overflow-touch rounded-lg border border-slate-800 bg-slate-900/50 -mx-1 px-1 max-lg:scroll-px-2">
       <table className="w-full text-left border-collapse min-w-[1400px]">
         <thead>

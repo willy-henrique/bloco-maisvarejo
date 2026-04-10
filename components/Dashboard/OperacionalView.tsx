@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import type { PlanoDeAtaque, Prioridade, Responsavel, Tarefa, StatusPlano, StatusTarefa } from '../../types';
+import type { PlanoDeAcao, Prioridade, Responsavel, Tarefa, StatusPlano, StatusTarefa } from '../../types';
 import type { UserRole as UserRoleType } from '../../types/user';
 import { CheckCircle, Play, Circle, AlertTriangle, Plus, ChevronDown, ChevronRight, Trash2, User, Calendar, Target, FileText } from 'lucide-react';
 import { ResponsavelAutocomplete } from './ResponsavelAutocomplete';
@@ -11,6 +11,7 @@ import {
 import { canViewByOwnershipOrObserver, tarefaAtribuidaAoUsuario } from './taskAssignmentUtils';
 import { ObserversPanel } from './ObserversPanel';
 import { apiGetBlockContext } from '../../services/ritmoCollabApi';
+import { VisibilityFilterBar, type VisibilityFilter } from '../Shared/VisibilityFilterBar';
 
 // Utilidades
 function tsFromDateInput(v: string): number {
@@ -82,7 +83,7 @@ export type OperacionalCaps = {
 
 type OperacionalProps = {
   prioridades: Prioridade[];
-  planos: PlanoDeAtaque[];
+  planos: PlanoDeAcao[];
   tarefas: Tarefa[];
   responsaveis: Responsavel[];
   computeStatusPlano: (planoId: string) => StatusPlano | null;
@@ -96,7 +97,7 @@ type OperacionalProps = {
   onDeleteTarefa: (id: string) => void;
   onAddObserver?: (entity: 'prioridade' | 'plano' | 'tarefa', entityId: string, userId: string) => void;
   onRemoveObserver?: (entity: 'prioridade' | 'plano' | 'tarefa', entityId: string, userId: string) => void;
-  onUpdatePlano: (id: string, u: Partial<PlanoDeAtaque>) => void;
+  onUpdatePlano: (id: string, u: Partial<PlanoDeAcao>) => void;
   onDeletePlano: (id: string) => void;
   operacionalCaps?: OperacionalCaps;
 };
@@ -249,14 +250,14 @@ const TarefaRow: React.FC<{
 
 const OperacionalPlanoCard: React.FC<{
   prioridade: Prioridade;
-  plano: PlanoDeAtaque;
+  plano: PlanoDeAcao;
   tarefas: Tarefa[];
   responsaveis: Responsavel[];
   computeStatusPlano: (planoId: string) => StatusPlano | null;
   onAddTarefa: (t: Omit<Tarefa, 'id'>) => void;
   onUpdateTarefa: (id: string, u: Partial<Tarefa>) => void;
   onDeleteTarefa: (id: string) => void;
-  onUpdatePlano: (id: string, u: Partial<PlanoDeAtaque>) => void;
+  onUpdatePlano: (id: string, u: Partial<PlanoDeAcao>) => void;
   loggedUserResponsavelId?: string;
   isAdmin?: boolean;
   myResponsavelIds?: Set<string>;
@@ -359,7 +360,7 @@ const OperacionalPlanoCard: React.FC<{
   }, [expanded, status, plano.id, tarefas]);
 
   const W2H: Array<{
-    key: keyof PlanoDeAtaque;
+    key: keyof PlanoDeAcao;
     label: string;
     sub: string;
     type: 'textarea' | 'input' | 'date' | 'resp';
@@ -372,7 +373,7 @@ const OperacionalPlanoCard: React.FC<{
     { key: 'how_much', label: 'HOW MUCH', sub: 'Quanto', type: 'input' },
   ];
 
-  const handleUpdatePlano = (u: Partial<PlanoDeAtaque>) => {
+  const handleUpdatePlano = (u: Partial<PlanoDeAcao>) => {
     onUpdatePlano(plano.id, u);
   };
 
@@ -390,6 +391,7 @@ const OperacionalPlanoCard: React.FC<{
       data_inicio: Date.now(),
       data_vencimento: parsedVenc,
       status_tarefa: 'Pendente',
+      created_by: loggedUserResponsavelId ?? '',
       empresa: plano.empresa ?? prioridade.empresa,
     });
     setNovaTarefa({
@@ -459,7 +461,7 @@ const OperacionalPlanoCard: React.FC<{
                     <textarea
                       key={`${plano.id}-${key}`}
                       defaultValue={(plano[key] as string) || ''}
-                      onBlur={canWritePlano ? (e) => handleUpdatePlano({ [key]: e.target.value } as Partial<PlanoDeAtaque>) : undefined}
+                      onBlur={canWritePlano ? (e) => handleUpdatePlano({ [key]: e.target.value } as Partial<PlanoDeAcao>) : undefined}
                       readOnly={!canWritePlano}
                       disabled={!canWritePlano}
                       rows={2}
@@ -470,7 +472,7 @@ const OperacionalPlanoCard: React.FC<{
                     <input
                       key={`${plano.id}-${key}`}
                       defaultValue={(plano[key] as string) || ''}
-                      onBlur={canWritePlano ? (e) => handleUpdatePlano({ [key]: e.target.value } as Partial<PlanoDeAtaque>) : undefined}
+                      onBlur={canWritePlano ? (e) => handleUpdatePlano({ [key]: e.target.value } as Partial<PlanoDeAcao>) : undefined}
                       readOnly={!canWritePlano}
                       disabled={!canWritePlano}
                       className="w-full bg-transparent text-sm text-slate-200 outline-none border-b border-transparent focus:border-slate-600 transition-colors py-0.5 placeholder:text-slate-700 disabled:opacity-60"
@@ -777,6 +779,7 @@ export const OperacionalView: React.FC<OperacionalProps> = ({
 }) => {
   const [abaAtiva, setAbaAtiva] = useState<'planos' | 'tarefas'>('tarefas');
   const [visibilityMode, setVisibilityMode] = useState<'mine' | 'following'>('mine');
+  const [visFilters, setVisFilters] = useState<VisibilityFilter[]>([]);
   const [tarefasConcluidasOpen, setTarefasConcluidasOpen] = useState(false);
   const [planosConcluidosOpen, setPlanosConcluidosOpen] = useState(false);
   const oc = {
@@ -866,8 +869,21 @@ export const OperacionalView: React.FC<OperacionalProps> = ({
       );
     }
     list.sort((a, b) => a.when_fim - b.when_fim);
+    if (!seesAllPrioridades && visFilters.length > 0) {
+      const currentUid = loggedUserUid ?? '';
+      list = list.filter((pl) => {
+        const isCreator = pl.created_by === currentUid;
+        const isOwner = pl.who_id === currentUid;
+        const isObserver = (pl.observadores ?? []).some((o) => o.user_id === currentUid);
+        return (
+          (visFilters.includes('created') && isCreator) ||
+          (visFilters.includes('assigned') && isOwner) ||
+          (visFilters.includes('observing') && isObserver)
+        );
+      });
+    }
     return list;
-  }, [planos, visiblePrioridades, visibilityMode, myResponsavelIds]);
+  }, [planos, visiblePrioridades, visibilityMode, myResponsavelIds, seesAllPrioridades, visFilters, loggedUserUid]);
   const visiblePlanosAtivos = useMemo(
     () => visiblePlanos.filter((pl) => ((computeStatusPlano(pl.id) || pl.status_plano) as StatusPlano) !== 'Concluido'),
     [visiblePlanos, computeStatusPlano],
@@ -878,7 +894,7 @@ export const OperacionalView: React.FC<OperacionalProps> = ({
   );
 
   const planoById = useMemo(() => {
-    const map = new Map<string, PlanoDeAtaque>();
+    const map = new Map<string, PlanoDeAcao>();
     for (const pl of visiblePlanos) map.set(pl.id, pl);
     return map;
   }, [visiblePlanos]);
@@ -896,7 +912,21 @@ export const OperacionalView: React.FC<OperacionalProps> = ({
       if (visibilityMode === 'mine') return mine;
       return Array.isArray(t.observadores) && t.observadores.some((o) => myResponsavelIds.has(normStr(o.user_id))) && !mine;
     });
-    return filtradas.sort((a, b) => a.data_vencimento - b.data_vencimento);
+    let out = filtradas.sort((a, b) => a.data_vencimento - b.data_vencimento);
+    if (!seesAllPrioridades && visFilters.length > 0) {
+      const currentUid = loggedUserUid ?? '';
+      out = out.filter((t) => {
+        const isCreator = t.created_by === currentUid;
+        const isOwner = t.responsavel_id === currentUid;
+        const isObserver = (t.observadores ?? []).some((o) => o.user_id === currentUid);
+        return (
+          (visFilters.includes('created') && isCreator) ||
+          (visFilters.includes('assigned') && isOwner) ||
+          (visFilters.includes('observing') && isObserver)
+        );
+      });
+    }
+    return out;
   }, [
     tarefas,
     visiblePlanos,
@@ -904,6 +934,9 @@ export const OperacionalView: React.FC<OperacionalProps> = ({
     myResponsavelIds,
     responsaveis,
     visibilityMode,
+    seesAllPrioridades,
+    visFilters,
+    loggedUserUid,
   ]);
 
   const visibleTarefasAtivas = useMemo(
@@ -944,7 +977,7 @@ export const OperacionalView: React.FC<OperacionalProps> = ({
                   : 'text-slate-400 hover:text-slate-200'
               }`}
             >
-              Plano de ataque
+              Plano de ação
             </button>
           </div>
           <div className="inline-flex rounded-lg border border-slate-700 bg-slate-900/60 p-0.5">
@@ -974,6 +1007,7 @@ export const OperacionalView: React.FC<OperacionalProps> = ({
             : `${visibleTarefas.length} ${visibleTarefas.length === 1 ? 'tarefa' : 'tarefas'}`}
         </span>
       </div>
+      {!seesAllPrioridades && <VisibilityFilterBar active={visFilters} onChange={setVisFilters} />}
 
       {abaAtiva === 'planos' && visiblePlanos.length === 0 && (
         <div className="px-4 py-10 text-sm text-slate-500 text-center">
