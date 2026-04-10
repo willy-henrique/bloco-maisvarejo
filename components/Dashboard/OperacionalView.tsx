@@ -237,6 +237,7 @@ const TarefaRow: React.FC<{
             entityId={tarefa.id}
             observers={tarefa.observadores ?? []}
             allUsers={allUsers}
+            resolveUserName={(userId) => displayNomeDonoPrioridade(userId, responsaveis) || userId}
             onAdd={(userId) => onAddObserver?.('tarefa', tarefa.id, userId)}
             onRemove={(userId) => onRemoveObserver?.('tarefa', tarefa.id, userId)}
             canEdit={canWriteTarefa}
@@ -536,6 +537,7 @@ const OperacionalPlanoCard: React.FC<{
               entityId={plano.id}
               observers={plano.observadores ?? []}
               allUsers={allUsers}
+              resolveUserName={(userId) => displayNomeDonoPrioridade(userId, responsaveis) || userId}
               onAdd={(userId) => onAddObserver?.('plano', plano.id, userId)}
               onRemove={(userId) => onRemoveObserver?.('plano', plano.id, userId)}
               canEdit={canWritePlano}
@@ -1197,6 +1199,7 @@ export const OperacionalView: React.FC<OperacionalProps> = ({
                                 entityId={t.id}
                                 observers={t.observadores ?? []}
                                 allUsers={responsaveis.map((r) => r.nome)}
+                                resolveUserName={(userId) => displayNomeDonoPrioridade(userId, responsaveis) || userId}
                                 onAdd={(userId) => onAddObserver?.('tarefa', t.id, userId)}
                                 onRemove={(userId) => onRemoveObserver?.('tarefa', t.id, userId)}
                                 canEdit={oc.tarefaWrite}

@@ -10,6 +10,7 @@ interface ObserversPanelProps {
   onAdd: (userId: string) => void;
   onRemove: (userId: string) => void;
   canEdit: boolean;
+  resolveUserName?: (userId: string) => string;
 }
 
 export const ObserversPanel: React.FC<ObserversPanelProps> = ({
@@ -20,6 +21,7 @@ export const ObserversPanel: React.FC<ObserversPanelProps> = ({
   onAdd,
   onRemove,
   canEdit,
+  resolveUserName,
 }) => {
   const [open, setOpen] = useState(false);
   const [candidate, setCandidate] = useState('');
@@ -68,12 +70,13 @@ export const ObserversPanel: React.FC<ObserversPanelProps> = ({
             ) : (
               observers.map((o) => {
                 const isCreator = o.role === 'creator';
+                const displayName = resolveUserName?.(o.user_id) || o.user_id;
                 return (
                   <div
                     key={`${entity}-${entityId}-${o.user_id}`}
                     className="flex items-center justify-between gap-2 text-xs bg-slate-800/50 border border-slate-700 rounded px-2 py-1.5"
                   >
-                    <span className="text-slate-200 truncate">{o.user_id}</span>
+                    <span className="text-slate-200 truncate">{displayName}</span>
                     <div className="inline-flex items-center gap-1.5 shrink-0">
                       {isCreator ? (
                         <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] bg-amber-500/15 text-amber-300 border border-amber-500/30">

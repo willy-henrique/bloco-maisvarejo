@@ -600,6 +600,7 @@ const PlanoCard: React.FC<{
               entityId={plano.id}
               observers={plano.observadores ?? []}
               allUsers={allUsers}
+              resolveUserName={(userId) => displayNomeDonoPrioridade(userId, responsaveis) || userId}
               onAdd={(userId) => onAddObserver?.('plano', plano.id, userId)}
               onRemove={(userId) => onRemoveObserver?.('plano', plano.id, userId)}
               canEdit={canEditObservers}
@@ -1264,6 +1265,7 @@ const PrioridadeCard: React.FC<{
               entityId={prioridade.id}
               observers={prioridade.observadores ?? []}
               allUsers={allUsers}
+              resolveUserName={(userId) => displayNomeDonoPrioridade(userId, responsaveis) || userId}
               onAdd={(userId) => onAddObserver?.('prioridade', prioridade.id, userId)}
               onRemove={(userId) => onRemoveObserver?.('prioridade', prioridade.id, userId)}
               canEdit={canPrioridadeWrite}
@@ -1637,6 +1639,7 @@ export const EstrategicoView: React.FC<EstrategicoViewProps> = (props) => {
               entityId={detalheAberto.id}
               observers={detalheAberto.observadores ?? []}
               allUsers={responsaveis.map((r) => r.nome)}
+              resolveUserName={(userId) => displayNomeDonoPrioridade(userId, responsaveis) || userId}
               onAdd={(userId) => onAddObserver?.('prioridade', detalheAberto.id, userId)}
               onRemove={(userId) => onRemoveObserver?.('prioridade', detalheAberto.id, userId)}
               canEdit={caps.prioridadeWrite}
