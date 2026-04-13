@@ -642,6 +642,7 @@ function AppContent() {
         tarefaWrite: hasModuleAction('table', 'tarefa_write'),
         tarefaAssign: hasModuleAction('table', 'tarefa_assign'),
         tarefaDelete: hasModuleAction('table', 'tarefa_delete'),
+        observerEdit: hasModuleAction('table', 'observer_edit'),
         crossWorkspaceView: hasModuleAction('table', 'cross_workspace_view'),
         crossWorkspaceAssign: hasModuleAction('table', 'cross_workspace_assign'),
       },
@@ -651,6 +652,7 @@ function AppContent() {
         tarefaWrite: hasModuleAction('operacional', 'tarefa_write'),
         tarefaAssign: hasModuleAction('operacional', 'tarefa_assign'),
         tarefaDelete: hasModuleAction('operacional', 'tarefa_delete'),
+        observerEdit: hasModuleAction('operacional', 'observer_edit'),
         crossWorkspaceView: hasModuleAction('operacional', 'cross_workspace_view'),
         crossWorkspaceAssign: hasModuleAction('operacional', 'cross_workspace_assign'),
       },
@@ -1298,6 +1300,7 @@ function AppContent() {
                     tarefaWrite: perm.table.tarefaWrite,
                     tarefaAssign: perm.table.tarefaAssign || perm.table.tarefaWrite,
                     tarefaDelete: perm.table.tarefaDelete,
+                    observerEdit: perm.table.observerEdit,
                   }}
                 />
               )}
@@ -1336,6 +1339,7 @@ function AppContent() {
                     tarefaWrite: perm.operacional.tarefaWrite,
                     tarefaAssign: perm.operacional.tarefaAssign || perm.operacional.tarefaWrite,
                     tarefaDelete: perm.operacional.tarefaDelete,
+                    observerEdit: perm.operacional.observerEdit,
                   }}
                 />
               )}

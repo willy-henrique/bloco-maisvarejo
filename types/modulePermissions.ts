@@ -38,6 +38,7 @@ export const MODULE_ACTIONS: Record<ViewId, { id: string; label: string }[]> = {
       label: 'Atribuir tarefas a outras pessoas',
     },
     { id: 'tarefa_delete', label: 'Excluir tarefas' },
+    { id: 'observer_edit', label: 'Adicionar/remover observadores' },
     {
       id: 'cross_workspace_view',
       label: 'Visualizar itens compartilhados entre workspaces',
@@ -55,6 +56,7 @@ export const MODULE_ACTIONS: Record<ViewId, { id: string; label: string }[]> = {
       label: 'Atribuir tarefas a outras pessoas',
     },
     { id: 'tarefa_delete', label: 'Excluir tarefas' },
+    { id: 'observer_edit', label: 'Adicionar/remover observadores' },
     {
       id: 'cross_workspace_view',
       label: 'Visualizar itens compartilhados entre workspaces',

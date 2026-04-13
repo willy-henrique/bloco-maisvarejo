@@ -3,8 +3,8 @@ import type { ModulePermissionMap } from './modulePermissions';
 
 export type UserRole = 'administrador' | 'gerente' | 'usuario';
 
-/** A partir de 2, `tarefa_assign` é avaliado explicitamente (antes: implícito com `tarefa_write`). */
-export const PERMISSIONS_SCHEMA_VERSION = 2;
+/** A partir de 3, `observer_edit` é avaliado explicitamente por módulo. */
+export const PERMISSIONS_SCHEMA_VERSION = 3;
 
 export interface UserProfile {
   uid: string;

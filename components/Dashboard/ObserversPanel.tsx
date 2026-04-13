@@ -6,7 +6,7 @@ interface ObserversPanelProps {
   entity: 'prioridade' | 'plano' | 'tarefa';
   entityId: string;
   observers: Observer[];
-  allUsers: string[];
+  allUsers: Array<{ id: string; label: string }>;
   onAdd: (userId: string) => void;
   onRemove: (userId: string) => void;
   canEdit: boolean;
@@ -25,22 +25,46 @@ export const ObserversPanel: React.FC<ObserversPanelProps> = ({
 }) => {
   const [open, setOpen] = useState(false);
   const [candidate, setCandidate] = useState('');
+  const normalizedCandidate = candidate.trim().toLowerCase();
   const selectedIds = useMemo(
     () => new Set((observers ?? []).map((o) => String(o.user_id ?? '').trim().toLowerCase()).filter(Boolean)),
     [observers],
   );
 
-  const addableUsers = useMemo(
-    () =>
-      allUsers.filter((u) => {
-        const n = u.trim().toLowerCase();
-        return !!n && !selectedIds.has(n);
-      }),
-    [allUsers, selectedIds],
-  );
+  const usersById = useMemo(() => {
+    const map = new Map<string, { id: string; label: string }>();
+    for (const u of allUsers) {
+      const id = String(u.id ?? '').trim();
+      const label = String(u.label ?? '').trim();
+      if (!id) continue;
+      map.set(id.toLowerCase(), { id, label: label || id });
+    }
+    return map;
+  }, [allUsers]);
+
+  const addableUsers = useMemo(() => {
+    const out: Array<{ id: string; label: string }> = [];
+    for (const u of allUsers) {
+      const id = String(u.id ?? '').trim();
+      const label = String(u.label ?? '').trim();
+      const key = id.toLowerCase();
+      if (!id || selectedIds.has(key)) continue;
+      out.push({ id, label: label || id });
+    }
+    return out;
+  }, [allUsers, selectedIds]);
+
+  const resolvedCandidateId = useMemo(() => {
+    if (!normalizedCandidate) return '';
+    const byId = usersById.get(normalizedCandidate);
+    if (byId) return byId.id;
+    const byLabel = addableUsers.find((u) => u.label.trim().toLowerCase() === normalizedCandidate);
+    if (byLabel) return byLabel.id;
+    return '';
+  }, [normalizedCandidate, usersById, addableUsers]);
 
   const handleAdd = () => {
-    const userId = candidate.trim();
+    const userId = resolvedCandidateId || candidate.trim();
     if (!userId) return;
     if (selectedIds.has(userId.toLowerCase())) return;
     onAdd(userId);
@@ -115,13 +139,13 @@ export const ObserversPanel: React.FC<ObserversPanelProps> = ({
               />
               <datalist id={`observers-${entity}-${entityId}`}>
                 {addableUsers.map((u) => (
-                  <option key={u} value={u} />
+                  <option key={u.id} value={u.label} />
                 ))}
               </datalist>
               <button
                 type="button"
                 onClick={handleAdd}
-                disabled={!candidate.trim()}
+                disabled={!candidate.trim() || (!resolvedCandidateId && !usersById.has(normalizedCandidate))}
                 className="inline-flex items-center gap-1 px-2 py-1.5 rounded text-xs bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white"
               >
                 <UserPlus size={12} />

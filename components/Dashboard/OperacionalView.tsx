@@ -79,6 +79,7 @@ export type OperacionalCaps = {
   tarefaWrite?: boolean;
   tarefaAssign?: boolean;
   tarefaDelete?: boolean;
+  observerEdit?: boolean;
 };
 
 type OperacionalProps = {
@@ -110,7 +111,8 @@ const TarefaRow: React.FC<{
   canWriteTarefa?: boolean;
   canAssignTarefa?: boolean;
   canDeleteTarefa?: boolean;
-  allUsers: string[];
+  canEditObservers?: boolean;
+  allUsers: Array<{ id: string; label: string }>;
   onAddObserver?: (entity: 'prioridade' | 'plano' | 'tarefa', entityId: string, userId: string) => void;
   onRemoveObserver?: (entity: 'prioridade' | 'plano' | 'tarefa', entityId: string, userId: string) => void;
 }> = ({
@@ -121,6 +123,7 @@ const TarefaRow: React.FC<{
   canWriteTarefa = true,
   canAssignTarefa = true,
   canDeleteTarefa = true,
+  canEditObservers = true,
   allUsers,
   onAddObserver,
   onRemoveObserver,
@@ -240,7 +243,7 @@ const TarefaRow: React.FC<{
             resolveUserName={(userId) => displayNomeDonoPrioridade(userId, responsaveis) || userId}
             onAdd={(userId) => onAddObserver?.('tarefa', tarefa.id, userId)}
             onRemove={(userId) => onRemoveObserver?.('tarefa', tarefa.id, userId)}
-            canEdit={canWriteTarefa}
+            canEdit={canEditObservers}
           />
         )}
       </td>
@@ -266,7 +269,8 @@ const OperacionalPlanoCard: React.FC<{
   canWriteTarefa?: boolean;
   canAssignTarefa?: boolean;
   canDeleteTarefa?: boolean;
-  allUsers: string[];
+  canEditObservers?: boolean;
+  allUsers: Array<{ id: string; label: string }>;
   onAddObserver?: (entity: 'prioridade' | 'plano' | 'tarefa', entityId: string, userId: string) => void;
   onRemoveObserver?: (entity: 'prioridade' | 'plano' | 'tarefa', entityId: string, userId: string) => void;
 }> = ({
@@ -286,6 +290,7 @@ const OperacionalPlanoCard: React.FC<{
   canWriteTarefa = true,
   canAssignTarefa = true,
   canDeleteTarefa = true,
+  canEditObservers = true,
   allUsers,
   onAddObserver,
   onRemoveObserver,
@@ -540,7 +545,7 @@ const OperacionalPlanoCard: React.FC<{
               resolveUserName={(userId) => displayNomeDonoPrioridade(userId, responsaveis) || userId}
               onAdd={(userId) => onAddObserver?.('plano', plano.id, userId)}
               onRemove={(userId) => onRemoveObserver?.('plano', plano.id, userId)}
-              canEdit={canWritePlano}
+              canEdit={canEditObservers}
             />
           </div>
 
@@ -597,6 +602,7 @@ const OperacionalPlanoCard: React.FC<{
                           canWriteTarefa={canWriteTarefa}
                           canAssignTarefa={canAssignTarefa}
                           canDeleteTarefa={canDeleteTarefa}
+                          canEditObservers={canEditObservers}
                           allUsers={allUsers}
                           onAddObserver={onAddObserver}
                           onRemoveObserver={onRemoveObserver}
@@ -646,6 +652,7 @@ const OperacionalPlanoCard: React.FC<{
                               canWriteTarefa={canWriteTarefa}
                               canAssignTarefa={canAssignTarefa}
                               canDeleteTarefa={canDeleteTarefa}
+                              canEditObservers={canEditObservers}
                               allUsers={allUsers}
                               onAddObserver={onAddObserver}
                               onRemoveObserver={onRemoveObserver}
@@ -789,6 +796,7 @@ export const OperacionalView: React.FC<OperacionalProps> = ({
     tarefaWrite: operacionalCaps?.tarefaWrite !== false,
     tarefaAssign: operacionalCaps?.tarefaAssign !== false,
     tarefaDelete: operacionalCaps?.tarefaDelete !== false,
+    observerEdit: operacionalCaps?.observerEdit !== false,
   };
 
   const seesAllPrioridades = loggedUserRole === 'administrador';
@@ -1043,7 +1051,8 @@ export const OperacionalView: React.FC<OperacionalProps> = ({
                     canWriteTarefa={oc.tarefaWrite}
                     canAssignTarefa={oc.tarefaAssign}
                     canDeleteTarefa={oc.tarefaDelete}
-                    allUsers={responsaveis.map((r) => r.nome)}
+                    canEditObservers={oc.observerEdit}
+                    allUsers={responsaveis.map((r) => ({ id: r.id, label: r.nome }))}
                     onAddObserver={onAddObserver}
                     onRemoveObserver={onRemoveObserver}
                   />
@@ -1092,7 +1101,8 @@ export const OperacionalView: React.FC<OperacionalProps> = ({
                         canWriteTarefa={oc.tarefaWrite}
                         canAssignTarefa={oc.tarefaAssign}
                         canDeleteTarefa={oc.tarefaDelete}
-                        allUsers={responsaveis.map((r) => r.nome)}
+                        canEditObservers={oc.observerEdit}
+                        allUsers={responsaveis.map((r) => ({ id: r.id, label: r.nome }))}
                         onAddObserver={onAddObserver}
                         onRemoveObserver={onRemoveObserver}
                       />
@@ -1198,11 +1208,11 @@ export const OperacionalView: React.FC<OperacionalProps> = ({
                                 entity="tarefa"
                                 entityId={t.id}
                                 observers={t.observadores ?? []}
-                                allUsers={responsaveis.map((r) => r.nome)}
+                                allUsers={responsaveis.map((r) => ({ id: r.id, label: r.nome }))}
                                 resolveUserName={(userId) => displayNomeDonoPrioridade(userId, responsaveis) || userId}
                                 onAdd={(userId) => onAddObserver?.('tarefa', t.id, userId)}
                                 onRemove={(userId) => onRemoveObserver?.('tarefa', t.id, userId)}
-                                canEdit={oc.tarefaWrite}
+                                canEdit={oc.observerEdit}
                               />
                             </td>
                           </tr>

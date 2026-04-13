@@ -61,6 +61,28 @@ export function userHasModuleAction(
   if (actionId === 'tarefa_assign') {
     return userCanAssignTarefasToOthers(profile, view);
   }
+  if (actionId === 'observer_edit') {
+    if (!userHasViewAccess(profile, view)) return false;
+    const mp = profile.modulePermissions;
+    if (mp == null || Object.keys(mp).length === 0) return true;
+    const allowed = mp[view];
+    if (allowed === undefined) return true;
+    if (allowed.includes('observer_edit')) return true;
+    const ver = profile.permissionsSchemaVersion ?? 1;
+    if (ver < PERMISSIONS_SCHEMA_VERSION) {
+      if (view === 'table') {
+        return (
+          allowed.includes('prioridade_write') ||
+          allowed.includes('plano_write') ||
+          allowed.includes('tarefa_write')
+        );
+      }
+      if (view === 'operacional') {
+        return allowed.includes('plano_write') || allowed.includes('tarefa_write');
+      }
+    }
+    return false;
+  }
   if (!userHasViewAccess(profile, view)) return false;
 
   const mp = profile.modulePermissions;

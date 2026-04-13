@@ -122,6 +122,8 @@ export interface EstrategicoCaps {
   /** Pode escolher outro responsável na tarefa (senão só a si). */
   tarefaAssign?: boolean;
   tarefaDelete?: boolean;
+  /** Pode adicionar/remover observadores no Tático. */
+  observerEdit?: boolean;
 }
 
 interface EstrategicoViewProps {
@@ -165,6 +167,10 @@ const TarefaRow: React.FC<{
   canWriteTarefa?: boolean;
   canAssignTarefa?: boolean;
   canDeleteTarefa?: boolean;
+  allUsers: Array<{ id: string; label: string }>;
+  onAddObserver?: (entity: 'prioridade' | 'plano' | 'tarefa', entityId: string, userId: string) => void;
+  onRemoveObserver?: (entity: 'prioridade' | 'plano' | 'tarefa', entityId: string, userId: string) => void;
+  canEditObservers?: boolean;
 }> = ({
   tarefa,
   responsaveis,
@@ -173,8 +179,13 @@ const TarefaRow: React.FC<{
   canWriteTarefa = true,
   canAssignTarefa = true,
   canDeleteTarefa = true,
+  allUsers,
+  onAddObserver,
+  onRemoveObserver,
+  canEditObservers = true,
 }) => {
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [showObservers, setShowObservers] = useState(false);
   const resp = responsaveis.find(
     (r) =>
       normStr(r.id) === normStr(tarefa.responsavel_id) ||
@@ -284,6 +295,29 @@ const TarefaRow: React.FC<{
         )}
       </td>
     </tr>
+    <tr className="bg-slate-900/40">
+      <td colSpan={5} className="px-4 pb-2">
+        <button
+          type="button"
+          onClick={() => setShowObservers((v) => !v)}
+          className="text-[11px] text-slate-400 hover:text-slate-200"
+        >
+          👁 {(tarefa.observadores ?? []).length} observadores
+        </button>
+        {showObservers && (
+          <ObserversPanel
+            entity="tarefa"
+            entityId={tarefa.id}
+            observers={tarefa.observadores ?? []}
+            allUsers={allUsers}
+            resolveUserName={(userId) => displayNomeDonoPrioridade(userId, responsaveis) || userId}
+            onAdd={(userId) => onAddObserver?.('tarefa', tarefa.id, userId)}
+            onRemove={(userId) => onRemoveObserver?.('tarefa', tarefa.id, userId)}
+            canEdit={canEditObservers}
+          />
+        )}
+      </td>
+    </tr>
     {confirmDelete && (
       <Modal isOpen onClose={() => setConfirmDelete(false)} title="Remover item" maxWidth="sm">
         <div className="space-y-4 text-sm text-slate-200">
@@ -332,7 +366,7 @@ const PlanoCard: React.FC<{
   prioridadeDonoId?: string;
   viewerIsAdmin?: boolean;
   viewerMyResponsavelIds?: Set<string>;
-  allUsers: string[];
+  allUsers: Array<{ id: string; label: string }>;
   onAddObserver?: (entity: 'prioridade' | 'plano' | 'tarefa', entityId: string, userId: string) => void;
   onRemoveObserver?: (entity: 'prioridade' | 'plano' | 'tarefa', entityId: string, userId: string) => void;
   canEditObservers?: boolean;
@@ -668,6 +702,10 @@ const PlanoCard: React.FC<{
                         canWriteTarefa={canWriteTarefa}
                         canAssignTarefa={canAssignTarefa}
                         canDeleteTarefa={canDeleteTarefa}
+                        allUsers={allUsers}
+                        onAddObserver={onAddObserver}
+                        onRemoveObserver={onRemoveObserver}
+                        canEditObservers={canEditObservers}
                       />
                     ))}
                   </tbody>
@@ -906,7 +944,7 @@ const DetalhePrioridade: React.FC<{
             lockWhoToOverrideName={false}
             prioridadeDonoId={prioridade.dono_id}
             viewerIsAdmin={true}
-            allUsers={responsaveis.map((r) => r.nome)}
+            allUsers={responsaveis.map((r) => ({ id: r.id, label: r.nome }))}
           />
         ))}
       </div>
@@ -952,10 +990,11 @@ const PrioridadeCard: React.FC<{
   canTarefaDelete?: boolean;
   viewerIsAdmin?: boolean;
   viewerMyResponsavelIds?: Set<string>;
-  allUsers: string[];
+  allUsers: Array<{ id: string; label: string }>;
   onAddObserver?: (entity: 'prioridade' | 'plano' | 'tarefa', entityId: string, userId: string) => void;
   onRemoveObserver?: (entity: 'prioridade' | 'plano' | 'tarefa', entityId: string, userId: string) => void;
   onOpenDetalhe?: (p: Prioridade) => void;
+  canEditObservers?: boolean;
 }> = ({
   prioridade,
   planos,
@@ -990,6 +1029,7 @@ const PrioridadeCard: React.FC<{
   onAddObserver,
   onRemoveObserver,
   onOpenDetalhe,
+  canEditObservers = true,
 }) => {
   const myViewerIds = viewerMyResponsavelIds ?? EMPTY_ID_SET;
 
@@ -1268,7 +1308,7 @@ const PrioridadeCard: React.FC<{
               resolveUserName={(userId) => displayNomeDonoPrioridade(userId, responsaveis) || userId}
               onAdd={(userId) => onAddObserver?.('prioridade', prioridade.id, userId)}
               onRemove={(userId) => onRemoveObserver?.('prioridade', prioridade.id, userId)}
-              canEdit={canPrioridadeWrite}
+              canEdit={canEditObservers}
             />
             {planos.map((plano) => (
               <PlanoCard
@@ -1297,7 +1337,7 @@ const PrioridadeCard: React.FC<{
                 allUsers={allUsers}
                 onAddObserver={onAddObserver}
                 onRemoveObserver={onRemoveObserver}
-                canEditObservers={canPlanoWrite}
+                canEditObservers={canEditObservers}
               />
             ))}
           </div>
@@ -1345,6 +1385,7 @@ export const EstrategicoView: React.FC<EstrategicoViewProps> = (props) => {
     tarefaWrite: estrategicoCaps?.tarefaWrite !== false,
     tarefaAssign: estrategicoCaps?.tarefaAssign !== false,
     tarefaDelete: estrategicoCaps?.tarefaDelete !== false,
+    observerEdit: estrategicoCaps?.observerEdit !== false,
   };
 
   /** Admin/gerente: vê tudo e destrava WHO do plano; demais usuários seguem dono da prioridade nos planos. */
@@ -1596,10 +1637,11 @@ export const EstrategicoView: React.FC<EstrategicoViewProps> = (props) => {
                   canTarefaDelete={caps.tarefaDelete}
                   viewerIsAdmin={viewerSeesAllTarefasNoPlano}
                   viewerMyResponsavelIds={myResponsavelIds}
-                  allUsers={responsaveis.map((r) => r.nome)}
+                  allUsers={responsaveis.map((r) => ({ id: r.id, label: r.nome }))}
                   onAddObserver={onAddObserver}
                   onRemoveObserver={onRemoveObserver}
                   onOpenDetalhe={setDetalheAberto}
+                  canEditObservers={caps.observerEdit}
                 />
               </div>
             );
@@ -1638,11 +1680,11 @@ export const EstrategicoView: React.FC<EstrategicoViewProps> = (props) => {
               entity="prioridade"
               entityId={detalheAberto.id}
               observers={detalheAberto.observadores ?? []}
-              allUsers={responsaveis.map((r) => r.nome)}
+              allUsers={responsaveis.map((r) => ({ id: r.id, label: r.nome }))}
               resolveUserName={(userId) => displayNomeDonoPrioridade(userId, responsaveis) || userId}
               onAdd={(userId) => onAddObserver?.('prioridade', detalheAberto.id, userId)}
               onRemove={(userId) => onRemoveObserver?.('prioridade', detalheAberto.id, userId)}
-              canEdit={caps.prioridadeWrite}
+              canEdit={caps.observerEdit}
             />
           </div>
         </Modal>

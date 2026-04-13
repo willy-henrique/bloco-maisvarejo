@@ -88,6 +88,18 @@ export const UserForm: React.FC<UserFormProps> = ({
             raw[vid] = [...arr, 'tarefa_assign'];
           }
         }
+        for (const vid of ['table', 'operacional'] as const) {
+          const arr = raw[vid];
+          if (!arr || ver >= PERMISSIONS_SCHEMA_VERSION) continue;
+          if (arr.includes('observer_edit')) continue;
+          const canWriteAny =
+            arr.includes('tarefa_write') ||
+            arr.includes('plano_write') ||
+            (vid === 'table' && arr.includes('prioridade_write'));
+          if (canWriteAny) {
+            raw[vid] = [...arr, 'observer_edit'];
+          }
+        }
         setModulePermissions(raw);
       } else {
         setModulePermissions(defaultModulePermissionsForViews(safeViews));
