@@ -23,6 +23,7 @@ import {
   Target,
   Play,
   Archive,
+  Eye,
 } from 'lucide-react';
 import { EstrategicoGridIcon } from '../icons/EstrategicoGridIcon';
 import { ResponsavelAutocomplete } from './ResponsavelAutocomplete';
@@ -131,6 +132,7 @@ interface EstrategicoViewProps {
   planos: PlanoDeAcao[];
   tarefas: Tarefa[];
   responsaveis: Responsavel[];
+  whoUsers?: Responsavel[];
   observerUsers?: Responsavel[];
   computeStatusPlano: (id: string) => StatusPlano | null;
   onUpdatePrioridade: (id: string, u: Partial<Prioridade>) => void;
@@ -187,12 +189,13 @@ const TarefaRow: React.FC<{
 }) => {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [showObservers, setShowObservers] = useState(false);
+  const byAllUsers = allUsers.find((u) => normStr(u.id) === normStr(tarefa.responsavel_id));
   const resp = responsaveis.find(
     (r) =>
       normStr(r.id) === normStr(tarefa.responsavel_id) ||
       normStr(r.nome) === normStr(tarefa.responsavel_id),
   );
-  const displayNome = resp?.nome || tarefa.responsavel_id || '';
+  const displayNome = resp?.nome || byAllUsers?.label || tarefa.responsavel_id || '';
   const cfg = TAREFA_CFG[tarefa.status_tarefa] || TAREFA_CFG.Pendente;
   const StatusIcon = cfg.Icon;
   const isOverdue = tarefa.data_vencimento < Date.now() && tarefa.status_tarefa !== 'Concluida';
@@ -271,17 +274,32 @@ const TarefaRow: React.FC<{
         </span>
       </td>
       <td className="px-4 py-3">
-        <select
-          value={tarefa.status_tarefa}
-          onChange={(e) => onUpdate({ status_tarefa: e.target.value as StatusTarefa })}
-          disabled={!canWriteTarefa}
-          className="text-[10px] font-semibold px-2 py-1 rounded-sm uppercase bg-slate-800 border border-slate-700 text-slate-200 outline-none focus:border-slate-500 disabled:opacity-50"
-        >
-          <option value="Pendente">PENDENTE</option>
-          <option value="EmExecucao">EM EXECUÇÃO</option>
-          <option value="Bloqueada">BLOQUEADA</option>
-          <option value="Concluida">CONCLUÍDA</option>
-        </select>
+        <div className="flex items-center gap-2">
+          <select
+            value={tarefa.status_tarefa}
+            onChange={(e) => onUpdate({ status_tarefa: e.target.value as StatusTarefa })}
+            disabled={!canWriteTarefa}
+            className="text-[10px] font-semibold px-2 py-1 rounded-sm uppercase bg-slate-800 border border-slate-700 text-slate-200 outline-none focus:border-slate-500 disabled:opacity-50"
+          >
+            <option value="Pendente">PENDENTE</option>
+            <option value="EmExecucao">EM EXECUÇÃO</option>
+            <option value="Bloqueada">BLOQUEADA</option>
+            <option value="Concluida">CONCLUÍDA</option>
+          </select>
+          <button
+            type="button"
+            onClick={() => setShowObservers((v) => !v)}
+            className={`p-1 rounded transition-colors ${
+              showObservers
+                ? 'text-slate-100 bg-slate-700/80'
+                : 'text-slate-500 hover:text-slate-200 hover:bg-slate-800/60'
+            }`}
+            title={`${(tarefa.observadores ?? []).length} observador(es)`}
+            aria-label="Abrir observadores"
+          >
+            <Eye size={13} />
+          </button>
+        </div>
       </td>
       <td className="px-2 py-3 text-right w-16">
         {canDeleteTarefa && (
@@ -296,16 +314,9 @@ const TarefaRow: React.FC<{
         )}
       </td>
     </tr>
-    <tr className="bg-slate-900/40">
-      <td colSpan={5} className="px-4 pb-2">
-        <button
-          type="button"
-          onClick={() => setShowObservers((v) => !v)}
-          className="text-[11px] text-slate-400 hover:text-slate-200"
-        >
-          👁 {(tarefa.observadores ?? []).length} observadores
-        </button>
-        {showObservers && (
+    {showObservers && (
+      <tr className="bg-slate-900/40">
+        <td colSpan={5} className="px-4 pb-2">
           <ObserversPanel
             entity="tarefa"
             entityId={tarefa.id}
@@ -315,10 +326,11 @@ const TarefaRow: React.FC<{
             onAdd={(userId) => onAddObserver?.('tarefa', tarefa.id, userId)}
             onRemove={(userId) => onRemoveObserver?.('tarefa', tarefa.id, userId)}
             canEdit={canEditObservers}
+            hideTrigger
           />
-        )}
-      </td>
-    </tr>
+        </td>
+      </tr>
+    )}
     {confirmDelete && (
       <Modal isOpen onClose={() => setConfirmDelete(false)} title="Remover item" maxWidth="sm">
         <div className="space-y-4 text-sm text-slate-200">
@@ -344,6 +356,7 @@ const PlanoCard: React.FC<{
   plano: PlanoDeAcao;
   tarefas: Tarefa[];
   responsaveis: Responsavel[];
+  whoUsers?: Responsavel[];
   computeStatusPlano: (id: string) => StatusPlano | null;
   onUpdate: (u: Partial<PlanoDeAcao>) => void;
   onDelete: () => void;
@@ -375,6 +388,7 @@ const PlanoCard: React.FC<{
   plano,
   tarefas,
   responsaveis,
+  whoUsers,
   computeStatusPlano,
   onUpdate,
   onDelete,
@@ -398,10 +412,12 @@ const PlanoCard: React.FC<{
   onRemoveObserver,
   canEditObservers = true,
 }) => {
+  const whoPool = whoUsers && whoUsers.length > 0 ? whoUsers : responsaveis;
   const myViewerIds = viewerMyResponsavelIds ?? EMPTY_ID_SET;
 
   const [expanded, setExpanded] = useState(false);
   const [showAddTarefa, setShowAddTarefa] = useState(false);
+  const [showPlanoObservers, setShowPlanoObservers] = useState(false);
   const [confirmDeletePlano, setConfirmDeletePlano] = useState(false);
   const [blockContext, setBlockContext] = useState<
     { task_id: string; task_title: string; task_owner: string; block_reason: string }[]
@@ -422,9 +438,9 @@ const PlanoCard: React.FC<{
   const computed = computeStatusPlano(plano.id);
   const status = (computed || plano.status_plano) as StatusPlano;
   const statusCfg = STATUS_CFG[status] || STATUS_CFG.Execucao;
-  const resp = responsaveis.find((r) => normStr(r.id) === normStr(plano.who_id));
+  const resp = whoPool.find((r) => normStr(r.id) === normStr(plano.who_id));
   const planWhoReadable =
-    displayNomeDonoPrioridade(plano.who_id, responsaveis) || resp?.nome || plano.who_id || '';
+    displayNomeDonoPrioridade(plano.who_id, whoPool) || resp?.nome || plano.who_id || '';
   const displayWho = whoOverrideName || planWhoReadable || '—';
 
   const donoDestaPrioridade =
@@ -556,12 +572,41 @@ const PlanoCard: React.FC<{
             </div>
           </button>
         </div>
+        <button
+          type="button"
+          onClick={() => setShowPlanoObservers((v) => !v)}
+          className={`p-1.5 rounded transition-colors ${
+            showPlanoObservers
+              ? 'text-slate-100 bg-slate-700/80'
+              : 'text-slate-500 hover:text-slate-200 hover:bg-slate-800/60'
+          }`}
+          title={`${(plano.observadores ?? []).length} observador(es)`}
+          aria-label="Abrir observadores do plano"
+        >
+          <Eye size={13} />
+        </button>
         {canDeletePlano && (
           <button type="button" onClick={() => setConfirmDeletePlano(true)} className="p-1.5 text-slate-600 hover:text-red-400 hover:bg-red-500/10 rounded transition-colors shrink-0" title="Excluir plano">
             <Trash2 size={13} />
           </button>
         )}
       </div>
+
+      {showPlanoObservers && (
+        <div className="px-6 pb-3">
+          <ObserversPanel
+            entity="plano"
+            entityId={plano.id}
+            observers={plano.observadores ?? []}
+            allUsers={allUsers}
+            resolveUserName={(userId) => displayNomeDonoPrioridade(userId, responsaveis) || userId}
+            onAdd={(userId) => onAddObserver?.('plano', plano.id, userId)}
+            onRemove={(userId) => onRemoveObserver?.('plano', plano.id, userId)}
+            canEdit={canEditObservers}
+            hideTrigger
+          />
+        </div>
+      )}
 
       {expanded && (
         <div className="border-t border-slate-800">
@@ -616,7 +661,7 @@ const PlanoCard: React.FC<{
                     <div className="w-full bg-transparent py-0.5 text-sm text-slate-200">{displayWho || '—'}</div>
                   ) : canWritePlano ? (
                     <ResponsavelAutocomplete
-                      responsaveis={responsaveis}
+                      responsaveis={whoPool}
                       valueId={plano.who_id}
                       onCommit={(id) => onUpdate({ who_id: id })}
                       variant="inline"
@@ -629,19 +674,6 @@ const PlanoCard: React.FC<{
               </React.Fragment>
             ))}
           </div>
-          <div className="px-6 pb-3">
-            <ObserversPanel
-              entity="plano"
-              entityId={plano.id}
-              observers={plano.observadores ?? []}
-              allUsers={allUsers}
-              resolveUserName={(userId) => displayNomeDonoPrioridade(userId, responsaveis) || userId}
-              onAdd={(userId) => onAddObserver?.('plano', plano.id, userId)}
-              onRemove={(userId) => onRemoveObserver?.('plano', plano.id, userId)}
-              canEdit={canEditObservers}
-            />
-          </div>
-
           {/* Tasks section */}
           <div className="border-t border-slate-800">
             <div className="px-5 py-3 flex items-center justify-between gap-3">
@@ -960,6 +992,7 @@ const PrioridadeCard: React.FC<{
   planos: PlanoDeAcao[];
   todasTarefas: Tarefa[];
   responsaveis: Responsavel[];
+  whoUsers?: Responsavel[];
   computeStatusPlano: (id: string) => StatusPlano | null;
   expanded: boolean;
   onToggle: () => void;
@@ -1001,6 +1034,7 @@ const PrioridadeCard: React.FC<{
   planos,
   todasTarefas,
   responsaveis,
+  whoUsers,
   computeStatusPlano,
   expanded,
   onToggle,
@@ -1032,6 +1066,7 @@ const PrioridadeCard: React.FC<{
   onOpenDetalhe,
   canEditObservers = true,
 }) => {
+  const whoPool = whoUsers && whoUsers.length > 0 ? whoUsers : responsaveis;
   const myViewerIds = viewerMyResponsavelIds ?? EMPTY_ID_SET;
 
   const [showAddPlano, setShowAddPlano] = useState(false);
@@ -1102,10 +1137,17 @@ const PrioridadeCard: React.FC<{
 
   return (
     <div className="bg-slate-900/60 border border-slate-800 rounded-xl">
-      <button
-        type="button"
+      <div
+        role="button"
+        tabIndex={0}
         onClick={onToggle}
-        className="w-full px-4 py-4 flex items-start gap-3 hover:bg-slate-900/80 transition-colors text-left"
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            onToggle();
+          }
+        }}
+        className="w-full px-4 py-4 flex items-start gap-3 hover:bg-slate-900/80 transition-colors text-left cursor-pointer"
       >
         <div className="mt-1 text-slate-500 shrink-0">
           {expanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
@@ -1201,7 +1243,7 @@ const PrioridadeCard: React.FC<{
             </div>
           </div>
         </div>
-      </button>
+      </div>
 
       {expanded && (
         <div className="border-t border-slate-800 p-4 pt-3 space-y-3">
@@ -1257,7 +1299,7 @@ const PrioridadeCard: React.FC<{
                   Responsável
                 </label>
                 <ResponsavelAutocomplete
-                  responsaveis={responsaveis}
+                  responsaveis={whoPool}
                   valueId={novoPlano.who_id}
                   onCommit={(id) => setNovoPlano((prev) => ({ ...prev, who_id: id }))}
                   placeholder="Buscar no cadastro..."
@@ -1301,22 +1343,13 @@ const PrioridadeCard: React.FC<{
           )}
 
           <div className="space-y-3 pt-1">
-            <ObserversPanel
-              entity="prioridade"
-              entityId={prioridade.id}
-              observers={prioridade.observadores ?? []}
-              allUsers={allUsers}
-              resolveUserName={(userId) => displayNomeDonoPrioridade(userId, responsaveis) || userId}
-              onAdd={(userId) => onAddObserver?.('prioridade', prioridade.id, userId)}
-              onRemove={(userId) => onRemoveObserver?.('prioridade', prioridade.id, userId)}
-              canEdit={canEditObservers}
-            />
             {planos.map((plano) => (
               <PlanoCard
                 key={plano.id}
                 plano={plano}
                 tarefas={todasTarefas.filter((t) => t.plano_id === plano.id)}
                 responsaveis={responsaveis}
+                whoUsers={whoPool}
                 computeStatusPlano={computeStatusPlano}
                 onUpdate={(u) => onUpdatePlano(plano.id, u)}
                 onDelete={() => onDeletePlano(plano.id)}
@@ -1356,6 +1389,7 @@ export const EstrategicoView: React.FC<EstrategicoViewProps> = (props) => {
     planos,
     tarefas,
     responsaveis,
+    whoUsers,
     observerUsers,
     computeStatusPlano,
     onUpdatePrioridade,
@@ -1389,6 +1423,7 @@ export const EstrategicoView: React.FC<EstrategicoViewProps> = (props) => {
     tarefaDelete: estrategicoCaps?.tarefaDelete !== false,
     observerEdit: estrategicoCaps?.observerEdit !== false,
   };
+  const whoPool = whoUsers && whoUsers.length > 0 ? whoUsers : responsaveis;
   const observerPool = observerUsers && observerUsers.length > 0 ? observerUsers : responsaveis;
 
   /** Admin/gerente: vê tudo e destrava WHO do plano; demais usuários seguem dono da prioridade nos planos. */
@@ -1478,7 +1513,7 @@ export const EstrategicoView: React.FC<EstrategicoViewProps> = (props) => {
 
   const ativas = useMemo(() => {
     let list = filteredPrioridades.filter((p) => p.status_prioridade !== 'Concluido');
-    if (myResponsavelIds.size > 0) {
+    if (!seesAllPrioridades && myResponsavelIds.size > 0) {
       list = list.filter((p) => {
         const mine =
           donoPrioridadeCorrespondeAoUsuario(p.dono_id, myResponsavelIds, responsaveis) ||
@@ -1600,6 +1635,7 @@ export const EstrategicoView: React.FC<EstrategicoViewProps> = (props) => {
                   planos={planos.filter((pl) => pl.prioridade_id === p.id)}
                   todasTarefas={tarefas}
                   responsaveis={responsaveis}
+                  whoUsers={whoPool}
                   computeStatusPlano={computeStatusPlano}
                   expanded={expandedByPrioridade[p.id] ?? true}
                   onToggle={() =>
@@ -1679,16 +1715,6 @@ export const EstrategicoView: React.FC<EstrategicoViewProps> = (props) => {
                 {new Date(detalheAberto.data_alvo).toLocaleDateString('pt-BR')}
               </p>
             </div>
-            <ObserversPanel
-              entity="prioridade"
-              entityId={detalheAberto.id}
-              observers={detalheAberto.observadores ?? []}
-              allUsers={observerPool.map((r) => ({ id: r.id, label: r.nome }))}
-              resolveUserName={(userId) => displayNomeDonoPrioridade(userId, responsaveis) || userId}
-              onAdd={(userId) => onAddObserver?.('prioridade', detalheAberto.id, userId)}
-              onRemove={(userId) => onRemoveObserver?.('prioridade', detalheAberto.id, userId)}
-              canEdit={caps.observerEdit}
-            />
           </div>
         </Modal>
       )}

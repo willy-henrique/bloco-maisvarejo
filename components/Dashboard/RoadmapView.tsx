@@ -3,12 +3,15 @@ import { ActionItem, ItemStatus } from '../../types';
 import { formatDateOnlyPtBr } from '../../utils/date';
 import { Calendar, User, ChevronRight } from 'lucide-react';
 import { Badge } from '../Shared/Badge';
+import { nomeExibicaoWhoParaItem } from './responsavelSearchUtils';
 
 interface RoadmapViewProps {
   items: ActionItem[];
   onOpenItem?: (item: ActionItem) => void;
   /** Permissão para abrir o modal de edição */
   canOpenItem?: boolean;
+  /** Resolve who (uid/id/nome) para nome legível — evita UID na lista */
+  displayWho?: (who: string) => string;
 }
 
 const MONTHS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
@@ -28,7 +31,14 @@ function formatMonthLabel(month: number, year: number): string {
   return `${MONTHS[month]} ${year}`;
 }
 
-export const RoadmapView: React.FC<RoadmapViewProps> = ({ items, onOpenItem, canOpenItem = true }) => {
+export const RoadmapView: React.FC<RoadmapViewProps> = ({
+  items,
+  onOpenItem,
+  canOpenItem = true,
+  displayWho,
+}) => {
+  const formatWho = (who: string) =>
+    (displayWho ? displayWho(who) : nomeExibicaoWhoParaItem(who || '', [], null)) || '—';
   const byMonth = useMemo(() => {
     const map = new Map<string, ActionItem[]>();
     items.forEach(item => {
@@ -89,7 +99,7 @@ export const RoadmapView: React.FC<RoadmapViewProps> = ({ items, onOpenItem, can
                         </p>
                         <p className="text-[11px] text-slate-500 flex items-center gap-1.5 mt-0.5">
                           <User size={10} />
-                          {item.who}
+                          {formatWho(item.who)}
                           <span className="text-slate-600">•</span>
                           {formatDateOnlyPtBr(item.when)}
                         </p>
@@ -123,7 +133,7 @@ export const RoadmapView: React.FC<RoadmapViewProps> = ({ items, onOpenItem, can
                         </p>
                         <p className="text-[11px] text-slate-500 flex items-center gap-1.5 mt-0.5">
                           <User size={10} />
-                          {item.who}
+                          {formatWho(item.who)}
                         </p>
                       </div>
                       <ChevronRight size={16} className="text-slate-500 group-hover:text-slate-300 shrink-0" />

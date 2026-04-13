@@ -2,12 +2,16 @@ import React from 'react';
 import { ActionItem, ItemStatus, UrgencyLevel } from '../../types';
 import { formatTimestampPtBr } from '../../utils/date';
 import { TrendingUp, CheckCircle, Clock, AlertCircle, Target, BarChart3 } from 'lucide-react';
+import { nomeExibicaoWhoParaItem } from './responsavelSearchUtils';
 
 interface PerformanceViewProps {
   items: ActionItem[];
+  displayWho?: (who: string) => string;
 }
 
-export const PerformanceView: React.FC<PerformanceViewProps> = ({ items }) => {
+export const PerformanceView: React.FC<PerformanceViewProps> = ({ items, displayWho }) => {
+  const formatWho = (who: string) =>
+    (displayWho ? displayWho(who) : nomeExibicaoWhoParaItem(who || '', [], null)) || '—';
   const total = items.length;
   const completed = items.filter(i => i.status === ItemStatus.COMPLETED).length;
   const executing = items.filter(i => i.status === ItemStatus.EXECUTING).length;
@@ -120,7 +124,7 @@ export const PerformanceView: React.FC<PerformanceViewProps> = ({ items }) => {
             {blockedItems.map(item => (
               <li key={item.id} className="text-sm text-slate-300 py-2 px-3 bg-slate-800/40 rounded border border-slate-700/50">
                 <span className="font-medium text-slate-200">{item.what}</span>
-                {item.who && <span className="text-slate-500 ml-2">— {item.who}</span>}
+                {item.who && <span className="text-slate-500 ml-2">— {formatWho(item.who)}</span>}
                 {item.blockedAt && (
                   <span className="text-slate-500 ml-2 text-xs">
                     (bloqueado {formatTimestampPtBr(item.blockedAt)})

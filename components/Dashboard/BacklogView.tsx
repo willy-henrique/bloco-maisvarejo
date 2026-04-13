@@ -16,7 +16,20 @@ import {
 import { toExternalHttpUrl } from '../../utils/externalLink';
 import { Modal } from '../Shared/Modal';
 import { ResponsavelAutocomplete } from './ResponsavelAutocomplete';
+import { nomeExibicaoWhoParaItem } from './responsavelSearchUtils';
 import { VisibilityFilterBar, type VisibilityFilter } from '../Shared/VisibilityFilterBar';
+
+function initialsFromName(nome: string): string {
+  const t = nome.trim();
+  if (!t) return '?';
+  return t
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((n) => n[0])
+    .join('')
+    .toUpperCase();
+}
 
 export interface BacklogCapabilities {
   canCreate?: boolean;
@@ -54,6 +67,15 @@ export const BacklogView: React.FC<BacklogViewProps> = ({
 }) => {
   const [itemToDelete, setItemToDelete] = useState<string | null>(null);
   const [visFilters, setVisFilters] = useState<VisibilityFilter[]>([]);
+  const creatorDisplay = (item: ActionItem): string => {
+    const creator = (item.created_by ?? '').trim();
+    if (creator) {
+      return displayWho?.(creator) ?? nomeExibicaoWhoParaItem(creator, responsaveis, null);
+    }
+    const owner = (item.who ?? '').trim();
+    if (!owner) return '—';
+    return displayWho?.(owner) ?? nomeExibicaoWhoParaItem(owner, responsaveis, null);
+  };
   const cap = {
     canCreate: capabilities?.canCreate !== false,
     canEdit: capabilities?.canEdit !== false,
@@ -129,9 +151,19 @@ export const BacklogView: React.FC<BacklogViewProps> = ({
                         {item.what || '—'}
                       </button>
                       <p className="text-[11px] text-slate-500 line-clamp-1 mt-0.5 sm:hidden">
-                        {item.who && `${displayWho ? displayWho(item.who) : item.who} · `}
+                        {item.who &&
+                          `${displayWho?.(item.who) ?? nomeExibicaoWhoParaItem(item.who, responsaveis, null)} · `}
                         {item.when && formatDateOnlyPtBr(item.when)}
                       </p>
+                      <div
+                        className="flex items-center gap-1.5 mt-0.5 min-w-0"
+                        title="Quem criou a demanda"
+                      >
+                        <span className="w-5 h-5 rounded-full bg-slate-700 text-slate-300 text-[8px] font-bold flex items-center justify-center shrink-0">
+                          {initialsFromName(creatorDisplay(item))}
+                        </span>
+                        <span className="text-[11px] text-slate-300 truncate">{creatorDisplay(item)}</span>
+                      </div>
                       {item.link && item.link.trim() && (
                         <a
                           href={toExternalHttpUrl(item.link)}
@@ -149,7 +181,9 @@ export const BacklogView: React.FC<BacklogViewProps> = ({
                     <td className="px-3 py-2.5 hidden sm:table-cell">
                       <div className="flex items-center gap-1.5 text-[11px] text-slate-400">
                         <User size={10} />
-                        {(item.who ? (displayWho ? displayWho(item.who) : item.who) : '—')}
+                        {item.who
+                          ? displayWho?.(item.who) ?? nomeExibicaoWhoParaItem(item.who, responsaveis, null)
+                          : '—'}
                       </div>
                       {cap.canEdit && (
                         <div className="mt-1 max-w-[240px]">
@@ -165,6 +199,15 @@ export const BacklogView: React.FC<BacklogViewProps> = ({
                       <div className="flex items-center gap-1.5 text-[11px] text-slate-500 mt-0.5">
                         <Calendar size={10} />
                         {item.when ? formatDateOnlyPtBr(item.when) : '—'}
+                      </div>
+                      <div
+                        className="flex items-center gap-1.5 text-[11px] text-slate-500 mt-0.5 min-w-0"
+                        title="Quem criou a demanda"
+                      >
+                        <span className="w-5 h-5 rounded-full bg-slate-700 text-slate-300 text-[8px] font-bold flex items-center justify-center shrink-0">
+                          {initialsFromName(creatorDisplay(item))}
+                        </span>
+                        <span className="text-slate-300 truncate">{creatorDisplay(item)}</span>
                       </div>
                       {item.link && item.link.trim() && (
                         <a

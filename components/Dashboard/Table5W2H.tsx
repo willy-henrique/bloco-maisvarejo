@@ -4,6 +4,7 @@ import { ActionItem, ItemStatus } from '../../types';
 import { formatDateOnlyPtBr } from '../../utils/date';
 import { Trash2, Pencil, ShieldAlert, Calendar, User, Info, MapPin, FileText, ChevronDown, ChevronRight, CheckCircle, Activity } from 'lucide-react';
 import { VisibilityFilterBar, type VisibilityFilter } from '../Shared/VisibilityFilterBar';
+import { nomeExibicaoWhoParaItem } from './responsavelSearchUtils';
 
 interface Table5W2HProps {
   items: ActionItem[];
@@ -22,6 +23,7 @@ interface Table5W2HProps {
   onRemoveFromOperacional?: (id: string) => void;
   currentUserId?: string | null;
   isAdmin?: boolean;
+  displayWho?: (who: string) => string;
 }
 
 export const Table5W2H: React.FC<Table5W2HProps> = ({
@@ -36,7 +38,10 @@ export const Table5W2H: React.FC<Table5W2HProps> = ({
   onRemoveFromOperacional,
   currentUserId,
   isAdmin = false,
+  displayWho,
 }) => {
+  const formatWho = (who: string) =>
+    (displayWho ? displayWho(who) : nomeExibicaoWhoParaItem(who || '', [], null)) || '—';
   const [concluidosOpen, setConcluidosOpen] = useState(false);
   const [visFilters, setVisFilters] = useState<VisibilityFilter[]>([]);
 
@@ -302,7 +307,7 @@ export const Table5W2H: React.FC<Table5W2HProps> = ({
                         {item.what || '—'}
                       </td>
                       <td className="px-3 py-2.5 text-[11px] text-slate-500">
-                        {item.who || '—'} · {item.when ? formatDateOnlyPtBr(item.when) : '—'}
+                        {formatWho(item.who)} · {item.when ? formatDateOnlyPtBr(item.when) : '—'}
                       </td>
                       <td className="px-3 py-2.5 text-right">
                         {onEditItem && (

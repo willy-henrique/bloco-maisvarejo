@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import type { PlanoDeAcao, Prioridade, Responsavel, Tarefa, StatusPlano, StatusTarefa } from '../../types';
 import type { UserRole as UserRoleType } from '../../types/user';
-import { CheckCircle, Play, Circle, AlertTriangle, Plus, ChevronDown, ChevronRight, Trash2, User, Calendar, Target, FileText } from 'lucide-react';
+import { CheckCircle, Play, Circle, AlertTriangle, Plus, ChevronDown, ChevronRight, Trash2, User, Calendar, Target, FileText, Eye } from 'lucide-react';
 import { ResponsavelAutocomplete } from './ResponsavelAutocomplete';
 import {
   responsavelIdsForLoggedUser,
@@ -11,7 +11,7 @@ import {
 import { canViewByOwnershipOrObserver, tarefaAtribuidaAoUsuario } from './taskAssignmentUtils';
 import { ObserversPanel } from './ObserversPanel';
 import { apiGetBlockContext } from '../../services/ritmoCollabApi';
-import { VisibilityFilterBar, type VisibilityFilter } from '../Shared/VisibilityFilterBar';
+import { type VisibilityFilter } from '../Shared/VisibilityFilterBar';
 
 // Utilidades
 function tsFromDateInput(v: string): number {
@@ -87,6 +87,7 @@ type OperacionalProps = {
   planos: PlanoDeAcao[];
   tarefas: Tarefa[];
   responsaveis: Responsavel[];
+  whoUsers?: Responsavel[];
   observerUsers?: Responsavel[];
   computeStatusPlano: (planoId: string) => StatusPlano | null;
   loggedUserUid?: string | null;
@@ -130,12 +131,13 @@ const TarefaRow: React.FC<{
   onRemoveObserver,
 }) => {
   const [showObservers, setShowObservers] = useState(false);
+  const byAllUsers = allUsers.find((u) => normStr(u.id) === normStr(tarefa.responsavel_id));
   const resp = responsaveis.find(
     (r) =>
       normStr(r.id) === normStr(tarefa.responsavel_id) ||
       normStr(r.nome) === normStr(tarefa.responsavel_id),
   );
-  const displayNome = resp?.nome || tarefa.responsavel_id || '';
+  const displayNome = resp?.nome || byAllUsers?.label || tarefa.responsavel_id || '';
   const cfg = TAREFA_CFG[tarefa.status_tarefa] || TAREFA_CFG.Pendente;
   const StatusIcon = cfg.Icon;
 
@@ -201,17 +203,32 @@ const TarefaRow: React.FC<{
       </td>
       <td className="px-4 py-3 text-slate-400">{fmtDate(tarefa.data_vencimento)}</td>
       <td className="px-4 py-3">
-        <select
-          value={tarefa.status_tarefa}
-          onChange={(e) => onUpdate({ status_tarefa: e.target.value as StatusTarefa })}
-          disabled={!canWriteTarefa}
-          className="text-[10px] font-semibold px-2 py-1 rounded-sm uppercase bg-slate-800 border border-slate-700 text-slate-200 outline-none focus:border-slate-500 disabled:opacity-50"
-        >
-          <option value="Pendente">PENDENTE</option>
-          <option value="EmExecucao">EM EXECUÇÃO</option>
-          <option value="Bloqueada">BLOQUEADA</option>
-          <option value="Concluida">CONCLUÍDA</option>
-        </select>
+        <div className="flex items-center gap-2">
+          <select
+            value={tarefa.status_tarefa}
+            onChange={(e) => onUpdate({ status_tarefa: e.target.value as StatusTarefa })}
+            disabled={!canWriteTarefa}
+            className="text-[10px] font-semibold px-2 py-1 rounded-sm uppercase bg-slate-800 border border-slate-700 text-slate-200 outline-none focus:border-slate-500 disabled:opacity-50"
+          >
+            <option value="Pendente">PENDENTE</option>
+            <option value="EmExecucao">EM EXECUÇÃO</option>
+            <option value="Bloqueada">BLOQUEADA</option>
+            <option value="Concluida">CONCLUÍDA</option>
+          </select>
+          <button
+            type="button"
+            onClick={() => setShowObservers((v) => !v)}
+            className={`p-1 rounded transition-colors ${
+              showObservers
+                ? 'text-slate-100 bg-slate-700/80'
+                : 'text-slate-500 hover:text-slate-200 hover:bg-slate-800/60'
+            }`}
+            title={`${(tarefa.observadores ?? []).length} observador(es)`}
+            aria-label="Abrir observadores"
+          >
+            <Eye size={13} />
+          </button>
+        </div>
       </td>
       <td className="px-2 py-3 text-right w-16">
         {canDeleteTarefa && (
@@ -226,16 +243,9 @@ const TarefaRow: React.FC<{
         )}
       </td>
     </tr>
-    <tr className="bg-slate-900/40">
-      <td colSpan={6} className="px-4 pb-2">
-        <button
-          type="button"
-          onClick={() => setShowObservers((v) => !v)}
-          className="text-[11px] text-slate-400 hover:text-slate-200"
-        >
-          👁 {(tarefa.observadores ?? []).length} observadores
-        </button>
-        {showObservers && (
+    {showObservers && (
+      <tr className="bg-slate-900/40">
+        <td colSpan={6} className="px-4 pb-2">
           <ObserversPanel
             entity="tarefa"
             entityId={tarefa.id}
@@ -245,10 +255,11 @@ const TarefaRow: React.FC<{
             onAdd={(userId) => onAddObserver?.('tarefa', tarefa.id, userId)}
             onRemove={(userId) => onRemoveObserver?.('tarefa', tarefa.id, userId)}
             canEdit={canEditObservers}
+            hideTrigger
           />
-        )}
-      </td>
-    </tr>
+        </td>
+      </tr>
+    )}
     </>
   );
 };
@@ -258,6 +269,7 @@ const OperacionalPlanoCard: React.FC<{
   plano: PlanoDeAcao;
   tarefas: Tarefa[];
   responsaveis: Responsavel[];
+  whoUsers?: Responsavel[];
   computeStatusPlano: (planoId: string) => StatusPlano | null;
   onAddTarefa: (t: Omit<Tarefa, 'id'>) => void;
   onUpdateTarefa: (id: string, u: Partial<Tarefa>) => void;
@@ -279,6 +291,7 @@ const OperacionalPlanoCard: React.FC<{
   plano,
   tarefas,
   responsaveis,
+  whoUsers,
   computeStatusPlano,
   onAddTarefa,
   onUpdateTarefa,
@@ -296,6 +309,7 @@ const OperacionalPlanoCard: React.FC<{
   onAddObserver,
   onRemoveObserver,
 }) => {
+  const whoPool = whoUsers && whoUsers.length > 0 ? whoUsers : responsaveis;
   const [expanded, setExpanded] = useState(false);
   const [showAddTarefa, setShowAddTarefa] = useState(false);
   const [concluidasNoPlanoOpen, setConcluidasNoPlanoOpen] = useState(false);
@@ -320,7 +334,7 @@ const OperacionalPlanoCard: React.FC<{
 
   /** WHO do plano (5W2H) — pode diferir do dono da prioridade; sempre refletir `plano.who_id`. */
   const displayWhoPlano =
-    displayNomeDonoPrioridade(plano.who_id, responsaveis).trim() || (plano.who_id || '').trim() || '';
+    displayNomeDonoPrioridade(plano.who_id, whoPool).trim() || (plano.who_id || '').trim() || '';
   const donoDestaPrioridade =
     myResponsavelIds.size > 0 &&
     donoPrioridadeCorrespondeAoUsuario(prioridade.dono_id, myResponsavelIds, responsaveis);
@@ -506,7 +520,7 @@ const OperacionalPlanoCard: React.FC<{
                     <ResponsavelAutocomplete
                       valueId={plano.who_id}
                       onCommit={(id) => handleUpdatePlano({ who_id: id })}
-                      responsaveis={responsaveis}
+                      responsaveis={whoPool}
                       placeholder="Selecione responsável"
                       variant="compact"
                     />
@@ -773,6 +787,7 @@ export const OperacionalView: React.FC<OperacionalProps> = ({
   planos,
   tarefas,
   responsaveis,
+  whoUsers,
   observerUsers,
   computeStatusPlano,
   loggedUserUid,
@@ -793,6 +808,7 @@ export const OperacionalView: React.FC<OperacionalProps> = ({
   const [visFilters, setVisFilters] = useState<VisibilityFilter[]>([]);
   const [tarefasConcluidasOpen, setTarefasConcluidasOpen] = useState(false);
   const [planosConcluidosOpen, setPlanosConcluidosOpen] = useState(false);
+  const [openTaskObservers, setOpenTaskObservers] = useState<Record<string, boolean>>({});
   const oc = {
     planoWrite: operacionalCaps?.planoWrite !== false,
     tarefaWrite: operacionalCaps?.tarefaWrite !== false,
@@ -800,6 +816,7 @@ export const OperacionalView: React.FC<OperacionalProps> = ({
     tarefaDelete: operacionalCaps?.tarefaDelete !== false,
     observerEdit: operacionalCaps?.observerEdit !== false,
   };
+  const whoPool = whoUsers && whoUsers.length > 0 ? whoUsers : responsaveis;
   const observerPool = observerUsers && observerUsers.length > 0 ? observerUsers : responsaveis;
 
   const seesAllPrioridades = loggedUserRole === 'administrador';
@@ -963,24 +980,10 @@ export const OperacionalView: React.FC<OperacionalProps> = ({
   );
 
   return (
-    <section className="bg-slate-900/60 border border-slate-800 rounded-xl overflow-hidden">
-      <div className="px-4 py-3 border-b border-slate-800 flex items-center justify-between bg-slate-900/80">
-        <div className="flex items-center gap-2">
-          <h3 className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
-            Operacional
-          </h3>
-          <div className="inline-flex rounded-lg border border-slate-700 bg-slate-900/60 p-0.5">
-            <button
-              type="button"
-              onClick={() => setAbaAtiva('tarefas')}
-              className={`px-2.5 py-1 text-[11px] rounded-md transition-colors ${
-                abaAtiva === 'tarefas'
-                  ? 'bg-blue-600 text-white'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              Tarefas
-            </button>
+    <div className="space-y-2">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex flex-col gap-1.5">
+          <div className="inline-flex rounded-lg border border-slate-700 bg-slate-900/60 p-0.5 w-fit">
             <button
               type="button"
               onClick={() => setAbaAtiva('planos')}
@@ -992,8 +995,26 @@ export const OperacionalView: React.FC<OperacionalProps> = ({
             >
               Plano de ação
             </button>
+            <button
+              type="button"
+              onClick={() => setAbaAtiva('tarefas')}
+              className={`px-2.5 py-1 text-[11px] rounded-md transition-colors ${
+                abaAtiva === 'tarefas'
+                  ? 'bg-blue-600 text-white'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              Tarefas
+            </button>
           </div>
-          <div className="inline-flex rounded-lg border border-slate-700 bg-slate-900/60 p-0.5">
+          <div className="inline-flex rounded-lg border border-slate-700 bg-slate-900/60 p-0.5 w-fit">
+            <span
+              className="px-2.5 py-1 text-[11px] rounded-md text-slate-200 bg-slate-800/80 border border-slate-600/70 cursor-default select-none"
+              title="Contexto fixo"
+              aria-label="Operacional (rótulo)"
+            >
+              Operacional
+            </span>
             <button
               type="button"
               onClick={() => setVisibilityMode('mine')}
@@ -1020,8 +1041,8 @@ export const OperacionalView: React.FC<OperacionalProps> = ({
             : `${visibleTarefas.length} ${visibleTarefas.length === 1 ? 'tarefa' : 'tarefas'}`}
         </span>
       </div>
-      {!seesAllPrioridades && <VisibilityFilterBar active={visFilters} onChange={setVisFilters} />}
 
+      <section className="bg-slate-900/60 border border-slate-800 rounded-xl overflow-hidden">
       {abaAtiva === 'planos' && visiblePlanos.length === 0 && (
         <div className="px-4 py-10 text-sm text-slate-500 text-center">
           Nenhum plano operacional disponível {seesAllPrioridades ? '' : 'para o seu usuário'}.
@@ -1042,6 +1063,7 @@ export const OperacionalView: React.FC<OperacionalProps> = ({
                     plano={plano}
                     tarefas={tarefas}
                     responsaveis={responsaveis}
+                    whoUsers={whoPool}
                     computeStatusPlano={computeStatusPlano}
                     onAddTarefa={onAddTarefa}
                     onUpdateTarefa={onUpdateTarefa}
@@ -1092,6 +1114,7 @@ export const OperacionalView: React.FC<OperacionalProps> = ({
                         plano={plano}
                         tarefas={tarefas}
                         responsaveis={responsaveis}
+                        whoUsers={whoPool}
                         computeStatusPlano={computeStatusPlano}
                         onAddTarefa={onAddTarefa}
                         onUpdateTarefa={onUpdateTarefa}
@@ -1173,17 +1196,34 @@ export const OperacionalView: React.FC<OperacionalProps> = ({
                               </button>
                             </td>
                             <td className="px-3 py-2">
-                              <select
-                                value={t.status_tarefa}
-                                onChange={(e) => onUpdateTarefa(t.id, { status_tarefa: e.target.value as StatusTarefa })}
-                                disabled={!oc.tarefaWrite}
-                                className="text-[10px] font-semibold px-2 py-1 rounded-sm uppercase bg-slate-800 border border-slate-700 text-slate-200 outline-none focus:border-slate-500 disabled:opacity-50"
-                              >
-                                <option value="Pendente">PENDENTE</option>
-                                <option value="EmExecucao">EM EXECUÇÃO</option>
-                                <option value="Bloqueada">BLOQUEADA</option>
-                                <option value="Concluida">CONCLUÍDA</option>
-                              </select>
+                              <div className="flex items-center gap-2">
+                                <select
+                                  value={t.status_tarefa}
+                                  onChange={(e) => onUpdateTarefa(t.id, { status_tarefa: e.target.value as StatusTarefa })}
+                                  disabled={!oc.tarefaWrite}
+                                  className="text-[10px] font-semibold px-2 py-1 rounded-sm uppercase bg-slate-800 border border-slate-700 text-slate-200 outline-none focus:border-slate-500 disabled:opacity-50"
+                                >
+                                  <option value="Pendente">PENDENTE</option>
+                                  <option value="EmExecucao">EM EXECUÇÃO</option>
+                                  <option value="Bloqueada">BLOQUEADA</option>
+                                  <option value="Concluida">CONCLUÍDA</option>
+                                </select>
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setOpenTaskObservers((prev) => ({ ...prev, [t.id]: !prev[t.id] }))
+                                  }
+                                  className={`p-1 rounded transition-colors ${
+                                    openTaskObservers[t.id]
+                                      ? 'text-slate-100 bg-slate-700/80'
+                                      : 'text-slate-500 hover:text-slate-200 hover:bg-slate-800/60'
+                                  }`}
+                                  title={`${(t.observadores ?? []).length} observador(es)`}
+                                  aria-label="Abrir observadores da tarefa"
+                                >
+                                  <Eye size={13} />
+                                </button>
+                              </div>
                             </td>
                             <td className="px-3 py-2">
                               <p className="text-slate-200 text-sm">{t.titulo}</p>
@@ -1205,20 +1245,23 @@ export const OperacionalView: React.FC<OperacionalProps> = ({
                               )}
                             </td>
                           </tr>
-                          <tr className="bg-slate-900/40">
-                            <td colSpan={7} className="px-3 pb-2">
-                              <ObserversPanel
-                                entity="tarefa"
-                                entityId={t.id}
-                                observers={t.observadores ?? []}
-                                allUsers={observerPool.map((r) => ({ id: r.id, label: r.nome }))}
-                                resolveUserName={(userId) => displayNomeDonoPrioridade(userId, responsaveis) || userId}
-                                onAdd={(userId) => onAddObserver?.('tarefa', t.id, userId)}
-                                onRemove={(userId) => onRemoveObserver?.('tarefa', t.id, userId)}
-                                canEdit={oc.observerEdit}
-                              />
-                            </td>
-                          </tr>
+                          {openTaskObservers[t.id] && (
+                            <tr className="bg-slate-900/40">
+                              <td colSpan={7} className="px-3 pb-2">
+                                <ObserversPanel
+                                  entity="tarefa"
+                                  entityId={t.id}
+                                  observers={t.observadores ?? []}
+                                  allUsers={observerPool.map((r) => ({ id: r.id, label: r.nome }))}
+                                  resolveUserName={(userId) => displayNomeDonoPrioridade(userId, responsaveis) || userId}
+                                  onAdd={(userId) => onAddObserver?.('tarefa', t.id, userId)}
+                                  onRemove={(userId) => onRemoveObserver?.('tarefa', t.id, userId)}
+                                  canEdit={oc.observerEdit}
+                                  hideTrigger
+                                />
+                              </td>
+                            </tr>
+                          )}
                         </React.Fragment>
                       );
                     })}
@@ -1291,7 +1334,8 @@ export const OperacionalView: React.FC<OperacionalProps> = ({
           )}
         </div>
       )}
-    </section>
+      </section>
+    </div>
   );
 };
 

@@ -17,6 +17,7 @@ import { useRitmoGestao } from './controllers/useRitmoGestao';
 import { StorageService } from './services/storageService';
 import { isFirebaseConfigured, subscribeBoard, saveBoardNotes } from './services/firestoreSync';
 import { listAllUsers } from './services/firebaseAuth';
+import { isDeveloperEmail } from './config/developer';
 import { subscribeAppSettings, getDefaultAppSettings } from './services/appSettings';
 import type { UserProfile } from './types/user';
 import type { AppSettings } from './types/appSettings';
@@ -95,6 +96,8 @@ function AppContent() {
   const [defaultStatusForNew, setDefaultStatusForNew] = useState<ItemStatus | null>(null);
   const [modalContext, setModalContext] = useState<'default' | 'backlog' | 'estrategico'>('default');
   const [toast, setToast] = useState<{ message: string; type: ToastType } | null>(null);
+  /** Filtro do campo "Pesquisar..." no header (Estratégico, Backlog, Desempenho, Roadmap). */
+  const [headerSearchQuery, setHeaderSearchQuery] = useState('');
   const [selectedPrioridade, setSelectedPrioridade] = useState<Prioridade | null>(null);
   const [prioridadeModalOpen, setPrioridadeModalOpen] = useState(false);
   const [prioridadeToDelete, setPrioridadeToDelete] = useState<Prioridade | null>(null);
@@ -200,7 +203,9 @@ function AppContent() {
       try {
         const all = await listAllUsers();
         if (!cancelled) {
-          setPerfisCadastroUsuarios(all.filter((u) => u.ativo !== false));
+          setPerfisCadastroUsuarios(
+            all.filter((u) => u.ativo !== false && !isDeveloperEmail(u.email)),
+          );
         }
       } catch {
         if (!cancelled) setPerfisCadastroUsuarios([]);
@@ -417,18 +422,21 @@ function AppContent() {
     [profile?.role, isCreatedByMe, myResponsavelIdsForBoard, responsaveisParaAtribuicao],
   );
 
-  // Filtro estrito por empresa — itens sem empresa (legado) caem na primeira empresa ativa.
-  const defaultEmpresaFallback = empresasAtivas[0] ?? '';
-
   const matchWorkspaceStrict = useCallback(
     (empresa?: string | null): boolean => {
       const em = (empresa ?? '').trim();
-      const effective = em || defaultEmpresaFallback;
-      if (!effective) return workspaceAtivo === 'all';
-      if (workspaceAtivo === 'all') return canSeeEmpresa(effective);
-      return effective.toLowerCase() === String(workspaceAtivo).trim().toLowerCase();
+      const ws = String(workspaceAtivo).trim().toLowerCase();
+
+      // Sem empresa (legado): quando um workspace específico está selecionado,
+      // mantém visível para não "sumir" com itens antigos ao trocar de filtro.
+      if (!em) {
+        return ws !== 'all';
+      }
+
+      if (ws === 'all') return canSeeEmpresa(em);
+      return em.toLowerCase() === ws;
     },
-    [workspaceAtivo, canSeeEmpresa, defaultEmpresaFallback],
+    [workspaceAtivo, canSeeEmpresa],
   );
 
   const canReadCrossWorkspaceGlobal = useMemo(() => {
@@ -489,6 +497,47 @@ function AppContent() {
     myResponsavelIdsForBoard,
     responsaveisParaAtribuicao,
   ]);
+
+  const filterActionItemsByHeaderSearch = useCallback(
+    (list: ActionItem[]) => {
+      const needle = headerSearchQuery.trim().toLowerCase();
+      if (!needle) return list;
+      return list.filter((i) => {
+        const whoResolved = displayWhoKanban(i.who);
+        const creatorResolved = displayWhoKanban(i.created_by ?? '');
+        const haystack = [
+          i.what,
+          i.why,
+          i.where,
+          i.how,
+          i.notes,
+          i.homologationActions,
+          i.link,
+          i.empresa,
+          i.who,
+          whoResolved,
+          i.created_by,
+          creatorResolved,
+          String(i.status ?? ''),
+          String(i.urgency ?? ''),
+        ]
+          .join(' ')
+          .toLowerCase();
+        return haystack.includes(needle);
+      });
+    },
+    [headerSearchQuery, displayWhoKanban],
+  );
+
+  const itemsFiltradosComPesquisa = useMemo(
+    () => filterActionItemsByHeaderSearch(itemsFiltrados),
+    [itemsFiltrados, filterActionItemsByHeaderSearch],
+  );
+
+  const backlogViewItemsComPesquisa = useMemo(
+    () => filterActionItemsByHeaderSearch(backlogViewItems),
+    [backlogViewItems, filterActionItemsByHeaderSearch],
+  );
 
   /** Prioridade entra na lista mesmo com empresa “errada” se o usuário é dono, WHO de algum plano ou tem tarefa atribuída. */
   const prioridadeVisivelPorDemandaAtribuida = useCallback(
@@ -949,11 +998,16 @@ function AppContent() {
           </div>
 
           <div className="flex items-center gap-2">
-            <div className="relative hidden xl:block">
-              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+            <div className="relative hidden md:block min-w-0 max-w-[min(100%,14rem)]">
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
               <input
+                type="search"
+                value={headerSearchQuery}
+                onChange={(e) => setHeaderSearchQuery(e.target.value)}
                 placeholder="Pesquisar..."
-                className="bg-slate-950/80 border border-slate-800 rounded-lg py-2 pl-9 pr-3 text-sm text-slate-300 outline-none focus:border-slate-600 w-48 transition-all"
+                autoComplete="off"
+                aria-label="Pesquisar iniciativas e backlog"
+                className="bg-slate-950/80 border border-slate-800 rounded-lg py-2 pl-9 pr-3 text-sm text-slate-300 outline-none focus:border-slate-600 w-full md:w-48 transition-all"
               />
             </div>
             {activeView === 'quadro' && ritmo.podeAdicionarPrioridade && (
@@ -1041,26 +1095,29 @@ function AppContent() {
               {[
                 {
                   label: 'Ações Totais',
-                  val: activeView === 'backlog' ? backlogViewItems.length : itemsFiltrados.length,
+                  val:
+                    activeView === 'backlog'
+                      ? backlogViewItemsComPesquisa.length
+                      : itemsFiltradosComPesquisa.length,
                   icon: activeView === 'dashboard' ? EstrategicoGridIcon : ListTodo,
                 },
                 {
                   label: 'Em Execução',
-                  val: (activeView === 'backlog' ? backlogViewItems : itemsFiltrados).filter(
+                  val: (activeView === 'backlog' ? backlogViewItemsComPesquisa : itemsFiltradosComPesquisa).filter(
                     (i) => i.status === ItemStatus.EXECUTING
                   ).length,
                   icon: Activity,
                 },
                 {
                   label: 'Bloqueios',
-                  val: (activeView === 'backlog' ? backlogViewItems : itemsFiltrados).filter(
+                  val: (activeView === 'backlog' ? backlogViewItemsComPesquisa : itemsFiltradosComPesquisa).filter(
                     (i) => i.status === ItemStatus.BLOCKED
                   ).length,
                   icon: AlertCircle,
                 },
                 {
                   label: 'Concluídas',
-                  val: (activeView === 'backlog' ? backlogViewItems : itemsFiltrados).filter(
+                  val: (activeView === 'backlog' ? backlogViewItemsComPesquisa : itemsFiltradosComPesquisa).filter(
                     (i) => i.status === ItemStatus.COMPLETED
                   ).length,
                   icon: Target,
@@ -1229,7 +1286,7 @@ function AppContent() {
             <div className="pb-8">
               {activeView === 'dashboard' && (
                 <KanbanBoard
-                  items={itemsFiltrados}
+                  items={itemsFiltradosComPesquisa}
                   onStatusChange={updateStatus}
                   onOpenItem={(item) => openItemModal(item, undefined, 'estrategico')}
                   onAddInColumn={(status) => openItemModal(null, status, 'estrategico')}
@@ -1252,6 +1309,7 @@ function AppContent() {
                   planos={ritmoPlanosEscopoVisivel}
                   tarefas={ritmoTarefasEscopoVisivel}
                   responsaveis={responsaveisEscopoAtribuicao}
+                  whoUsers={responsaveisParaAtribuicao}
                   observerUsers={responsaveisParaAtribuicao}
                   computeStatusPlano={ritmo.computeStatusPlano}
                   onUpdatePrioridade={handleUpdatePrioridadeTatico}
@@ -1311,6 +1369,7 @@ function AppContent() {
                   planos={ritmoPlanosEscopoVisivel}
                   tarefas={ritmoTarefasEscopoVisivel}
                   responsaveis={responsaveisEscopoAtribuicao}
+                  whoUsers={responsaveisParaAtribuicao}
                   observerUsers={responsaveisParaAtribuicao}
                   computeStatusPlano={ritmo.computeStatusPlano}
                   loggedUserUid={profile?.uid}
@@ -1347,7 +1406,7 @@ function AppContent() {
               )}
               {activeView === 'backlog' && (
                 <BacklogView
-                  items={backlogViewItems}
+                  items={backlogViewItemsComPesquisa}
                   onUpdate={updateItem}
                   onDelete={deleteItem}
                   onEditItem={(item) => openItemModal(item, undefined, 'backlog')}
@@ -1366,7 +1425,7 @@ function AppContent() {
                     }
                   }}
                   displayWho={displayWhoKanban}
-                  responsaveis={responsaveisEscopoAtribuicao}
+                  responsaveis={responsaveisParaAtribuicao}
                   currentUserId={firebaseUser?.uid}
                   isAdmin={profile?.role === 'administrador'}
                   onAddNew={
@@ -1382,12 +1441,15 @@ function AppContent() {
                   }}
                 />
               )}
-              {activeView === 'performance' && <PerformanceView items={itemsFiltrados} />}
+              {activeView === 'performance' && (
+                <PerformanceView items={itemsFiltradosComPesquisa} displayWho={displayWhoKanban} />
+              )}
               {activeView === 'roadmap' && (
                 <RoadmapView
-                  items={itemsFiltrados}
+                  items={itemsFiltradosComPesquisa}
                   onOpenItem={openItemModal}
                   canOpenItem={perm.roadmap.edit}
+                  displayWho={displayWhoKanban}
                 />
               )}
               {activeView === 'quadro' && (
@@ -1561,10 +1623,12 @@ function AppContent() {
           loggedUserName={profile?.nome}
           lockWhoToLoggedUser={true}
           canEditWho={profile?.role === 'administrador'}
-          responsaveis={responsaveisEscopoAtribuicao}
+          responsaveis={responsaveisParaAtribuicao}
           hideWhereEmpresa={modalContext === 'backlog'}
           hideStatusUrgency={modalContext === 'backlog'}
           itemModalContext={modalContext}
+          currentUserId={firebaseUser?.uid ?? undefined}
+          resolveUserDisplay={displayWhoKanban}
           readOnly={
             selectedItem !== null &&
             (modalContext === 'backlog'

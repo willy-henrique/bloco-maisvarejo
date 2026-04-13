@@ -5,6 +5,13 @@ function normStr(v: string | null | undefined): string {
   return (v ?? '').trim().toLowerCase();
 }
 
+/** Evita mostrar UID/código técnico cru na UI (Firebase ~28 chars, sem espaços). */
+function looksLikeOpaqueUserId(value: string): boolean {
+  const v = value.trim();
+  if (!v || v.includes(' ') || v.includes('@')) return false;
+  return /^[a-zA-Z0-9_-]{22,36}$/.test(v);
+}
+
 /** Dicas extras quando `profile.nome` difere do Auth ou está vazio (ex.: login só com email). */
 export type LoggedUserIdentityExtras = {
   email?: string | null;
@@ -90,7 +97,17 @@ export function nomeExibicaoWhoParaItem(
       return (u.nome ?? '').trim();
     }
   }
-  return r.nome || w;
+  for (const u of perfisCadastro ?? []) {
+    if (u.ativo === false) continue;
+    if (normStr(u.email) === normStr(w) && (u.nome ?? '').trim()) {
+      return (u.nome ?? '').trim();
+    }
+  }
+  const out = r.nome || w;
+  if (normStr(out) === normStr(w) && looksLikeOpaqueUserId(w)) {
+    return 'Usuário';
+  }
+  return out;
 }
 
 /** Mesmo cadastro (id ou nome legados que resolvem para o mesmo responsável). */
@@ -140,7 +157,12 @@ export function displayNomeDonoPrioridade(donoId: string, responsaveis: Responsa
   const segments = d.includes('|')
     ? d.split('|').map((s) => s.trim()).filter(Boolean)
     : [d];
-  const names = segments.map((seg) => resolveResponsavelDisplay(responsaveis, seg).nome || seg);
+  const names = segments.map((seg) => {
+    const r = resolveResponsavelDisplay(responsaveis, seg);
+    if (r.nome && normStr(r.nome) !== normStr(seg)) return r.nome;
+    if (looksLikeOpaqueUserId(seg)) return 'Usuário';
+    return r.nome || seg;
+  });
   return [...new Set(names.map((n) => n.trim()).filter(Boolean))].join(' | ');
 }
 

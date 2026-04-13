@@ -11,6 +11,8 @@ interface ObserversPanelProps {
   onRemove: (userId: string) => void;
   canEdit: boolean;
   resolveUserName?: (userId: string) => string;
+  /** Quando true, não renderiza o botão de olho interno e mostra o conteúdo direto. */
+  hideTrigger?: boolean;
 }
 
 export const ObserversPanel: React.FC<ObserversPanelProps> = ({
@@ -22,8 +24,9 @@ export const ObserversPanel: React.FC<ObserversPanelProps> = ({
   onRemove,
   canEdit,
   resolveUserName,
+  hideTrigger = false,
 }) => {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(hideTrigger);
   const [candidate, setCandidate] = useState('');
   const normalizedCandidate = candidate.trim().toLowerCase();
   const selectedIds = useMemo(
@@ -72,22 +75,22 @@ export const ObserversPanel: React.FC<ObserversPanelProps> = ({
   };
 
   return (
-    <div className="mt-3 border border-slate-800 rounded-lg bg-slate-900/40">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="w-full px-3 py-2 flex items-center justify-between text-left hover:bg-slate-800/40 rounded-lg transition-colors"
-      >
-        <span className="inline-flex items-center gap-2 text-xs text-slate-300">
+    <div className="mt-2">
+      {!hideTrigger && (
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          className="inline-flex items-center gap-2 px-2 py-1 rounded-md text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 transition-colors"
+          title="Observadores"
+        >
           <Eye size={13} />
-          Observadores
-        </span>
-        <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 tabular-nums">
-          {(observers ?? []).length}
-        </span>
-      </button>
-      {open && (
-        <div className="px-3 pb-3 space-y-2 border-t border-slate-800">
+          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-800 text-slate-400 tabular-nums">
+            {(observers ?? []).length}
+          </span>
+        </button>
+      )}
+      {(hideTrigger || open) && (
+        <div className="mt-2 px-3 pb-3 pt-2 space-y-2 border border-slate-800 rounded-lg bg-slate-900/40">
           <div className="pt-2 space-y-1.5">
             {(observers ?? []).length === 0 ? (
               <p className="text-[11px] text-slate-500">Sem observadores.</p>

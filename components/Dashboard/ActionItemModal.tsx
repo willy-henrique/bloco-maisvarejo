@@ -34,6 +34,22 @@ interface ActionItemModalProps {
    * com título de modal “Item Estratégico”.
    */
   itemModalContext?: 'default' | 'backlog' | 'estrategico';
+  /** UID do usuário logado para exibir "Eu" quando aplicável. */
+  currentUserId?: string;
+  /** Resolve uid/id legado para nome legível no cabeçalho do modal. */
+  resolveUserDisplay?: (value: string) => string;
+}
+
+function initialsFromName(nome: string): string {
+  const t = nome.trim();
+  if (!t) return '?';
+  return t
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((n) => n[0])
+    .join('')
+    .toUpperCase();
 }
 
 const emptyForm = (whoDefault: string): Omit<ActionItem, 'id' | 'createdAt' | 'updatedAt'> => ({
@@ -67,6 +83,8 @@ export const ActionItemModal: React.FC<ActionItemModalProps> = ({
   responsaveis = [],
   readOnly = false,
   itemModalContext = 'default',
+  currentUserId,
+  resolveUserDisplay,
 }) => {
   const isEdit = item !== null;
   const isBacklogItem =
@@ -77,13 +95,24 @@ export const ActionItemModal: React.FC<ActionItemModalProps> = ({
   const effectiveHideWhereEmpresa = hideWhereEmpresa || isBacklogLike;
   const effectiveHideStatusUrgency = hideStatusUrgency || isBacklogLike;
   const isWhoLocked = lockWhoToLoggedUser && !!loggedUserName?.trim();
-  // Em edição, mantém o "Quem?" original do item.
   const shouldLockWho = isWhoLocked && !isEdit;
-  const lockWhoAndWhen = isBacklogLike;
-  const isWhoReadOnly = lockWhoAndWhen || !canEditWho;
+  const lockWhenInBacklog = isBacklogLike;
+  const isWhoReadOnly = !canEditWho;
   const whoDefault = shouldLockWho ? loggedUserName!.trim() : '';
   const [form, setForm] = useState(emptyForm(whoDefault));
-  const whoDisplay = resolveResponsavelDisplay(responsaveis, form.who || whoDefault).nome || (form.who || whoDefault || '');
+  const whoKey = (form.who || whoDefault || '').trim();
+  const whoDisplay =
+    (whoKey && resolveUserDisplay ? resolveUserDisplay(whoKey) : '') ||
+    resolveResponsavelDisplay(responsaveis, whoKey).nome ||
+    whoKey ||
+    '';
+  const creatorSource = (item?.created_by ?? '').trim() || (currentUserId ?? '').trim();
+  const creatorLabel = creatorSource
+    ? resolveUserDisplay?.(creatorSource) ||
+      resolveResponsavelDisplay(responsaveis, creatorSource).nome ||
+      (currentUserId && creatorSource === currentUserId ? (loggedUserName?.trim() || '') : '') ||
+      creatorSource
+    : '—';
 
   useEffect(() => {
     if (item) {
@@ -305,7 +334,7 @@ export const ActionItemModal: React.FC<ActionItemModalProps> = ({
                 type="date"
                 value={form.when}
                 onChange={(e) => update('when', e.target.value)}
-                disabled={readOnly || lockWhoAndWhen}
+                disabled={readOnly || lockWhenInBacklog}
                 className="w-full bg-slate-800/50 border border-slate-700 rounded-lg pl-9 pr-3 py-2.5 text-sm text-slate-200 outline-none focus:border-slate-600 disabled:opacity-70 disabled:cursor-not-allowed"
               />
             </div>
@@ -333,22 +362,34 @@ export const ActionItemModal: React.FC<ActionItemModalProps> = ({
           )}
         </div>
 
-        <div className="flex justify-end gap-2 pt-2 border-t border-slate-800">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-4 py-2 text-sm font-medium text-slate-400 hover:text-slate-100 transition-colors"
-          >
-            {readOnly ? 'Fechar' : 'Cancelar'}
-          </button>
-          {!readOnly && (
-            <button
-              type="submit"
-              className="px-4 py-2.5 min-h-[44px] text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors touch-manipulation"
-            >
-              {isEdit ? 'Salvar' : 'Criar'}
-            </button>
+        <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-800">
+          {isEdit && creatorLabel && creatorLabel !== '—' ? (
+            <span className="inline-flex items-center gap-2 min-w-0" title="Quem criou a demanda">
+              <span className="w-6 h-6 rounded-full bg-slate-700 text-slate-300 text-[9px] font-bold flex items-center justify-center shrink-0">
+                {initialsFromName(creatorLabel)}
+              </span>
+              <span className="text-sm text-slate-200 font-medium truncate">{creatorLabel}</span>
+            </span>
+          ) : (
+            <span />
           )}
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 text-sm font-medium text-slate-400 hover:text-slate-100 transition-colors"
+            >
+              {readOnly ? 'Fechar' : 'Cancelar'}
+            </button>
+            {!readOnly && (
+              <button
+                type="submit"
+                className="px-4 py-2.5 min-h-[44px] text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors touch-manipulation"
+              >
+                {isEdit ? 'Salvar' : 'Criar'}
+              </button>
+            )}
+          </div>
         </div>
       </form>
     </Modal>
