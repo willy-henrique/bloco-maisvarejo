@@ -1252,6 +1252,7 @@ function AppContent() {
                   planos={ritmoPlanosEscopoVisivel}
                   tarefas={ritmoTarefasEscopoVisivel}
                   responsaveis={responsaveisEscopoAtribuicao}
+                  observerUsers={responsaveisParaAtribuicao}
                   computeStatusPlano={ritmo.computeStatusPlano}
                   onUpdatePrioridade={handleUpdatePrioridadeTatico}
                   onDeletePrioridade={handleDeletePrioridade}
@@ -1310,6 +1311,7 @@ function AppContent() {
                   planos={ritmoPlanosEscopoVisivel}
                   tarefas={ritmoTarefasEscopoVisivel}
                   responsaveis={responsaveisEscopoAtribuicao}
+                  observerUsers={responsaveisParaAtribuicao}
                   computeStatusPlano={ritmo.computeStatusPlano}
                   loggedUserUid={profile?.uid}
                   loggedUserName={profile?.nome}

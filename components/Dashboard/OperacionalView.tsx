@@ -87,6 +87,7 @@ type OperacionalProps = {
   planos: PlanoDeAcao[];
   tarefas: Tarefa[];
   responsaveis: Responsavel[];
+  observerUsers?: Responsavel[];
   computeStatusPlano: (planoId: string) => StatusPlano | null;
   loggedUserUid?: string | null;
   loggedUserName?: string | null;
@@ -772,6 +773,7 @@ export const OperacionalView: React.FC<OperacionalProps> = ({
   planos,
   tarefas,
   responsaveis,
+  observerUsers,
   computeStatusPlano,
   loggedUserUid,
   loggedUserName,
@@ -798,6 +800,7 @@ export const OperacionalView: React.FC<OperacionalProps> = ({
     tarefaDelete: operacionalCaps?.tarefaDelete !== false,
     observerEdit: operacionalCaps?.observerEdit !== false,
   };
+  const observerPool = observerUsers && observerUsers.length > 0 ? observerUsers : responsaveis;
 
   const seesAllPrioridades = loggedUserRole === 'administrador';
   const viewerSeesAllTarefasNoPlano = loggedUserRole === 'administrador';
@@ -1052,7 +1055,7 @@ export const OperacionalView: React.FC<OperacionalProps> = ({
                     canAssignTarefa={oc.tarefaAssign}
                     canDeleteTarefa={oc.tarefaDelete}
                     canEditObservers={oc.observerEdit}
-                    allUsers={responsaveis.map((r) => ({ id: r.id, label: r.nome }))}
+                    allUsers={observerPool.map((r) => ({ id: r.id, label: r.nome }))}
                     onAddObserver={onAddObserver}
                     onRemoveObserver={onRemoveObserver}
                   />
@@ -1102,7 +1105,7 @@ export const OperacionalView: React.FC<OperacionalProps> = ({
                         canAssignTarefa={oc.tarefaAssign}
                         canDeleteTarefa={oc.tarefaDelete}
                         canEditObservers={oc.observerEdit}
-                        allUsers={responsaveis.map((r) => ({ id: r.id, label: r.nome }))}
+                        allUsers={observerPool.map((r) => ({ id: r.id, label: r.nome }))}
                         onAddObserver={onAddObserver}
                         onRemoveObserver={onRemoveObserver}
                       />
@@ -1208,7 +1211,7 @@ export const OperacionalView: React.FC<OperacionalProps> = ({
                                 entity="tarefa"
                                 entityId={t.id}
                                 observers={t.observadores ?? []}
-                                allUsers={responsaveis.map((r) => ({ id: r.id, label: r.nome }))}
+                                allUsers={observerPool.map((r) => ({ id: r.id, label: r.nome }))}
                                 resolveUserName={(userId) => displayNomeDonoPrioridade(userId, responsaveis) || userId}
                                 onAdd={(userId) => onAddObserver?.('tarefa', t.id, userId)}
                                 onRemove={(userId) => onRemoveObserver?.('tarefa', t.id, userId)}

@@ -131,6 +131,7 @@ interface EstrategicoViewProps {
   planos: PlanoDeAcao[];
   tarefas: Tarefa[];
   responsaveis: Responsavel[];
+  observerUsers?: Responsavel[];
   computeStatusPlano: (id: string) => StatusPlano | null;
   onUpdatePrioridade: (id: string, u: Partial<Prioridade>) => void;
   onDeletePrioridade: (p: Prioridade) => void;
@@ -1355,6 +1356,7 @@ export const EstrategicoView: React.FC<EstrategicoViewProps> = (props) => {
     planos,
     tarefas,
     responsaveis,
+    observerUsers,
     computeStatusPlano,
     onUpdatePrioridade,
     onAddPlano,
@@ -1387,6 +1389,7 @@ export const EstrategicoView: React.FC<EstrategicoViewProps> = (props) => {
     tarefaDelete: estrategicoCaps?.tarefaDelete !== false,
     observerEdit: estrategicoCaps?.observerEdit !== false,
   };
+  const observerPool = observerUsers && observerUsers.length > 0 ? observerUsers : responsaveis;
 
   /** Admin/gerente: vê tudo e destrava WHO do plano; demais usuários seguem dono da prioridade nos planos. */
   const isAdmin = loggedUserRole === 'administrador' || loggedUserRole === 'gerente';
@@ -1637,7 +1640,7 @@ export const EstrategicoView: React.FC<EstrategicoViewProps> = (props) => {
                   canTarefaDelete={caps.tarefaDelete}
                   viewerIsAdmin={viewerSeesAllTarefasNoPlano}
                   viewerMyResponsavelIds={myResponsavelIds}
-                  allUsers={responsaveis.map((r) => ({ id: r.id, label: r.nome }))}
+                  allUsers={observerPool.map((r) => ({ id: r.id, label: r.nome }))}
                   onAddObserver={onAddObserver}
                   onRemoveObserver={onRemoveObserver}
                   onOpenDetalhe={setDetalheAberto}
@@ -1680,7 +1683,7 @@ export const EstrategicoView: React.FC<EstrategicoViewProps> = (props) => {
               entity="prioridade"
               entityId={detalheAberto.id}
               observers={detalheAberto.observadores ?? []}
-              allUsers={responsaveis.map((r) => ({ id: r.id, label: r.nome }))}
+              allUsers={observerPool.map((r) => ({ id: r.id, label: r.nome }))}
               resolveUserName={(userId) => displayNomeDonoPrioridade(userId, responsaveis) || userId}
               onAdd={(userId) => onAddObserver?.('prioridade', detalheAberto.id, userId)}
               onRemove={(userId) => onRemoveObserver?.('prioridade', detalheAberto.id, userId)}
