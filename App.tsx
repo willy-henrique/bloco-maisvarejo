@@ -1644,7 +1644,7 @@ function AppContent() {
             <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
             Conectado
           </div>
-          <span>MAVO 1.8</span>
+          <span>MAVO 1.9</span>
         </footer>
       </main>
     </div>

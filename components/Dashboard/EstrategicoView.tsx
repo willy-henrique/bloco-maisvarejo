@@ -441,7 +441,7 @@ const PlanoCard: React.FC<{
   const resp = whoPool.find((r) => normStr(r.id) === normStr(plano.who_id));
   const planWhoReadable =
     displayNomeDonoPrioridade(plano.who_id, whoPool) || resp?.nome || plano.who_id || '';
-  const displayWho = whoOverrideName || planWhoReadable || '—';
+  const displayWho = planWhoReadable || whoOverrideName || '—';
 
   // Usuário é dono do PLANO (who_id) — vê todas as tarefas deste plano.
   // Dono da prioridade pai não concede visibilidade automática sobre todos os planos.
@@ -1083,6 +1083,8 @@ const PrioridadeCard: React.FC<{
     return planos.filter((pl) => {
       if (donoPrioridadeCorrespondeAoUsuario(pl.who_id, myViewerIds, responsaveis)) return true;
       if (canViewByOwnershipOrObserver([], pl.observadores, myViewerIds, responsaveis)) return true;
+      // Criador do plano sempre enxerga o próprio plano.
+      if (pl.created_by && myViewerIds.has(normStr(pl.created_by))) return true;
       const tarefasDoPlano = todasTarefas.filter((t) => t.plano_id === pl.id);
       return tarefasDoPlano.some(
         (t) =>
@@ -1148,7 +1150,7 @@ const PrioridadeCard: React.FC<{
       when_fim: parsedWhenFim,
       how: '',
       status_plano: 'Execucao',
-      created_by: prioridade.created_by ?? '',
+      created_by: loggedUserResponsavelId ?? prioridade.created_by ?? '',
     });
     setNovoPlano({
       titulo: '',
@@ -1245,7 +1247,7 @@ const PrioridadeCard: React.FC<{
             <div className="flex items-center gap-4 shrink-0">
               <div className="text-center">
                 <p className="text-2xl font-bold text-slate-100 tabular-nums">
-                  {planos.length}
+                  {planosVisiveis.length}
                 </p>
                 <p className="text-[11px] text-slate-500">planos de ação</p>
               </div>
