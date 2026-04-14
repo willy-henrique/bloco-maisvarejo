@@ -443,17 +443,24 @@ const PlanoCard: React.FC<{
     displayNomeDonoPrioridade(plano.who_id, whoPool) || resp?.nome || plano.who_id || '';
   const displayWho = whoOverrideName || planWhoReadable || '—';
 
-  const donoDestaPrioridade =
+  // Usuário é dono do PLANO (who_id) — vê todas as tarefas deste plano.
+  // Dono da prioridade pai não concede visibilidade automática sobre todos os planos.
+  const souDonoDestePlano =
     myViewerIds.size > 0 &&
-    donoPrioridadeCorrespondeAoUsuario(prioridadeDonoId, myViewerIds, responsaveis);
+    donoPrioridadeCorrespondeAoUsuario(plano.who_id, myViewerIds, responsaveis);
 
   const tarefasVisiveis = useMemo(() => {
-    if (viewerIsAdmin || donoDestaPrioridade) return tarefas;
-    return tarefas.filter((t) => tarefaAtribuidaAoUsuario(t, myViewerIds, responsaveis));
-  }, [tarefas, viewerIsAdmin, donoDestaPrioridade, myViewerIds, responsaveis]);
+    if (viewerIsAdmin || souDonoDestePlano) return tarefas;
+    // Não-admin e não-dono do plano: vê tarefas atribuídas a si OU onde é observador.
+    return tarefas.filter(
+      (t) =>
+        tarefaAtribuidaAoUsuario(t, myViewerIds, responsaveis) ||
+        canViewByOwnershipOrObserver([t.responsavel_id], t.observadores, myViewerIds, responsaveis),
+    );
+  }, [tarefas, viewerIsAdmin, souDonoDestePlano, myViewerIds, responsaveis]);
 
   const bloqueiosNaoVisiveis = useMemo(() => {
-    if (viewerIsAdmin || donoDestaPrioridade) return [];
+    if (viewerIsAdmin || souDonoDestePlano) return [];
     const visiveis = new Set(tarefasVisiveis.map((t) => t.id));
     return tarefas
       .filter((t) => !visiveis.has(t.id) && t.status_tarefa === 'Bloqueada')
@@ -463,7 +470,7 @@ const PlanoCard: React.FC<{
         responsavel: displayNomeDonoPrioridade(t.responsavel_id, responsaveis) || t.responsavel_id,
         motivo: t.bloqueio_motivo || 'Motivo não informado',
       }));
-  }, [tarefas, tarefasVisiveis, viewerIsAdmin, donoDestaPrioridade, responsaveis]);
+  }, [tarefas, tarefasVisiveis, viewerIsAdmin, souDonoDestePlano, responsaveis]);
 
   const concluidas = tarefasVisiveis.filter((t) => t.status_tarefa === 'Concluida').length;
   const totalTarefas = tarefasVisiveis.length;
@@ -1069,6 +1076,22 @@ const PrioridadeCard: React.FC<{
   const whoPool = whoUsers && whoUsers.length > 0 ? whoUsers : responsaveis;
   const myViewerIds = viewerMyResponsavelIds ?? EMPTY_ID_SET;
 
+  // Filtra os planos visíveis ao viewer.
+  // Admin vê tudo. Não-admin vê apenas planos onde é WHO, observador, ou tem tarefa atribuída/observada.
+  const planosVisiveis = useMemo(() => {
+    if (viewerIsAdmin || myViewerIds.size === 0) return planos;
+    return planos.filter((pl) => {
+      if (donoPrioridadeCorrespondeAoUsuario(pl.who_id, myViewerIds, responsaveis)) return true;
+      if (canViewByOwnershipOrObserver([], pl.observadores, myViewerIds, responsaveis)) return true;
+      const tarefasDoPlano = todasTarefas.filter((t) => t.plano_id === pl.id);
+      return tarefasDoPlano.some(
+        (t) =>
+          tarefaAtribuidaAoUsuario(t, myViewerIds, responsaveis) ||
+          canViewByOwnershipOrObserver([t.responsavel_id], t.observadores, myViewerIds, responsaveis),
+      );
+    });
+  }, [planos, viewerIsAdmin, myViewerIds, responsaveis, todasTarefas]);
+
   const [showAddPlano, setShowAddPlano] = useState(false);
   const [novoPlano, setNovoPlano] = useState({
     titulo: '',
@@ -1336,14 +1359,14 @@ const PrioridadeCard: React.FC<{
             </div>
           )}
 
-          {planos.length === 0 && !showAddPlano && (
+          {planosVisiveis.length === 0 && !showAddPlano && (
             <div className="py-6 text-center text-slate-500 text-sm border border-dashed border-slate-800 rounded-xl">
               Nenhum plano de ação ainda. Clique em &quot;Novo Plano&quot; para começar.
             </div>
           )}
 
           <div className="space-y-3 pt-1">
-            {planos.map((plano) => (
+            {planosVisiveis.map((plano) => (
               <PlanoCard
                 key={plano.id}
                 plano={plano}
@@ -1445,8 +1468,6 @@ export const EstrategicoView: React.FC<EstrategicoViewProps> = (props) => {
       const el = document.querySelector(`[data-prioridade-id="${targetId}"]`) as HTMLElement | null;
       if (el) {
         el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        el.classList.add('ring-2', 'ring-blue-400');
-        setTimeout(() => el.classList.remove('ring-2', 'ring-blue-400'), 2000);
       }
       setExpandedByPrioridade((prev) => ({ ...prev, [targetId]: true }));
       onFocusConsumed?.();
@@ -1528,9 +1549,22 @@ export const EstrategicoView: React.FC<EstrategicoViewProps> = (props) => {
             return pl?.prioridade_id === p.id;
           });
         if (visibilityMode === 'mine') return mine;
-        const following = Array.isArray(p.observadores)
-          ? p.observadores.some((o) => myResponsavelIds.has(normStr(o.user_id)))
-          : false;
+        // "Itens que sigo": observador da prioridade, de algum plano seu, ou de alguma tarefa sua.
+        const following =
+          (Array.isArray(p.observadores) &&
+            p.observadores.some((o) => myResponsavelIds.has(normStr(o.user_id)))) ||
+          planos.some(
+            (pl) =>
+              pl.prioridade_id === p.id &&
+              canViewByOwnershipOrObserver([], pl.observadores, myResponsavelIds, responsaveis),
+          ) ||
+          tarefas.some((t) => {
+            if (tarefaAtribuidaAoUsuario(t, myResponsavelIds, responsaveis)) return false; // já coberto por mine
+            if (!canViewByOwnershipOrObserver([t.responsavel_id], t.observadores, myResponsavelIds, responsaveis))
+              return false;
+            const pl = planos.find((x) => x.id === t.plano_id);
+            return pl?.prioridade_id === p.id;
+          });
         return following && !mine;
       });
     }

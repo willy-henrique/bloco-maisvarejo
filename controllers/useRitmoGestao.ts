@@ -437,12 +437,11 @@ export function useRitmoGestao(encryptionKey: CryptoKey | null) {
         const it = prev.backlog.find((b) => b.id === backlogId);
         if (!it || it.status_backlog === 'promovido') return prev;
         if (prioridadesAtivas(prev.prioridades).length >= MAX_PRIORIDADES_ATIVAS) return prev;
-        const donoId = prev.responsaveis[0]?.id ?? 'r1';
         const nova: Prioridade = {
           id: novaId,
           titulo: it.titulo,
           descricao: it.descricao,
-          dono_id: donoId,
+          dono_id: '',
           data_inicio: Date.now(),
           data_alvo: Date.now() + 90 * 24 * 60 * 60 * 1000,
           status_prioridade: 'Execucao',

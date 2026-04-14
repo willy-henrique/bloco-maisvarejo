@@ -5,17 +5,13 @@
 
 import React, { useMemo, useState } from 'react';
 import { ActionItem, ItemStatus, type Responsavel } from '../../types';
-import { formatDateOnlyPtBr } from '../../utils/date';
 import {
   Trash2,
   PlayCircle,
-  Calendar,
-  User,
   ExternalLink,
 } from 'lucide-react';
 import { toExternalHttpUrl } from '../../utils/externalLink';
 import { Modal } from '../Shared/Modal';
-import { ResponsavelAutocomplete } from './ResponsavelAutocomplete';
 import { nomeExibicaoWhoParaItem } from './responsavelSearchUtils';
 import { VisibilityFilterBar, type VisibilityFilter } from '../Shared/VisibilityFilterBar';
 
@@ -150,11 +146,6 @@ export const BacklogView: React.FC<BacklogViewProps> = ({
                       >
                         {item.what || '—'}
                       </button>
-                      <p className="text-[11px] text-slate-500 line-clamp-1 mt-0.5 sm:hidden">
-                        {item.who &&
-                          `${displayWho?.(item.who) ?? nomeExibicaoWhoParaItem(item.who, responsaveis, null)} · `}
-                        {item.when && formatDateOnlyPtBr(item.when)}
-                      </p>
                       <div
                         className="flex items-center gap-1.5 mt-0.5 min-w-0"
                         title="Quem criou a demanda"
@@ -179,29 +170,8 @@ export const BacklogView: React.FC<BacklogViewProps> = ({
                       )}
                     </td>
                     <td className="px-3 py-2.5 hidden sm:table-cell">
-                      <div className="flex items-center gap-1.5 text-[11px] text-slate-400">
-                        <User size={10} />
-                        {item.who
-                          ? displayWho?.(item.who) ?? nomeExibicaoWhoParaItem(item.who, responsaveis, null)
-                          : '—'}
-                      </div>
-                      {cap.canEdit && (
-                        <div className="mt-1 max-w-[240px]">
-                          <ResponsavelAutocomplete
-                            responsaveis={responsaveis}
-                            valueId={item.who}
-                            onCommit={(id) => onUpdate(item.id, { who: id })}
-                            variant="compact"
-                            placeholder="Responsável..."
-                          />
-                        </div>
-                      )}
-                      <div className="flex items-center gap-1.5 text-[11px] text-slate-500 mt-0.5">
-                        <Calendar size={10} />
-                        {item.when ? formatDateOnlyPtBr(item.when) : '—'}
-                      </div>
                       <div
-                        className="flex items-center gap-1.5 text-[11px] text-slate-500 mt-0.5 min-w-0"
+                        className="flex items-center gap-1.5 text-[11px] text-slate-500 min-w-0"
                         title="Quem criou a demanda"
                       >
                         <span className="w-5 h-5 rounded-full bg-slate-700 text-slate-300 text-[8px] font-bold flex items-center justify-center shrink-0">
