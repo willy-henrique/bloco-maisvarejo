@@ -113,6 +113,11 @@ export const ActionItemModal: React.FC<ActionItemModalProps> = ({
       (currentUserId && creatorSource === currentUserId ? (loggedUserName?.trim() || '') : '') ||
       creatorSource
     : '—';
+  const ownerLabel = whoDisplay || '—';
+  const ownerAndCreatorMatch =
+    ownerLabel.trim().toLowerCase() !== '' &&
+    creatorLabel.trim().toLowerCase() !== '' &&
+    ownerLabel.trim().toLowerCase() === creatorLabel.trim().toLowerCase();
 
   useEffect(() => {
     if (item) {
@@ -367,13 +372,26 @@ export const ActionItemModal: React.FC<ActionItemModalProps> = ({
         </div>
 
         <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-800">
-          {isEdit && creatorLabel && creatorLabel !== '—' ? (
-            <span className="inline-flex items-center gap-2 min-w-0" title="Quem criou a demanda">
-              <span className="w-6 h-6 rounded-full bg-slate-700 text-slate-300 text-[9px] font-bold flex items-center justify-center shrink-0">
-                {initialsFromName(creatorLabel)}
+          {isEdit && (ownerLabel !== '—' || creatorLabel !== '—') ? (
+            <div className="min-w-0 flex items-center gap-3">
+              <span className="inline-flex items-center gap-2 min-w-0" title="Dono do card">
+                <span className="w-6 h-6 rounded-full bg-slate-700 text-slate-200 text-[9px] font-bold flex items-center justify-center shrink-0">
+                  {initialsFromName(ownerLabel)}
+                </span>
+                <span className="text-sm text-slate-100 font-semibold truncate">{ownerLabel}</span>
               </span>
-              <span className="text-sm text-slate-200 font-medium truncate">{creatorLabel}</span>
-            </span>
+              {!ownerAndCreatorMatch && creatorLabel && creatorLabel !== '—' && (
+                <span
+                  className="inline-flex items-center gap-1.5 min-w-0 text-[11px] text-slate-500"
+                  title="Quem lançou o item no backlog"
+                >
+                  <span className="w-5 h-5 rounded-full bg-slate-800 text-slate-400 text-[8px] font-bold flex items-center justify-center shrink-0">
+                    {initialsFromName(creatorLabel)}
+                  </span>
+                  <span className="truncate">Lançado por {creatorLabel}</span>
+                </span>
+              )}
+            </div>
           ) : (
             <span />
           )}

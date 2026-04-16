@@ -9,6 +9,7 @@ import {
   Trash2,
   PlayCircle,
   ExternalLink,
+  Building2,
 } from 'lucide-react';
 import { toExternalHttpUrl } from '../../utils/externalLink';
 import { Modal } from '../Shared/Modal';
@@ -63,6 +64,7 @@ export const BacklogView: React.FC<BacklogViewProps> = ({
 }) => {
   const [itemToDelete, setItemToDelete] = useState<string | null>(null);
   const [visFilters, setVisFilters] = useState<VisibilityFilter[]>([]);
+  const workspaceLabel = (item: ActionItem): string => (item.empresa ?? '').trim();
   const creatorDisplay = (item: ActionItem): string => {
     const creator = (item.created_by ?? '').trim();
     if (creator) {
@@ -155,6 +157,17 @@ export const BacklogView: React.FC<BacklogViewProps> = ({
                         </span>
                         <span className="text-[11px] text-slate-300 truncate">{creatorDisplay(item)}</span>
                       </div>
+                      {workspaceLabel(item) && (
+                        <div
+                          className="mt-1 inline-flex items-center rounded-full border border-slate-600/70 bg-slate-700/40 px-1.5 py-0.5 text-[9px] font-medium text-slate-300"
+                          title={`Workspace: ${workspaceLabel(item)}`}
+                        >
+                          <span className="mr-1 inline-flex h-3.5 w-3.5 items-center justify-center rounded-full bg-slate-600/70 text-slate-200">
+                            <Building2 size={8} />
+                          </span>
+                          {workspaceLabel(item)}
+                        </div>
+                      )}
                       {item.link && item.link.trim() && (
                         <a
                           href={toExternalHttpUrl(item.link)}
@@ -170,15 +183,6 @@ export const BacklogView: React.FC<BacklogViewProps> = ({
                       )}
                     </td>
                     <td className="px-3 py-2.5 hidden sm:table-cell">
-                      <div
-                        className="flex items-center gap-1.5 text-[11px] text-slate-500 min-w-0"
-                        title="Quem criou a demanda"
-                      >
-                        <span className="w-5 h-5 rounded-full bg-slate-700 text-slate-300 text-[8px] font-bold flex items-center justify-center shrink-0">
-                          {initialsFromName(creatorDisplay(item))}
-                        </span>
-                        <span className="text-slate-300 truncate">{creatorDisplay(item)}</span>
-                      </div>
                       {item.link && item.link.trim() && (
                         <a
                           href={toExternalHttpUrl(item.link)}

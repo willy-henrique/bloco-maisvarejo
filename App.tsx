@@ -879,14 +879,22 @@ function AppContent() {
         return;
       }
       let merged: Partial<Prioridade> = { ...updates };
+      const prioridadeAtual = ritmo.board.prioridades.find((p) => p.id === id);
+      const donoImutavelPorBacklog = Boolean(prioridadeAtual?.origem_backlog_id);
+      if (donoImutavelPorBacklog && merged.dono_id !== undefined) {
+        const { dono_id: _ignoreDono, ...rest } = merged;
+        merged = rest;
+      }
       if (updates.dono_id !== undefined) {
-        const current = ritmo.board.prioridades.find((p) => p.id === id);
+        const current = prioridadeAtual;
         const donoCanon = canonicalDonoIdForPersist(String(updates.dono_id));
         const antesCanon = current
           ? canonicalDonoIdForPersist(String(current.dono_id))
           : '';
-        merged = { ...merged, dono_id: donoCanon };
-        if (!antesCanon || normKey(donoCanon) !== normKey(antesCanon)) {
+        if (!donoImutavelPorBacklog) {
+          merged = { ...merged, dono_id: donoCanon };
+        }
+        if (!donoImutavelPorBacklog && (!antesCanon || normKey(donoCanon) !== normKey(antesCanon))) {
           const assignee = perfisCadastroUsuarios.find(
             (u) => u.ativo !== false && normKey(u.uid) === normKey(donoCanon),
           );
@@ -1485,8 +1493,9 @@ function AppContent() {
               if (!base) return;
               const titulo = updates.titulo ?? base.titulo;
               const descricao = updates.descricao ?? base.descricao ?? '';
+              const donoImutavelPorBacklog = Boolean(base.origem_backlog_id);
               const dono =
-                updates.dono_id !== undefined
+                !donoImutavelPorBacklog && updates.dono_id !== undefined
                   ? canonicalDonoIdForPersist(String(updates.dono_id))
                   : base.dono_id;
               const dataAlvoMs = updates.data_alvo ?? base.data_alvo;
@@ -1644,7 +1653,7 @@ function AppContent() {
             <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
             Conectado
           </div>
-          <span>MAVO 1.9</span>
+          <span>MAVO 2.0</span>
         </footer>
       </main>
     </div>

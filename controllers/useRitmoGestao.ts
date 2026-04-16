@@ -441,7 +441,8 @@ export function useRitmoGestao(encryptionKey: CryptoKey | null) {
           id: novaId,
           titulo: it.titulo,
           descricao: it.descricao,
-          dono_id: '',
+          // Regra de negócio: ao promover backlog, o dono nasce como autor da demanda.
+          dono_id: String(it.created_by || '').trim(),
           data_inicio: Date.now(),
           data_alvo: Date.now() + 90 * 24 * 60 * 60 * 1000,
           status_prioridade: 'Execucao',
@@ -488,14 +489,25 @@ export function useRitmoGestao(encryptionKey: CryptoKey | null) {
       const { created_by: _ignored, ...safeUpdates } = updates as Partial<Prioridade> & { created_by?: string };
       saveBoard((prev) => {
         const atual = prev.prioridades.find((p) => p.id === id);
-        const novoDonoRaw =
-          safeUpdates.dono_id !== undefined ? String(safeUpdates.dono_id).trim() : '';
-        /** Sempre que o Tático manda `dono_id`, grava carimbo e alinha planos — evita skip quando string legada ≡ uid canônico. */
-        const aplicarDono = safeUpdates.dono_id !== undefined && !!novoDonoRaw;
+        const isBacklogOrigin = Boolean(atual?.origem_backlog_id);
+        const donoUpdateSolicitado = safeUpdates.dono_id !== undefined;
+        const novoDonoRaw = donoUpdateSolicitado ? String(safeUpdates.dono_id).trim() : '';
+        /**
+         * Prioridade originada do backlog: dono é imutável (autor original da demanda).
+         * Portanto ignoramos qualquer tentativa de alterar `dono_id`.
+         */
+        const aplicarDono = donoUpdateSolicitado && !isBacklogOrigin && !!novoDonoRaw;
+        const updatesSemDono =
+          donoUpdateSolicitado && isBacklogOrigin
+            ? (() => {
+                const { dono_id: _dropDono, ...rest } = safeUpdates;
+                return rest;
+              })()
+            : safeUpdates;
 
         const nextPrioridades = prev.prioridades.map((p) => {
           if (p.id !== id) return p;
-          const merged: Prioridade = { ...p, ...safeUpdates };
+          const merged: Prioridade = { ...p, ...updatesSemDono };
           if (aplicarDono) merged.dono_atualizado_em = Date.now();
           return merged;
         });
@@ -508,8 +520,8 @@ export function useRitmoGestao(encryptionKey: CryptoKey | null) {
             : prev.planos;
 
         let nextTarefas = prev.tarefas;
-        if (safeUpdates.empresa !== undefined) {
-          const em = String(safeUpdates.empresa ?? '').trim();
+        if (updatesSemDono.empresa !== undefined) {
+          const em = String(updatesSemDono.empresa ?? '').trim();
           nextPlanos = nextPlanos.map((pl) =>
             pl.prioridade_id === id ? { ...pl, empresa: em } : pl
           );

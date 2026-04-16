@@ -284,6 +284,7 @@ export const DetalhePrioridadeModal: React.FC<DetalhePrioridadeModalProps> = ({
   onStatusPlano,
   onUpdatePrioridade,
 }) => {
+  const isBacklogOrigin = Boolean(prioridade.origem_backlog_id);
   const planosDaPrioridade = useMemo(
     () => planos.filter((pl) => pl.prioridade_id === prioridade.id),
     [planos, prioridade.id]
@@ -317,7 +318,7 @@ export const DetalhePrioridadeModal: React.FC<DetalhePrioridadeModalProps> = ({
       await onUpdatePrioridade(prioridade.id, {
         titulo: titulo.trim(),
         descricao: descricao.trim(),
-        dono_id: dono.trim(),
+        dono_id: isBacklogOrigin ? prioridade.dono_id : dono.trim(),
         data_alvo: new Date(dataAlvo).getTime(),
         status_prioridade: status,
       });
@@ -366,8 +367,14 @@ export const DetalhePrioridadeModal: React.FC<DetalhePrioridadeModalProps> = ({
                   type="text"
                   value={dono}
                   onChange={(e) => setDono(e.target.value)}
+                  disabled={isBacklogOrigin}
                   className="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-xs text-slate-100 outline-none focus:border-blue-500"
                 />
+                {isBacklogOrigin && (
+                  <p className="mt-1 text-[11px] text-slate-500">
+                    Dono fixo: definido pelo autor original do item no backlog.
+                  </p>
+                )}
               </div>
               <div>
                 <label className="block text-xs font-medium text-slate-400 mb-1">Data alvo</label>

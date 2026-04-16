@@ -1661,8 +1661,8 @@ export const EstrategicoView: React.FC<EstrategicoViewProps> = (props) => {
               myResponsavelIds,
               responsaveis,
             );
-            /** Tático: com permissão de escrita na prioridade, pode ajustar o responsável (dono). */
-            const canEditDonoNoTatico = caps.prioridadeWrite;
+            /** Dono de prioridade originada do backlog é imutável (autor da demanda). */
+            const canEditDonoNoTatico = caps.prioridadeWrite && !p.origem_backlog_id;
             const isLegacyPrioridade = p.id.startsWith('legacy-');
             return (
               <div key={p.id} id={`prioridade-card-${p.id}`} data-prioridade-id={p.id}>

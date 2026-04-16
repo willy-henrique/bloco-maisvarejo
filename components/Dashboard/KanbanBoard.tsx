@@ -15,6 +15,7 @@ import {
   Target,
   Archive,
   ExternalLink,
+  Building2,
 } from 'lucide-react';
 import { toExternalHttpUrl } from '../../utils/externalLink';
 
@@ -74,6 +75,10 @@ function workflowNeighbors(status: ItemStatus): {
 const iconBtnBase =
   'inline-flex items-center justify-center p-1.5 rounded-md border border-slate-600/80 bg-slate-700/50 text-slate-300 hover:bg-slate-600/70 hover:border-slate-500 transition-colors touch-manipulation disabled:opacity-25 disabled:pointer-events-none';
 
+function workspaceBadgeLabel(item: ActionItem): string {
+  return (item.empresa ?? '').trim();
+}
+
 const KanbanCard: React.FC<{
   item: ActionItem;
   onOpenItem?: (item: ActionItem) => void;
@@ -85,6 +90,7 @@ const KanbanCard: React.FC<{
 }> = ({ item, onOpenItem, onStatusChange, onDelete, onGoToTatico, caps, displayWho }) => {
   const { prev, next, prevLabel, nextLabel } = workflowNeighbors(item.status);
   const [confirmDelete, setConfirmDelete] = React.useState(false);
+  const workspaceLabel = workspaceBadgeLabel(item);
 
   return (
     <>
@@ -181,6 +187,17 @@ const KanbanCard: React.FC<{
       )}
       {item.where && (
         <p className="text-[10px] text-slate-500 mb-1 line-clamp-1">Onde: {item.where}</p>
+      )}
+      {workspaceLabel && (
+        <div
+          className="mb-1 inline-flex items-center rounded-full border border-slate-600/70 bg-slate-700/40 px-2 py-0.5 text-[9px] font-medium text-slate-300"
+          title={`Workspace: ${workspaceLabel}`}
+        >
+          <span className="mr-1 inline-flex h-3.5 w-3.5 items-center justify-center rounded-full bg-slate-600/70 text-slate-200">
+            <Building2 size={8} />
+          </span>
+          <span className="truncate max-w-[180px]">{workspaceLabel}</span>
+        </div>
       )}
       {item.link && item.link.trim() && (
         <a
@@ -385,6 +402,17 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
                       <span className="text-[10px] text-slate-500">
                         {displayWho(item.who)} · {item.when ? formatDateOnlyPtBr(item.when) : '—'}
                       </span>
+                      {workspaceBadgeLabel(item) && (
+                        <span
+                          className="inline-flex items-center rounded-full border border-slate-600/70 bg-slate-700/40 px-1.5 py-0.5 text-[9px] font-medium text-slate-300"
+                          title={`Workspace: ${workspaceBadgeLabel(item)}`}
+                        >
+                          <span className="mr-1 inline-flex h-3.5 w-3.5 items-center justify-center rounded-full bg-slate-600/70 text-slate-200">
+                            <Building2 size={8} />
+                          </span>
+                          {workspaceBadgeLabel(item)}
+                        </span>
+                      )}
                     </div>
                     <h4 className="text-sm font-medium text-slate-100 line-clamp-1">{item.what}</h4>
                     {item.why && (

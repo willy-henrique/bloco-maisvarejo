@@ -140,6 +140,8 @@ const TarefaRow: React.FC<{
   const displayNome = resp?.nome || byAllUsers?.label || tarefa.responsavel_id || '';
   const cfg = TAREFA_CFG[tarefa.status_tarefa] || TAREFA_CFG.Pendente;
   const StatusIcon = cfg.Icon;
+  const askDeleteConfirmation = (): boolean =>
+    window.confirm(`Tem certeza que deseja excluir a tarefa "${tarefa.titulo}"? Esta ação não pode ser desfeita.`);
 
   return (
     <>
@@ -234,7 +236,10 @@ const TarefaRow: React.FC<{
         {canDeleteTarefa && (
           <button
             type="button"
-            onClick={onDelete}
+            onClick={() => {
+              if (!askDeleteConfirmation()) return;
+              onDelete();
+            }}
             className="p-1.5 rounded text-slate-600 hover:text-red-400 hover:bg-red-500/10 transition-colors"
             title="Excluir"
           >
@@ -576,6 +581,9 @@ const OperacionalPlanoCard: React.FC<{
                   <p className="text-[11px] text-amber-300 font-medium">
                     Plano bloqueado por tarefa não visível para você
                   </p>
+                  <p className="text-[11px] text-amber-200/90 mt-1">
+                    Isso acontece quando o bloqueio está em tarefa de outro responsável fora do seu escopo de visualização.
+                  </p>
                   {bloqueiosNaoVisiveis.slice(0, 3).map((b) => (
                     <p key={b.id} className="text-[11px] text-amber-200/90 mt-1">
                       {b.titulo} · {b.responsavel} · {b.motivo}
@@ -583,7 +591,7 @@ const OperacionalPlanoCard: React.FC<{
                   ))}
                 </div>
               )}
-              {status === 'Bloqueado' && blockContext.length > 0 && (
+              {status === 'Bloqueado' && blockContext.length > 0 && bloqueiosNaoVisiveis.length === 0 && (
                 <div className="rounded-lg border border-red-500/35 bg-red-500/10 px-3 py-2">
                   <p className="text-[11px] text-red-300 font-medium">Causa do Bloqueio</p>
                   {blockContext.map((c) => (
@@ -1168,6 +1176,8 @@ export const OperacionalView: React.FC<OperacionalProps> = ({
                       const respNome = displayNomeDonoPrioridade(t.responsavel_id, responsaveis) || t.responsavel_id;
                       const cfg = TAREFA_CFG[t.status_tarefa] || TAREFA_CFG.Pendente;
                       const StatusIcon = cfg.Icon;
+                      const askDeleteConfirmation = (): boolean =>
+                        window.confirm(`Tem certeza que deseja excluir a tarefa "${t.titulo}"? Esta ação não pode ser desfeita.`);
                       return (
                         <React.Fragment key={t.id}>
                           <tr className="hover:bg-slate-800/20 transition-colors">
@@ -1236,7 +1246,10 @@ export const OperacionalView: React.FC<OperacionalProps> = ({
                               {oc.tarefaDelete && (
                                 <button
                                   type="button"
-                                  onClick={() => onDeleteTarefa(t.id)}
+                                  onClick={() => {
+                                    if (!askDeleteConfirmation()) return;
+                                    onDeleteTarefa(t.id);
+                                  }}
                                   className="p-1.5 rounded text-slate-600 hover:text-red-400 hover:bg-red-500/10 transition-colors"
                                   title="Excluir"
                                 >
@@ -1292,36 +1305,111 @@ export const OperacionalView: React.FC<OperacionalProps> = ({
                           {visibleTarefasConcluidas.map((t) => {
                             const pl = planoById.get(t.plano_id);
                             const respNome = displayNomeDonoPrioridade(t.responsavel_id, responsaveis) || t.responsavel_id;
+                            const cfg = TAREFA_CFG[t.status_tarefa] || TAREFA_CFG.Pendente;
+                            const StatusIcon = cfg.Icon;
+                            const askDeleteConfirmation = (): boolean =>
+                              window.confirm(`Tem certeza que deseja excluir a tarefa "${t.titulo}"? Esta ação não pode ser desfeita.`);
                             return (
-                              <tr key={t.id} className="hover:bg-slate-800/20 transition-colors">
-                                <td className="px-3 py-2 w-[90px]">
-                                  <CheckCircle size={14} className="text-blue-300" />
-                                </td>
-                                <td className="px-3 py-2 w-[120px]">
-                                  <span className="text-[10px] font-semibold px-2 py-1 rounded-sm uppercase bg-slate-800 border border-slate-700 text-slate-300">
-                                    CONCLUÍDA
-                                  </span>
-                                </td>
-                                <td className="px-3 py-2">
-                                  <p className="text-slate-300 text-sm line-through">{t.titulo}</p>
-                                  {t.descricao ? <p className="text-[11px] text-slate-600 truncate">{t.descricao}</p> : null}
-                                </td>
-                                <td className="px-3 py-2 text-slate-400">{respNome || '—'}</td>
-                                <td className="px-3 py-2 text-slate-500">{fmtDate(t.data_vencimento)}</td>
-                                <td className="px-3 py-2 text-slate-500">{pl?.titulo ?? '—'}</td>
-                                <td className="px-2 py-2 text-right w-16">
-                                  {oc.tarefaDelete && (
+                              <React.Fragment key={t.id}>
+                                <tr className="hover:bg-slate-800/20 transition-colors">
+                                  <td className="px-3 py-2">
                                     <button
                                       type="button"
-                                      onClick={() => onDeleteTarefa(t.id)}
-                                      className="p-1.5 rounded text-slate-600 hover:text-red-400 hover:bg-red-500/10 transition-colors"
-                                      title="Excluir"
+                                      disabled={!oc.tarefaWrite}
+                                      onClick={() => {
+                                        const idx = TAREFA_ORDER.indexOf(t.status_tarefa);
+                                        const next = TAREFA_ORDER[(idx + 1) % TAREFA_ORDER.length];
+                                        onUpdateTarefa(t.id, { status_tarefa: next });
+                                      }}
+                                      className="text-slate-500 hover:text-slate-200 disabled:opacity-40 disabled:pointer-events-none"
+                                      title="Alternar status"
                                     >
-                                      <Trash2 size={13} />
+                                      <StatusIcon size={14} className="text-blue-300" />
                                     </button>
-                                  )}
-                                </td>
-                              </tr>
+                                  </td>
+                                  <td className="px-3 py-2">
+                                    <div className="flex items-center gap-2">
+                                      <select
+                                        value={t.status_tarefa}
+                                        onChange={(e) => onUpdateTarefa(t.id, { status_tarefa: e.target.value as StatusTarefa })}
+                                        disabled={!oc.tarefaWrite}
+                                        className="text-[10px] font-semibold px-2 py-1 rounded-sm uppercase bg-slate-800 border border-slate-700 text-slate-200 outline-none focus:border-slate-500 disabled:opacity-50"
+                                      >
+                                        <option value="Pendente">PENDENTE</option>
+                                        <option value="EmExecucao">EM EXECUÇÃO</option>
+                                        <option value="Bloqueada">BLOQUEADA</option>
+                                        <option value="Concluida">CONCLUÍDA</option>
+                                      </select>
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          setOpenTaskObservers((prev) => ({ ...prev, [t.id]: !prev[t.id] }))
+                                        }
+                                        className={`p-1 rounded transition-colors ${
+                                          openTaskObservers[t.id]
+                                            ? 'text-slate-100 bg-slate-700/80'
+                                            : 'text-slate-500 hover:text-slate-200 hover:bg-slate-800/60'
+                                        }`}
+                                        title={`${(t.observadores ?? []).length} observador(es)`}
+                                        aria-label="Abrir observadores da tarefa"
+                                      >
+                                        <Eye size={13} />
+                                      </button>
+                                    </div>
+                                  </td>
+                                  <td className="px-3 py-2">
+                                    <p className="text-slate-300 text-sm line-through">{t.titulo}</p>
+                                    {t.descricao ? <p className="text-[11px] text-slate-600 truncate">{t.descricao}</p> : null}
+                                  </td>
+                                  <td className="px-3 py-2 text-slate-400">{respNome || '—'}</td>
+                                  <td className="px-3 py-2 text-slate-500">{fmtDate(t.data_vencimento)}</td>
+                                  <td className="px-3 py-2 text-slate-500">{pl?.titulo ?? '—'}</td>
+                                  <td className="px-2 py-2 text-right w-16">
+                                    <div className="inline-flex items-center gap-1">
+                                      {oc.tarefaWrite && (
+                                        <button
+                                          type="button"
+                                          onClick={() => onUpdateTarefa(t.id, { status_tarefa: 'Pendente' })}
+                                          className="p-1.5 rounded text-slate-500 hover:text-blue-300 hover:bg-blue-500/10 transition-colors"
+                                          title="Retornar para pendente"
+                                        >
+                                          <Circle size={13} />
+                                        </button>
+                                      )}
+                                      {oc.tarefaDelete && (
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            if (!askDeleteConfirmation()) return;
+                                            onDeleteTarefa(t.id);
+                                          }}
+                                          className="p-1.5 rounded text-slate-600 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                                          title="Excluir"
+                                        >
+                                          <Trash2 size={13} />
+                                        </button>
+                                      )}
+                                    </div>
+                                  </td>
+                                </tr>
+                                {openTaskObservers[t.id] && (
+                                  <tr className="bg-slate-900/40">
+                                    <td colSpan={7} className="px-3 pb-2">
+                                      <ObserversPanel
+                                        entity="tarefa"
+                                        entityId={t.id}
+                                        observers={t.observadores ?? []}
+                                        allUsers={observerPool.map((r) => ({ id: r.id, label: r.nome }))}
+                                        resolveUserName={(userId) => displayNomeDonoPrioridade(userId, responsaveis) || userId}
+                                        onAdd={(userId) => onAddObserver?.('tarefa', t.id, userId)}
+                                        onRemove={(userId) => onRemoveObserver?.('tarefa', t.id, userId)}
+                                        canEdit={oc.observerEdit}
+                                        hideTrigger
+                                      />
+                                    </td>
+                                  </tr>
+                                )}
+                              </React.Fragment>
                             );
                           })}
                         </tbody>
