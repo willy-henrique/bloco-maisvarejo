@@ -14,7 +14,6 @@ import {
 import { toExternalHttpUrl } from '../../utils/externalLink';
 import { Modal } from '../Shared/Modal';
 import { nomeExibicaoWhoParaItem } from './responsavelSearchUtils';
-import { VisibilityFilterBar, type VisibilityFilter } from '../Shared/VisibilityFilterBar';
 
 function initialsFromName(nome: string): string {
   const t = nome.trim();
@@ -63,7 +62,6 @@ export const BacklogView: React.FC<BacklogViewProps> = ({
   isAdmin = false,
 }) => {
   const [itemToDelete, setItemToDelete] = useState<string | null>(null);
-  const [visFilters, setVisFilters] = useState<VisibilityFilter[]>([]);
   const workspaceLabel = (item: ActionItem): string => (item.empresa ?? '').trim();
   const creatorDisplay = (item: ActionItem): string => {
     const creator = (item.created_by ?? '').trim();
@@ -82,28 +80,15 @@ export const BacklogView: React.FC<BacklogViewProps> = ({
   };
   const backlogItems = useMemo(() => {
     // Itens em demanda (BACKLOG)
-    const backlog = items
+    return items
       .filter((i) => i.status === ItemStatus.BACKLOG)
       .sort((a, b) => (a.createdAt ?? 0) - (b.createdAt ?? 0));
-    if (isAdmin || visFilters.length === 0) return backlog;
-    const uid = (currentUserId ?? '').trim();
-    return backlog.filter((item) => {
-      const isCreator = (item.created_by ?? '') === uid;
-      const isOwner = (item.who ?? '') === uid;
-      const isObserver = false;
-      return (
-        (visFilters.includes('created') && isCreator) ||
-        (visFilters.includes('assigned') && isOwner) ||
-        (visFilters.includes('observing') && isObserver)
-      );
-    });
-  }, [items, isAdmin, visFilters, currentUserId]);
+  }, [items]);
 
   const moveToPrioridade = (id: string) => onStatusChange(id, ItemStatus.ACTIVE);
 
   return (
     <div className="max-w-5xl mx-auto space-y-6 w-full min-w-0">
-      {!isAdmin && <VisibilityFilterBar active={visFilters} onChange={setVisFilters} />}
       {/* Backlog (não concluídos) */}
       <section className="bg-slate-900/50 border border-slate-800 rounded-lg overflow-hidden">
         <div className="px-4 py-3 border-b border-slate-800 flex items-center justify-between bg-slate-900/80">
@@ -148,14 +133,11 @@ export const BacklogView: React.FC<BacklogViewProps> = ({
                       >
                         {item.what || '—'}
                       </button>
-                      <div
-                        className="flex items-center gap-1.5 mt-0.5 min-w-0"
-                        title="Quem criou a demanda"
-                      >
-                        <span className="w-5 h-5 rounded-full bg-slate-700 text-slate-300 text-[8px] font-bold flex items-center justify-center shrink-0">
+                      <div className="flex items-center gap-1.5 mt-0.5 min-w-0" title="Quem lançou (não pode ser alterado)">
+                        <span className="w-5 h-5 rounded-full bg-slate-800 text-slate-400 text-[8px] font-bold flex items-center justify-center shrink-0">
                           {initialsFromName(creatorDisplay(item))}
                         </span>
-                        <span className="text-[11px] text-slate-300 truncate">{creatorDisplay(item)}</span>
+                        <span className="text-[11px] text-slate-400 truncate">{creatorDisplay(item)}</span>
                       </div>
                       {workspaceLabel(item) && (
                         <div

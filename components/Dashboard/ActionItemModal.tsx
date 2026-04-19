@@ -96,8 +96,10 @@ export const ActionItemModal: React.FC<ActionItemModalProps> = ({
   const effectiveHideStatusUrgency = hideStatusUrgency || isBacklogLike;
   const isWhoLocked = lockWhoToLoggedUser && !!loggedUserName?.trim();
   const shouldLockWho = isWhoLocked && !isEdit;
-  const lockWhenInBacklog = isBacklogLike;
   const isWhoReadOnly = !canEditWho;
+  /** Backlog: só lançamento; quem lança é fixo e exibido só em leitura. Estratégico (Kanban): pode atribuir responsável conforme permissão. */
+  const isBacklogTabContext = itemModalContext === 'backlog';
+  const showSlimWhoEditor = isEstrategicoKanban && !readOnly && canEditWho;
   const whoDefault = shouldLockWho ? loggedUserName!.trim() : '';
   const [form, setForm] = useState(emptyForm(whoDefault));
   const whoKey = (form.who || whoDefault || '').trim();
@@ -149,7 +151,11 @@ export const ActionItemModal: React.FC<ActionItemModalProps> = ({
     e.preventDefault();
     if (readOnly) return;
     if (isEdit && item) {
-      onUpdate(item.id, { ...form });
+      if (isBacklogTabContext) {
+        onUpdate(item.id, { ...form, who: item.who });
+      } else {
+        onUpdate(item.id, { ...form });
+      }
     } else {
       onSave(form);
     }
@@ -240,6 +246,44 @@ export const ActionItemModal: React.FC<ActionItemModalProps> = ({
               </button>
             </div>
           </div>
+          {isBacklogLike && (
+            <div className="md:col-span-2">
+              <label className="block text-[10px] font-medium text-slate-500 uppercase tracking-wider mb-1.5">
+                {isBacklogTabContext ? 'Lançado por' : 'Responsável'}
+              </label>
+              {showSlimWhoEditor ? (
+                <div className="relative">
+                  <User
+                    size={14}
+                    className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none"
+                  />
+                  <div className="pl-9">
+                    <ResponsavelAutocomplete
+                      responsaveis={responsaveis}
+                      valueId={form.who}
+                      onCommit={(id) => update('who', id)}
+                      disabled={readOnly}
+                      placeholder="Buscar responsável..."
+                    />
+                  </div>
+                </div>
+              ) : (
+                <div className="relative">
+                  <User size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                  <div
+                    className="w-full bg-slate-800/50 border border-slate-700 rounded-lg pl-9 pr-3 py-2.5 text-sm text-slate-200"
+                    title={
+                      isBacklogTabContext
+                        ? 'Quem registrou no backlog não pode ser alterado.'
+                        : undefined
+                    }
+                  >
+                    {isBacklogTabContext ? creatorLabel || whoDisplay || '—' : ownerLabel || '—'}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
           {!effectiveHideWhereEmpresa && (
             <>
               <div>
@@ -372,7 +416,7 @@ export const ActionItemModal: React.FC<ActionItemModalProps> = ({
         </div>
 
         <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-800">
-          {isEdit && (ownerLabel !== '—' || creatorLabel !== '—') ? (
+          {isEdit && !isBacklogTabContext && (ownerLabel !== '—' || creatorLabel !== '—') ? (
             <div className="min-w-0 flex items-center gap-3">
               <span className="inline-flex items-center gap-2 min-w-0" title="Dono do card">
                 <span className="w-6 h-6 rounded-full bg-slate-700 text-slate-200 text-[9px] font-bold flex items-center justify-center shrink-0">

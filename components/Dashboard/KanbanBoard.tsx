@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useEffect } from 'react';
-import { ActionItem, ItemStatus } from '../../types';
+import { ActionItem, ItemStatus, type Responsavel } from '../../types';
 import { formatDateOnlyPtBr } from '../../utils/date';
 import {
   Clock,
@@ -18,6 +18,7 @@ import {
   Building2,
 } from 'lucide-react';
 import { toExternalHttpUrl } from '../../utils/externalLink';
+import { ResponsavelAutocomplete } from './ResponsavelAutocomplete';
 
 export interface KanbanCapabilities {
   canCreate?: boolean;
@@ -25,6 +26,7 @@ export interface KanbanCapabilities {
   canDelete?: boolean;
   canWorkflow?: boolean;
   canLinkTatico?: boolean;
+  canEditIndicator?: boolean;
 }
 
 interface KanbanBoardProps {
@@ -35,6 +37,8 @@ interface KanbanBoardProps {
   onDelete?: (id: string) => void;
   forceOpenConcluidos?: boolean;
   onGoToTatico?: (item: ActionItem) => void;
+  onQuickUpdateWho?: (id: string, who: string) => void;
+  responsaveis?: Responsavel[];
   capabilities?: KanbanCapabilities;
   /** Resolve `who` (uid / legado) para nome legível no card */
   displayWho?: (who: string) => string;
@@ -85,12 +89,29 @@ const KanbanCard: React.FC<{
   onStatusChange: (id: string, status: ItemStatus) => void;
   onDelete?: (id: string) => void;
   onGoToTatico?: (item: ActionItem) => void;
+  onQuickUpdateWho?: (id: string, who: string) => void;
+  responsaveis: Responsavel[];
   caps: Required<KanbanCapabilities>;
   displayWho: (who: string) => string;
-}> = ({ item, onOpenItem, onStatusChange, onDelete, onGoToTatico, caps, displayWho }) => {
+}> = ({
+  item,
+  onOpenItem,
+  onStatusChange,
+  onDelete,
+  onGoToTatico,
+  onQuickUpdateWho,
+  responsaveis,
+  caps,
+  displayWho,
+}) => {
   const { prev, next, prevLabel, nextLabel } = workflowNeighbors(item.status);
   const [confirmDelete, setConfirmDelete] = React.useState(false);
+  const [editingWho, setEditingWho] = React.useState(false);
   const workspaceLabel = workspaceBadgeLabel(item);
+  const responsavelLabel = (displayWho(item.who).trim() || 'Nao informado');
+  const donoDemandaLabel = (
+    displayWho((item.created_by ?? '').trim() || item.who).trim() || 'Nao informado'
+  );
 
   return (
     <>
@@ -212,17 +233,68 @@ const KanbanCard: React.FC<{
           Abrir link
         </a>
       )}
-      <div className="flex flex-col gap-1 border-t border-slate-700/50 pt-2">
-        <div className="flex items-center gap-1.5 text-[10px] text-slate-500">
-          <User size={10} />
-          <span className="text-slate-400">{displayWho(item.who)}</span>
-        </div>
-        <div className="flex items-center gap-1.5 text-[10px] text-slate-500">
-          <Clock size={10} />
-          <span>{formatDateOnlyPtBr(item.when)}</span>
+      <div className="border-t border-slate-700/50 pt-2">
+        <div className="grid grid-cols-[minmax(0,1fr)_minmax(112px,34%)] gap-x-3 gap-y-1 items-start">
+          <div className="flex min-w-0 flex-col gap-1">
+            <div className="flex items-center gap-1.5 text-[10px] text-slate-400" title="Dono da demanda">
+              <User size={10} className="shrink-0 text-slate-500" />
+              <span className="truncate font-medium text-slate-200">{donoDemandaLabel}</span>
+            </div>
+            <div className="flex items-center gap-1.5 text-[10px] text-slate-500">
+              <Clock size={10} className="shrink-0" />
+              <span>{formatDateOnlyPtBr(item.when)}</span>
+            </div>
+          </div>
+          <div className="flex min-w-0 flex-col items-end gap-0.5 text-right">
+            <span className="text-[9px] font-normal text-slate-500">Responsável</span>
+            {editingWho && caps.canEditIndicator ? (
+              <div
+                className="w-full min-w-0"
+                onClick={(e) => e.stopPropagation()}
+                onMouseDown={(e) => e.stopPropagation()}
+              >
+                <ResponsavelAutocomplete
+                  responsaveis={responsaveis}
+                  valueId={item.who}
+                  onCommit={(id) => {
+                    onQuickUpdateWho?.(item.id, id);
+                    setEditingWho(false);
+                  }}
+                  placeholder="Buscar responsável..."
+                  variant="compact"
+                />
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (!caps.canEditIndicator) return;
+                  setEditingWho(true);
+                }}
+                className={`group inline-flex max-w-full items-center justify-end gap-1 rounded px-0 py-0 text-[10px] font-normal leading-snug transition-colors ${
+                  caps.canEditIndicator
+                    ? 'text-slate-300 hover:text-slate-100'
+                    : 'cursor-default text-slate-400'
+                }`}
+                title={
+                  caps.canEditIndicator ? 'Editar responsável da tarefa' : 'Responsável da tarefa'
+                }
+              >
+                <span className="min-w-0 truncate">{responsavelLabel}</span>
+                {caps.canEditIndicator && (
+                  <Pencil
+                    size={10}
+                    className="shrink-0 text-slate-500 opacity-60 transition-opacity group-hover:opacity-100"
+                    aria-hidden
+                  />
+                )}
+              </button>
+            )}
+          </div>
         </div>
         {item.notes && (
-          <p className="text-[10px] text-slate-500 line-clamp-2 pt-1 border-t border-slate-700/50">{item.notes}</p>
+          <p className="text-[10px] text-slate-500 line-clamp-2 pt-1.5 border-t border-slate-700/50">{item.notes}</p>
         )}
       </div>
     </div>
@@ -251,6 +323,8 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
   displayWho: displayWhoProp,
   forceOpenConcluidos,
   onGoToTatico,
+  onQuickUpdateWho,
+  responsaveis = [],
   capabilities,
 }) => {
   const caps: Required<KanbanCapabilities> = {
@@ -259,6 +333,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
     canDelete: capabilities?.canDelete !== false,
     canWorkflow: capabilities?.canWorkflow !== false,
     canLinkTatico: capabilities?.canLinkTatico !== false,
+    canEditIndicator: capabilities?.canEditIndicator !== false,
   };
 
   const displayWho = displayWhoProp ?? ((w: string) => w);
@@ -333,6 +408,8 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
                     onStatusChange={onStatusChange}
                     onDelete={onDelete}
                     onGoToTatico={onGoToTatico}
+                    onQuickUpdateWho={onQuickUpdateWho}
+                    responsaveis={responsaveis}
                     caps={caps}
                     displayWho={displayWho}
                   />

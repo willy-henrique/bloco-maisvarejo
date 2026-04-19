@@ -1297,10 +1297,12 @@ function AppContent() {
                   items={itemsFiltradosComPesquisa}
                   onStatusChange={updateStatus}
                   onOpenItem={(item) => openItemModal(item, undefined, 'estrategico')}
+                  onQuickUpdateWho={(id, who) => updateItem(id, { who })}
                   onAddInColumn={(status) => openItemModal(null, status, 'estrategico')}
                   onDelete={deleteItem}
                   forceOpenConcluidos={dashboardOpenConcluidas}
                   onGoToTatico={perm.dashboard.linkTatico ? handleGoToTaticoPriority : undefined}
+                  responsaveis={responsaveisParaAtribuicao}
                   displayWho={displayWhoKanban}
                   capabilities={{
                     canCreate: perm.dashboard.create,
@@ -1308,6 +1310,7 @@ function AppContent() {
                     canDelete: perm.dashboard.delete,
                     canWorkflow: perm.dashboard.workflow,
                     canLinkTatico: perm.dashboard.linkTatico,
+                    canEditIndicator: perm.dashboard.edit,
                   }}
                 />
               )}
@@ -1653,7 +1656,7 @@ function AppContent() {
             <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
             Conectado
           </div>
-          <span>MAVO 2.0</span>
+          <span>MAVO 2.0.1</span>
         </footer>
       </main>
     </div>
