@@ -812,8 +812,7 @@ export const OperacionalView: React.FC<OperacionalProps> = ({
   operacionalCaps,
 }) => {
   const [abaAtiva, setAbaAtiva] = useState<'planos' | 'tarefas'>('tarefas');
-  const [visibilityMode, setVisibilityMode] = useState<'mine' | 'following'>('mine');
-  const [visFilters, setVisFilters] = useState<VisibilityFilter[]>([]);
+  const [visibilityMode, setVisibilityMode] = useState<VisibilityFilter>('created');
   const [tarefasConcluidasOpen, setTarefasConcluidasOpen] = useState(false);
   const [planosConcluidosOpen, setPlanosConcluidosOpen] = useState(false);
   const [openTaskObservers, setOpenTaskObservers] = useState<Record<string, boolean>>({});
@@ -899,29 +898,21 @@ export const OperacionalView: React.FC<OperacionalProps> = ({
   const visiblePlanos = useMemo(() => {
     const allowedPriorityIds = new Set(visiblePrioridades.map((p) => p.id));
     let list = planos.filter((pl) => allowedPriorityIds.has(pl.prioridade_id));
-    if (visibilityMode === 'following' && myResponsavelIds.size > 0) {
-      list = list.filter(
-        (pl) =>
-          Array.isArray(pl.observadores) &&
-          pl.observadores.some((o) => myResponsavelIds.has(normStr(o.user_id)))
-      );
-    }
     list.sort((a, b) => a.when_fim - b.when_fim);
-    if (!seesAllPrioridades && visFilters.length > 0) {
-      const currentUid = loggedUserUid ?? '';
-      list = list.filter((pl) => {
-        const isCreator = pl.created_by === currentUid;
-        const isOwner = pl.who_id === currentUid;
-        const isObserver = (pl.observadores ?? []).some((o) => o.user_id === currentUid);
-        return (
-          (visFilters.includes('created') && isCreator) ||
-          (visFilters.includes('assigned') && isOwner) ||
-          (visFilters.includes('observing') && isObserver)
-        );
-      });
-    }
+    const currentUid = normStr(loggedUserUid ?? '');
+    list = list.filter((pl) => {
+      const isCreator = currentUid !== '' && normStr(pl.created_by) === currentUid;
+      const isAssigned = donoPrioridadeCorrespondeAoUsuario(pl.who_id, myResponsavelIds, responsaveis);
+      const isObserving =
+        Array.isArray(pl.observadores) &&
+        pl.observadores.some((o) => myResponsavelIds.has(normStr(o.user_id)));
+
+      if (visibilityMode === 'created') return isCreator;
+      if (visibilityMode === 'assigned') return isAssigned;
+      return isObserving;
+    });
     return list;
-  }, [planos, visiblePrioridades, visibilityMode, myResponsavelIds, seesAllPrioridades, visFilters, loggedUserUid]);
+  }, [planos, visiblePrioridades, visibilityMode, myResponsavelIds, responsaveis, loggedUserUid]);
   const visiblePlanosAtivos = useMemo(
     () => visiblePlanos.filter((pl) => ((computeStatusPlano(pl.id) || pl.status_plano) as StatusPlano) !== 'Concluido'),
     [visiblePlanos, computeStatusPlano],
@@ -940,40 +931,25 @@ export const OperacionalView: React.FC<OperacionalProps> = ({
   const visibleTarefas = useMemo(() => {
     const planosVisiveisIds = new Set(visiblePlanos.map((pl) => pl.id));
     const tarefasBase = tarefas.filter((t) => planosVisiveisIds.has(t.plano_id));
-    if (viewerSeesAllTarefasNoPlano) {
-      return [...tarefasBase].sort((a, b) => a.data_vencimento - b.data_vencimento);
-    }
+    const currentUid = normStr(loggedUserUid ?? '');
     const filtradas = tarefasBase.filter((t) => {
-      const mine =
-        tarefaAtribuidaAoUsuario(t, myResponsavelIds, responsaveis) ||
-        canViewByOwnershipOrObserver([t.responsavel_id], t.observadores, myResponsavelIds, responsaveis);
-      if (visibilityMode === 'mine') return mine;
-      return Array.isArray(t.observadores) && t.observadores.some((o) => myResponsavelIds.has(normStr(o.user_id))) && !mine;
+      const isCreator = currentUid !== '' && normStr(t.created_by) === currentUid;
+      const isAssigned = tarefaAtribuidaAoUsuario(t, myResponsavelIds, responsaveis);
+      const isObserving =
+        Array.isArray(t.observadores) &&
+        t.observadores.some((o) => myResponsavelIds.has(normStr(o.user_id)));
+
+      if (visibilityMode === 'created') return isCreator;
+      if (visibilityMode === 'assigned') return isAssigned;
+      return isObserving;
     });
-    let out = filtradas.sort((a, b) => a.data_vencimento - b.data_vencimento);
-    if (!seesAllPrioridades && visFilters.length > 0) {
-      const currentUid = loggedUserUid ?? '';
-      out = out.filter((t) => {
-        const isCreator = t.created_by === currentUid;
-        const isOwner = t.responsavel_id === currentUid;
-        const isObserver = (t.observadores ?? []).some((o) => o.user_id === currentUid);
-        return (
-          (visFilters.includes('created') && isCreator) ||
-          (visFilters.includes('assigned') && isOwner) ||
-          (visFilters.includes('observing') && isObserver)
-        );
-      });
-    }
-    return out;
+    return filtradas.sort((a, b) => a.data_vencimento - b.data_vencimento);
   }, [
     tarefas,
     visiblePlanos,
-    viewerSeesAllTarefasNoPlano,
     myResponsavelIds,
     responsaveis,
     visibilityMode,
-    seesAllPrioridades,
-    visFilters,
     loggedUserUid,
   ]);
 
@@ -1015,31 +991,39 @@ export const OperacionalView: React.FC<OperacionalProps> = ({
               Tarefas
             </button>
           </div>
-          <div className="inline-flex rounded-lg border border-slate-700 bg-slate-900/60 p-0.5 w-fit">
-            <span
-              className="px-2.5 py-1 text-[11px] rounded-md text-slate-200 bg-slate-800/80 border border-slate-600/70 cursor-default select-none"
-              title="Contexto fixo"
-              aria-label="Operacional (rótulo)"
-            >
-              Operacional
-            </span>
+          <div className="inline-flex flex-wrap items-center gap-2 w-fit">
             <button
               type="button"
-              onClick={() => setVisibilityMode('mine')}
+              onClick={() => setVisibilityMode('created')}
               className={`px-2.5 py-1 text-[11px] rounded-md transition-colors ${
-                visibilityMode === 'mine' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-slate-200'
+                visibilityMode === 'created'
+                  ? 'bg-blue-600 text-white border border-blue-500'
+                  : 'bg-slate-900/60 border border-slate-700 text-slate-300 hover:text-slate-100'
               }`}
             >
-              Meus itens
+              Lançados por mim
             </button>
             <button
               type="button"
-              onClick={() => setVisibilityMode('following')}
+              onClick={() => setVisibilityMode('assigned')}
               className={`px-2.5 py-1 text-[11px] rounded-md transition-colors ${
-                visibilityMode === 'following' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-slate-200'
+                visibilityMode === 'assigned'
+                  ? 'bg-blue-600 text-white border border-blue-500'
+                  : 'bg-slate-900/60 border border-slate-700 text-slate-300 hover:text-slate-100'
               }`}
             >
-              Itens que sigo
+              Atribuídos para mim
+            </button>
+            <button
+              type="button"
+              onClick={() => setVisibilityMode('observing')}
+              className={`px-2.5 py-1 text-[11px] rounded-md transition-colors ${
+                visibilityMode === 'observing'
+                  ? 'bg-blue-600 text-white border border-blue-500'
+                  : 'bg-slate-900/60 border border-slate-700 text-slate-300 hover:text-slate-100'
+              }`}
+            >
+              Itens que eu acompanho
             </button>
           </div>
         </div>
