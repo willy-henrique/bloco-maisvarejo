@@ -1322,6 +1322,7 @@ function AppContent() {
                   responsaveis={responsaveisEscopoAtribuicao}
                   whoUsers={responsaveisParaAtribuicao}
                   observerUsers={responsaveisParaAtribuicao}
+                  perfisCadastro={perfisCadastroUsuarios}
                   computeStatusPlano={ritmo.computeStatusPlano}
                   onUpdatePrioridade={handleUpdatePrioridadeTatico}
                   onDeletePrioridade={handleDeletePrioridade}
@@ -1656,7 +1657,7 @@ function AppContent() {
             <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
             Conectado
           </div>
-          <span>MAVO 2.0.1</span>
+          <span>MAVO 2.0.2</span>
         </footer>
       </main>
     </div>
