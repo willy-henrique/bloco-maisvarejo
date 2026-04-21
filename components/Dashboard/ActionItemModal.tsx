@@ -246,7 +246,7 @@ export const ActionItemModal: React.FC<ActionItemModalProps> = ({
               </button>
             </div>
           </div>
-          {isBacklogLike && (
+          {isBacklogLike && !isBacklogTabContext && (
             <div className="md:col-span-2">
               <label className="block text-[10px] font-medium text-slate-500 uppercase tracking-wider mb-1.5">
                 {isBacklogTabContext ? 'Lançado por' : 'Responsável'}
@@ -416,7 +416,17 @@ export const ActionItemModal: React.FC<ActionItemModalProps> = ({
         </div>
 
         <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-800">
-          {isEdit && !isBacklogTabContext && (ownerLabel !== '—' || creatorLabel !== '—') ? (
+          {isBacklogTabContext || isEstrategicoKanban ? (
+            <span
+              className="inline-flex max-w-[60%] items-center gap-2 rounded-full border border-slate-700 bg-slate-900/70 px-2.5 py-1 text-[11px] text-slate-200"
+              title="Usuário que lançou o card (não pode ser alterado)"
+            >
+              <span className="w-5 h-5 rounded-full bg-slate-700 text-slate-200 text-[8px] font-bold flex items-center justify-center shrink-0">
+                {initialsFromName(creatorLabel || '—')}
+              </span>
+              <span className="truncate">{creatorLabel || '—'}</span>
+            </span>
+          ) : isEdit && (ownerLabel !== '—' || creatorLabel !== '—') ? (
             <div className="min-w-0 flex items-center gap-3">
               <span className="inline-flex items-center gap-2 min-w-0" title="Dono do card">
                 <span className="w-6 h-6 rounded-full bg-slate-700 text-slate-200 text-[9px] font-bold flex items-center justify-center shrink-0">

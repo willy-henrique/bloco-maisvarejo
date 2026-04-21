@@ -140,6 +140,7 @@ const TarefaRow: React.FC<{
   const displayNome = resp?.nome || byAllUsers?.label || tarefa.responsavel_id || '';
   const cfg = TAREFA_CFG[tarefa.status_tarefa] || TAREFA_CFG.Pendente;
   const StatusIcon = cfg.Icon;
+  const isOverdue = tarefa.data_vencimento < Date.now() && tarefa.status_tarefa !== 'Concluida';
   const askDeleteConfirmation = (): boolean =>
     window.confirm(`Tem certeza que deseja excluir a tarefa "${tarefa.titulo}"? Esta ação não pode ser desfeita.`);
 
@@ -147,35 +148,46 @@ const TarefaRow: React.FC<{
     <>
     <tr className="hover:bg-slate-800/20 transition-colors">
       <td className="px-4 py-3">
-        <button
-          type="button"
-          disabled={!canWriteTarefa}
-          onClick={() => {
-            const idx = TAREFA_ORDER.indexOf(tarefa.status_tarefa);
-            const next = TAREFA_ORDER[(idx + 1) % TAREFA_ORDER.length];
-            onUpdate({ status_tarefa: next });
-          }}
-          className="text-slate-500 hover:text-slate-200 disabled:opacity-40 disabled:pointer-events-none"
-          title="Alternar status"
-        >
-          <StatusIcon size={14} className={tarefa.status_tarefa === 'Bloqueada' ? 'text-red-400' : tarefa.status_tarefa === 'Concluida' || tarefa.status_tarefa === 'EmExecucao' ? 'text-blue-300' : 'text-slate-500'} />
-        </button>
+        <div className="flex items-start gap-2.5">
+          <button
+            type="button"
+            disabled={!canWriteTarefa}
+            onClick={() => {
+              const idx = TAREFA_ORDER.indexOf(tarefa.status_tarefa);
+              const next = TAREFA_ORDER[(idx + 1) % TAREFA_ORDER.length];
+              onUpdate({ status_tarefa: next });
+            }}
+            className="mt-0.5 shrink-0 text-slate-500 hover:text-slate-200 disabled:opacity-40 disabled:pointer-events-none"
+            title="Alternar status"
+          >
+            <StatusIcon
+              size={14}
+              className={
+                tarefa.status_tarefa === 'Bloqueada'
+                  ? 'text-red-400'
+                  : tarefa.status_tarefa === 'Concluida' || tarefa.status_tarefa === 'EmExecucao'
+                    ? 'text-blue-300'
+                    : 'text-slate-500'
+              }
+            />
+          </button>
+          <div className="min-w-0">
+            <p className={`text-sm font-medium ${tarefa.status_tarefa === 'Concluida' ? 'line-through text-slate-500' : 'text-slate-200'}`}>
+              {tarefa.titulo}
+            </p>
+            {tarefa.descricao && tarefa.descricao.trim() !== '' && (
+              <p className="text-[11px] text-slate-500 mt-0.5 truncate max-w-[280px]">{tarefa.descricao}</p>
+            )}
+            {tarefa.status_tarefa === 'Bloqueada' && tarefa.bloqueio_motivo && (
+              <p className="text-[11px] text-red-400/80 mt-0.5 flex items-center gap-1">
+                <AlertTriangle size={10} /> {tarefa.bloqueio_motivo}
+              </p>
+            )}
+          </div>
+        </div>
       </td>
-      <td className="px-4 py-3">
-        <p className={`text-sm font-medium ${tarefa.status_tarefa === 'Concluida' ? 'line-through text-slate-500' : 'text-slate-200'}`}>
-          {tarefa.titulo}
-        </p>
-        {tarefa.descricao && tarefa.descricao.trim() !== '' && (
-          <p className="text-[11px] text-slate-500 mt-0.5 truncate max-w-[320px]">{tarefa.descricao}</p>
-        )}
-        {tarefa.status_tarefa === 'Bloqueada' && tarefa.bloqueio_motivo && (
-          <p className="text-[11px] text-red-400/80 mt-0.5 flex items-center gap-1">
-            <AlertTriangle size={10} /> {tarefa.bloqueio_motivo}
-          </p>
-        )}
-      </td>
-      <td className="px-4 py-3 text-slate-300">
-        <div className="flex items-center gap-2 min-w-0">
+      <td className="px-4 py-3 align-top relative z-20">
+        <div className="flex items-center gap-1.5 min-w-0">
           {displayNome ? (
             <span className="w-6 h-6 rounded-full bg-slate-700 text-slate-300 text-[9px] font-bold flex items-center justify-center shrink-0">
               {displayNome
@@ -187,7 +199,9 @@ const TarefaRow: React.FC<{
                 .toUpperCase()}
             </span>
           ) : (
-            <User size={12} className="text-slate-500 shrink-0" />
+            <span className="w-6 h-6 rounded-full bg-slate-800 text-slate-500 text-[9px] font-bold flex items-center justify-center shrink-0">
+              ?
+            </span>
           )}
           {canWriteTarefa ? (
             <ResponsavelAutocomplete
@@ -199,11 +213,16 @@ const TarefaRow: React.FC<{
               disabled={!canAssignTarefa}
             />
           ) : (
-            <span className="truncate block max-w-[140px] text-sm">{displayNome || '—'}</span>
+            <span className="text-xs text-slate-400 truncate max-w-[120px]">{displayNome || '—'}</span>
           )}
         </div>
       </td>
-      <td className="px-4 py-3 text-slate-400">{fmtDate(tarefa.data_vencimento)}</td>
+      <td className="px-4 py-3">
+        <span className={`text-xs flex items-center gap-1 ${isOverdue ? 'text-red-400 font-medium' : 'text-slate-400'}`}>
+          {isOverdue && <AlertTriangle size={10} />}
+          {fmtDate(tarefa.data_vencimento)}
+        </span>
+      </td>
       <td className="px-4 py-3">
         <div className="flex items-center gap-2">
           <select
@@ -250,7 +269,7 @@ const TarefaRow: React.FC<{
     </tr>
     {showObservers && (
       <tr className="bg-slate-900/40">
-        <td colSpan={6} className="px-4 pb-2">
+        <td colSpan={5} className="px-4 pb-2">
           <ObserversPanel
             entity="tarefa"
             entityId={tarefa.id}
@@ -596,21 +615,22 @@ const OperacionalPlanoCard: React.FC<{
                   <p className="text-[11px] text-red-300 font-medium">Causa do Bloqueio</p>
                   {blockContext.map((c) => (
                     <p key={c.task_id} className="text-[11px] text-red-200/90 mt-1">
-                      ⛔ Tarefa: "{c.task_title}" · 👤 Responsável: {c.task_owner} · 📝 Motivo: {c.block_reason || '—'}
+                      ⛔ Tarefa: &quot;{c.task_title}&quot; · 👤 Responsável:{' '}
+                      {displayNomeDonoPrioridade(c.task_owner, responsaveis).trim() || c.task_owner} · 📝 Motivo:{' '}
+                      {c.block_reason || '—'}
                     </p>
                   ))}
                 </div>
               )}
               {tarefasDoPlanoAtivas.length > 0 && (
-                <div className="overflow-x-hidden">
-                  <table className="w-full table-fixed border-collapse">
+                <div className="overflow-x-auto">
+                  <table className="w-full table-fixed min-w-[640px] border-collapse">
                     <thead>
-                      <tr className="border-b border-slate-800 text-[10px] font-semibold text-slate-500 uppercase tracking-wider">
-                        <th className="px-4 py-2 text-left">Status</th>
+                      <tr className="border-t border-b border-slate-800 text-[10px] font-semibold text-slate-600 uppercase tracking-wider bg-slate-900/40">
                         <th className="px-4 py-2 text-left">Tarefa</th>
                         <th className="px-4 py-2 text-left">Responsável</th>
                         <th className="px-4 py-2 text-left">Prazo</th>
-                        <th className="px-4 py-2 text-left">Label</th>
+                        <th className="px-4 py-2 text-left">Status</th>
                         <th className="px-2 py-2 text-right w-16">Ações</th>
                       </tr>
                     </thead>
@@ -652,15 +672,14 @@ const OperacionalPlanoCard: React.FC<{
                     </span>
                   </button>
                   {concluidasNoPlanoOpen && (
-                    <div className="overflow-x-hidden border-t border-slate-800/80">
-                      <table className="w-full table-fixed border-collapse">
+                    <div className="overflow-x-auto border-t border-slate-800/80">
+                      <table className="w-full table-fixed min-w-[640px] border-collapse">
                         <thead>
-                          <tr className="border-b border-slate-800 text-[10px] font-semibold text-slate-500 uppercase tracking-wider">
-                            <th className="px-4 py-2 text-left">Status</th>
+                          <tr className="border-t border-b border-slate-800 text-[10px] font-semibold text-slate-600 uppercase tracking-wider bg-slate-900/40">
                             <th className="px-4 py-2 text-left">Tarefa</th>
                             <th className="px-4 py-2 text-left">Responsável</th>
                             <th className="px-4 py-2 text-left">Prazo</th>
-                            <th className="px-4 py-2 text-left">Label</th>
+                            <th className="px-4 py-2 text-left">Status</th>
                             <th className="px-2 py-2 text-right w-16">Ações</th>
                           </tr>
                         </thead>
@@ -812,7 +831,7 @@ export const OperacionalView: React.FC<OperacionalProps> = ({
   operacionalCaps,
 }) => {
   const [abaAtiva, setAbaAtiva] = useState<'planos' | 'tarefas'>('tarefas');
-  const [visibilityMode, setVisibilityMode] = useState<VisibilityFilter>('created');
+  const [visibilityFilters, setVisibilityFilters] = useState<VisibilityFilter[]>([]);
   const [tarefasConcluidasOpen, setTarefasConcluidasOpen] = useState(false);
   const [planosConcluidosOpen, setPlanosConcluidosOpen] = useState(false);
   const [openTaskObservers, setOpenTaskObservers] = useState<Record<string, boolean>>({});
@@ -825,6 +844,11 @@ export const OperacionalView: React.FC<OperacionalProps> = ({
   };
   const whoPool = whoUsers && whoUsers.length > 0 ? whoUsers : responsaveis;
   const observerPool = observerUsers && observerUsers.length > 0 ? observerUsers : responsaveis;
+  const toggleVisibilityFilter = (filter: VisibilityFilter) => {
+    setVisibilityFilters((prev) =>
+      prev.includes(filter) ? prev.filter((item) => item !== filter) : [...prev, filter],
+    );
+  };
 
   const seesAllPrioridades = loggedUserRole === 'administrador';
   const viewerSeesAllTarefasNoPlano = loggedUserRole === 'administrador';
@@ -907,12 +931,14 @@ export const OperacionalView: React.FC<OperacionalProps> = ({
         Array.isArray(pl.observadores) &&
         pl.observadores.some((o) => myResponsavelIds.has(normStr(o.user_id)));
 
-      if (visibilityMode === 'created') return isCreator;
-      if (visibilityMode === 'assigned') return isAssigned;
-      return isObserving;
+      if (visibilityFilters.length === 0) return true;
+      const matchesCreated = visibilityFilters.includes('created') && isCreator;
+      const matchesAssigned = visibilityFilters.includes('assigned') && isAssigned;
+      const matchesObserving = visibilityFilters.includes('observing') && isObserving;
+      return matchesCreated || matchesAssigned || matchesObserving;
     });
     return list;
-  }, [planos, visiblePrioridades, visibilityMode, myResponsavelIds, responsaveis, loggedUserUid]);
+  }, [planos, visiblePrioridades, visibilityFilters, myResponsavelIds, responsaveis, loggedUserUid]);
   const visiblePlanosAtivos = useMemo(
     () => visiblePlanos.filter((pl) => ((computeStatusPlano(pl.id) || pl.status_plano) as StatusPlano) !== 'Concluido'),
     [visiblePlanos, computeStatusPlano],
@@ -939,9 +965,11 @@ export const OperacionalView: React.FC<OperacionalProps> = ({
         Array.isArray(t.observadores) &&
         t.observadores.some((o) => myResponsavelIds.has(normStr(o.user_id)));
 
-      if (visibilityMode === 'created') return isCreator;
-      if (visibilityMode === 'assigned') return isAssigned;
-      return isObserving;
+      if (visibilityFilters.length === 0) return true;
+      const matchesCreated = visibilityFilters.includes('created') && isCreator;
+      const matchesAssigned = visibilityFilters.includes('assigned') && isAssigned;
+      const matchesObserving = visibilityFilters.includes('observing') && isObserving;
+      return matchesCreated || matchesAssigned || matchesObserving;
     });
     return filtradas.sort((a, b) => a.data_vencimento - b.data_vencimento);
   }, [
@@ -949,7 +977,7 @@ export const OperacionalView: React.FC<OperacionalProps> = ({
     visiblePlanos,
     myResponsavelIds,
     responsaveis,
-    visibilityMode,
+    visibilityFilters,
     loggedUserUid,
   ]);
 
@@ -994,36 +1022,36 @@ export const OperacionalView: React.FC<OperacionalProps> = ({
           <div className="inline-flex flex-wrap items-center gap-2 w-fit">
             <button
               type="button"
-              onClick={() => setVisibilityMode('created')}
+              onClick={() => toggleVisibilityFilter('created')}
               className={`px-2.5 py-1 text-[11px] rounded-md transition-colors ${
-                visibilityMode === 'created'
+                visibilityFilters.includes('created')
                   ? 'bg-blue-600 text-white border border-blue-500'
                   : 'bg-slate-900/60 border border-slate-700 text-slate-300 hover:text-slate-100'
               }`}
             >
-              Lançados por mim
+              lançados por mim
             </button>
             <button
               type="button"
-              onClick={() => setVisibilityMode('assigned')}
+              onClick={() => toggleVisibilityFilter('assigned')}
               className={`px-2.5 py-1 text-[11px] rounded-md transition-colors ${
-                visibilityMode === 'assigned'
+                visibilityFilters.includes('assigned')
                   ? 'bg-blue-600 text-white border border-blue-500'
                   : 'bg-slate-900/60 border border-slate-700 text-slate-300 hover:text-slate-100'
               }`}
             >
-              Atribuídos para mim
+              atribuídos para mim
             </button>
             <button
               type="button"
-              onClick={() => setVisibilityMode('observing')}
+              onClick={() => toggleVisibilityFilter('observing')}
               className={`px-2.5 py-1 text-[11px] rounded-md transition-colors ${
-                visibilityMode === 'observing'
+                visibilityFilters.includes('observing')
                   ? 'bg-blue-600 text-white border border-blue-500'
                   : 'bg-slate-900/60 border border-slate-700 text-slate-300 hover:text-slate-100'
               }`}
             >
-              Itens que eu acompanho
+              itens que eu acompanho
             </button>
           </div>
         </div>
@@ -1141,17 +1169,16 @@ export const OperacionalView: React.FC<OperacionalProps> = ({
             </div>
           ) : (
             <div className="space-y-3">
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
+              <div className="overflow-x-auto rounded-lg border border-slate-800 bg-slate-900/50">
+                <table className="w-full table-fixed min-w-[900px] text-sm">
                   <thead>
-                    <tr className="border-b border-slate-800 text-[10px] font-semibold text-slate-500 uppercase tracking-wider">
-                      <th className="px-3 py-2 text-left">Status</th>
-                      <th className="px-3 py-2 text-left">Situação</th>
-                      <th className="px-3 py-2 text-left">Tarefa</th>
-                      <th className="px-3 py-2 text-left">Responsável</th>
-                      <th className="px-3 py-2 text-left">Prazo</th>
-                      <th className="px-3 py-2 text-left">Plano</th>
-                      <th className="px-2 py-2 text-right w-16">Ações</th>
+                    <tr className="bg-slate-900/80 text-slate-400 text-[10px] uppercase tracking-wider border-b border-slate-800">
+                      <th className="px-4 py-3 font-semibold text-left">Tarefa</th>
+                      <th className="px-4 py-3 font-semibold text-left">Responsável</th>
+                      <th className="px-4 py-3 font-semibold text-left">Prazo</th>
+                      <th className="px-4 py-3 font-semibold text-left">Status</th>
+                      <th className="px-4 py-3 font-semibold text-left">Plano de ação</th>
+                      <th className="px-2 py-3 font-semibold text-right w-16">Ações</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-800/60">
@@ -1160,36 +1187,55 @@ export const OperacionalView: React.FC<OperacionalProps> = ({
                       const respNome = displayNomeDonoPrioridade(t.responsavel_id, responsaveis) || t.responsavel_id;
                       const cfg = TAREFA_CFG[t.status_tarefa] || TAREFA_CFG.Pendente;
                       const StatusIcon = cfg.Icon;
+                      const isOverdue = t.data_vencimento < Date.now() && t.status_tarefa !== 'Concluida';
                       const askDeleteConfirmation = (): boolean =>
                         window.confirm(`Tem certeza que deseja excluir a tarefa "${t.titulo}"? Esta ação não pode ser desfeita.`);
                       return (
                         <React.Fragment key={t.id}>
                           <tr className="hover:bg-slate-800/20 transition-colors">
-                            <td className="px-3 py-2">
-                              <button
-                                type="button"
-                                disabled={!oc.tarefaWrite}
-                                onClick={() => {
-                                  const idx = TAREFA_ORDER.indexOf(t.status_tarefa);
-                                  const next = TAREFA_ORDER[(idx + 1) % TAREFA_ORDER.length];
-                                  onUpdateTarefa(t.id, { status_tarefa: next });
-                                }}
-                                className="text-slate-500 hover:text-slate-200 disabled:opacity-40 disabled:pointer-events-none"
-                                title="Alternar status"
-                              >
-                                <StatusIcon
-                                  size={14}
-                                  className={
-                                    t.status_tarefa === 'Bloqueada'
-                                      ? 'text-red-400'
-                                      : t.status_tarefa === 'Concluida' || t.status_tarefa === 'EmExecucao'
-                                        ? 'text-blue-300'
-                                        : 'text-slate-500'
-                                  }
-                                />
-                              </button>
+                            <td className="px-4 py-3">
+                              <div className="flex items-start gap-2.5">
+                                <button
+                                  type="button"
+                                  disabled={!oc.tarefaWrite}
+                                  onClick={() => {
+                                    const idx = TAREFA_ORDER.indexOf(t.status_tarefa);
+                                    const next = TAREFA_ORDER[(idx + 1) % TAREFA_ORDER.length];
+                                    onUpdateTarefa(t.id, { status_tarefa: next });
+                                  }}
+                                  className="mt-0.5 shrink-0 text-slate-500 hover:text-slate-200 disabled:opacity-40 disabled:pointer-events-none"
+                                  title="Alternar status"
+                                >
+                                  <StatusIcon
+                                    size={14}
+                                    className={
+                                      t.status_tarefa === 'Bloqueada'
+                                        ? 'text-red-400'
+                                        : t.status_tarefa === 'Concluida' || t.status_tarefa === 'EmExecucao'
+                                          ? 'text-blue-300'
+                                          : 'text-slate-500'
+                                    }
+                                  />
+                                </button>
+                                <div className="min-w-0">
+                                  <p className="text-slate-200 text-sm">{t.titulo}</p>
+                                  {t.descricao ? <p className="text-[11px] text-slate-500 truncate max-w-[320px]">{t.descricao}</p> : null}
+                                  {t.status_tarefa === 'Bloqueada' && t.bloqueio_motivo ? (
+                                    <p className="text-[11px] text-red-400/80 mt-0.5 flex items-center gap-1">
+                                      <AlertTriangle size={10} /> {t.bloqueio_motivo}
+                                    </p>
+                                  ) : null}
+                                </div>
+                              </div>
                             </td>
-                            <td className="px-3 py-2">
+                            <td className="px-4 py-3 text-slate-300">{respNome || '—'}</td>
+                            <td className="px-4 py-3">
+                              <span className={`text-xs flex items-center gap-1 ${isOverdue ? 'text-red-400 font-medium' : 'text-slate-400'}`}>
+                                {isOverdue && <AlertTriangle size={10} />}
+                                {fmtDate(t.data_vencimento)}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3">
                               <div className="flex items-center gap-2">
                                 <select
                                   value={t.status_tarefa}
@@ -1219,14 +1265,8 @@ export const OperacionalView: React.FC<OperacionalProps> = ({
                                 </button>
                               </div>
                             </td>
-                            <td className="px-3 py-2">
-                              <p className="text-slate-200 text-sm">{t.titulo}</p>
-                              {t.descricao ? <p className="text-[11px] text-slate-500 truncate">{t.descricao}</p> : null}
-                            </td>
-                            <td className="px-3 py-2 text-slate-300">{respNome || '—'}</td>
-                            <td className="px-3 py-2 text-slate-400">{fmtDate(t.data_vencimento)}</td>
-                            <td className="px-3 py-2 text-slate-400">{pl?.titulo ?? '—'}</td>
-                            <td className="px-2 py-2 text-right">
+                            <td className="px-4 py-3 text-slate-400">{pl?.titulo ?? '—'}</td>
+                            <td className="px-2 py-3 text-right">
                               {oc.tarefaDelete && (
                                 <button
                                   type="button"
@@ -1244,7 +1284,7 @@ export const OperacionalView: React.FC<OperacionalProps> = ({
                           </tr>
                           {openTaskObservers[t.id] && (
                             <tr className="bg-slate-900/40">
-                              <td colSpan={7} className="px-3 pb-2">
+                              <td colSpan={6} className="px-4 pb-2">
                                 <ObserversPanel
                                   entity="tarefa"
                                   entityId={t.id}
@@ -1283,8 +1323,18 @@ export const OperacionalView: React.FC<OperacionalProps> = ({
                     </span>
                   </button>
                   {tarefasConcluidasOpen && (
-                    <div className="overflow-x-auto border-t border-slate-800/80">
-                      <table className="w-full text-sm">
+                    <div className="overflow-x-auto border-t border-slate-800 bg-slate-900/50">
+                      <table className="w-full table-fixed min-w-[900px] text-sm">
+                        <thead>
+                          <tr className="bg-slate-900/80 text-slate-400 text-[10px] uppercase tracking-wider border-b border-slate-800">
+                            <th className="px-4 py-3 font-semibold text-left">Tarefa</th>
+                            <th className="px-4 py-3 font-semibold text-left">Responsável</th>
+                            <th className="px-4 py-3 font-semibold text-left">Prazo</th>
+                            <th className="px-4 py-3 font-semibold text-left">Status</th>
+                            <th className="px-4 py-3 font-semibold text-left">Plano de ação</th>
+                            <th className="px-2 py-3 font-semibold text-right w-16">Ações</th>
+                          </tr>
+                        </thead>
                         <tbody className="divide-y divide-slate-800/60">
                           {visibleTarefasConcluidas.map((t) => {
                             const pl = planoById.get(t.plano_id);
@@ -1296,22 +1346,30 @@ export const OperacionalView: React.FC<OperacionalProps> = ({
                             return (
                               <React.Fragment key={t.id}>
                                 <tr className="hover:bg-slate-800/20 transition-colors">
-                                  <td className="px-3 py-2">
-                                    <button
-                                      type="button"
-                                      disabled={!oc.tarefaWrite}
-                                      onClick={() => {
-                                        const idx = TAREFA_ORDER.indexOf(t.status_tarefa);
-                                        const next = TAREFA_ORDER[(idx + 1) % TAREFA_ORDER.length];
-                                        onUpdateTarefa(t.id, { status_tarefa: next });
-                                      }}
-                                      className="text-slate-500 hover:text-slate-200 disabled:opacity-40 disabled:pointer-events-none"
-                                      title="Alternar status"
-                                    >
-                                      <StatusIcon size={14} className="text-blue-300" />
-                                    </button>
+                                  <td className="px-4 py-3">
+                                    <div className="flex items-start gap-2.5">
+                                      <button
+                                        type="button"
+                                        disabled={!oc.tarefaWrite}
+                                        onClick={() => {
+                                          const idx = TAREFA_ORDER.indexOf(t.status_tarefa);
+                                          const next = TAREFA_ORDER[(idx + 1) % TAREFA_ORDER.length];
+                                          onUpdateTarefa(t.id, { status_tarefa: next });
+                                        }}
+                                        className="mt-0.5 shrink-0 text-slate-500 hover:text-slate-200 disabled:opacity-40 disabled:pointer-events-none"
+                                        title="Alternar status"
+                                      >
+                                        <StatusIcon size={14} className="text-blue-300" />
+                                      </button>
+                                      <div className="min-w-0">
+                                        <p className="text-slate-300 text-sm line-through">{t.titulo}</p>
+                                        {t.descricao ? <p className="text-[11px] text-slate-600 truncate max-w-[320px]">{t.descricao}</p> : null}
+                                      </div>
+                                    </div>
                                   </td>
-                                  <td className="px-3 py-2">
+                                  <td className="px-4 py-3 text-slate-400">{respNome || '—'}</td>
+                                  <td className="px-4 py-3 text-slate-500">{fmtDate(t.data_vencimento)}</td>
+                                  <td className="px-4 py-3">
                                     <div className="flex items-center gap-2">
                                       <select
                                         value={t.status_tarefa}
@@ -1341,14 +1399,8 @@ export const OperacionalView: React.FC<OperacionalProps> = ({
                                       </button>
                                     </div>
                                   </td>
-                                  <td className="px-3 py-2">
-                                    <p className="text-slate-300 text-sm line-through">{t.titulo}</p>
-                                    {t.descricao ? <p className="text-[11px] text-slate-600 truncate">{t.descricao}</p> : null}
-                                  </td>
-                                  <td className="px-3 py-2 text-slate-400">{respNome || '—'}</td>
-                                  <td className="px-3 py-2 text-slate-500">{fmtDate(t.data_vencimento)}</td>
-                                  <td className="px-3 py-2 text-slate-500">{pl?.titulo ?? '—'}</td>
-                                  <td className="px-2 py-2 text-right w-16">
+                                  <td className="px-4 py-3 text-slate-500">{pl?.titulo ?? '—'}</td>
+                                  <td className="px-2 py-3 text-right w-16">
                                     <div className="inline-flex items-center gap-1">
                                       {oc.tarefaWrite && (
                                         <button
@@ -1378,7 +1430,7 @@ export const OperacionalView: React.FC<OperacionalProps> = ({
                                 </tr>
                                 {openTaskObservers[t.id] && (
                                   <tr className="bg-slate-900/40">
-                                    <td colSpan={7} className="px-3 pb-2">
+                                    <td colSpan={6} className="px-4 pb-2">
                                       <ObserversPanel
                                         entity="tarefa"
                                         entityId={t.id}

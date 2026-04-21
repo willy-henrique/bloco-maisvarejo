@@ -150,8 +150,12 @@ export function donoPrioridadeCorrespondeAoUsuario(
   return false;
 }
 
-/** Nome(s) para exibir: resolve cada segmento "A | B" contra o cadastro de responsáveis. */
-export function displayNomeDonoPrioridade(donoId: string, responsaveis: Responsavel[]): string {
+/** Nome(s) para exibir: resolve cada segmento "A | B" contra responsáveis e, se informado, perfis Firebase (uid → nome). */
+export function displayNomeDonoPrioridade(
+  donoId: string,
+  responsaveis: Responsavel[],
+  perfisCadastro?: UserProfile[] | null,
+): string {
   const d = (donoId ?? '').trim();
   if (!d) return '';
   const segments = d.includes('|')
@@ -160,8 +164,25 @@ export function displayNomeDonoPrioridade(donoId: string, responsaveis: Responsa
   const names = segments.map((seg) => {
     const r = resolveResponsavelDisplay(responsaveis, seg);
     if (r.nome && normStr(r.nome) !== normStr(seg)) return r.nome;
-    if (looksLikeOpaqueUserId(seg)) return 'Usuário';
-    return r.nome || seg;
+
+    for (const u of perfisCadastro ?? []) {
+      if (u.ativo === false) continue;
+      if (normStr(u.uid) === normStr(seg) && (u.nome ?? '').trim()) {
+        return (u.nome ?? '').trim();
+      }
+    }
+    for (const u of perfisCadastro ?? []) {
+      if (u.ativo === false) continue;
+      if (normStr(u.email) === normStr(seg) && (u.nome ?? '').trim()) {
+        return (u.nome ?? '').trim();
+      }
+    }
+
+    const fallback = r.nome || seg;
+    if (normStr(fallback) === normStr(seg) && looksLikeOpaqueUserId(seg)) {
+      return seg.length > 10 ? `${seg.slice(0, 6)}…` : seg;
+    }
+    return fallback;
   });
   return [...new Set(names.map((n) => n.trim()).filter(Boolean))].join(' | ');
 }

@@ -133,12 +133,15 @@ export const BacklogView: React.FC<BacklogViewProps> = ({
                       >
                         {item.what || '—'}
                       </button>
-                      <div className="flex items-center gap-1.5 mt-0.5 min-w-0" title="Quem lançou (não pode ser alterado)">
-                        <span className="w-5 h-5 rounded-full bg-slate-800 text-slate-400 text-[8px] font-bold flex items-center justify-center shrink-0">
+                      <span
+                        className="inline-flex mt-1 max-w-full items-center gap-2 rounded-full border border-slate-700 bg-slate-900/70 px-2.5 py-1 text-[11px] text-slate-200 min-w-0"
+                        title="Quem lançou (não pode ser alterado)"
+                      >
+                        <span className="w-5 h-5 rounded-full bg-slate-700 text-slate-200 text-[8px] font-bold flex items-center justify-center shrink-0">
                           {initialsFromName(creatorDisplay(item))}
                         </span>
-                        <span className="text-[11px] text-slate-400 truncate">{creatorDisplay(item)}</span>
-                      </div>
+                        <span className="truncate">{creatorDisplay(item)}</span>
+                      </span>
                       {workspaceLabel(item) && (
                         <div
                           className="mt-1 inline-flex items-center rounded-full border border-slate-600/70 bg-slate-700/40 px-1.5 py-0.5 text-[9px] font-medium text-slate-300"

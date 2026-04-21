@@ -7,6 +7,7 @@ import type {
   StatusPlano,
   StatusTarefa,
 } from '../../types';
+import type { UserProfile } from '../../types/user';
 import {
   Plus,
   ArrowLeft,
@@ -38,6 +39,10 @@ import { ObserversPanel } from './ObserversPanel';
 import { apiGetBlockContext } from '../../services/ritmoCollabApi';
 import { Modal } from '../Shared/Modal';
 import { VisibilityFilterBar, type VisibilityFilter } from '../Shared/VisibilityFilterBar';
+
+function toggleVisibilityFilter(prev: VisibilityFilter[], filter: VisibilityFilter): VisibilityFilter[] {
+  return prev.includes(filter) ? prev.filter((item) => item !== filter) : [...prev, filter];
+}
 
 const EMPTY_ID_SET = new Set<string>();
 
@@ -158,6 +163,8 @@ interface EstrategicoViewProps {
   /** Quando definido, mostra somente esta prioridade no Tático */
   onlyPrioridadeId?: string | null;
   estrategicoCaps?: EstrategicoCaps;
+  /** Perfis Firebase (cadastro admin) para resolver uid → nome quando `dono_id` não bate só no cadastro de responsáveis */
+  perfisCadastro?: UserProfile[] | null;
 }
 
 // ── TarefaRow ────────────────────────────────────────────────────────────────
@@ -322,7 +329,9 @@ const TarefaRow: React.FC<{
             entityId={tarefa.id}
             observers={tarefa.observadores ?? []}
             allUsers={allUsers}
-            resolveUserName={(userId) => displayNomeDonoPrioridade(userId, responsaveis) || userId}
+            resolveUserName={(userId) =>
+              displayNomeDonoPrioridade(userId, responsaveis, perfisCadastro) || userId
+            }
             onAdd={(userId) => onAddObserver?.('tarefa', tarefa.id, userId)}
             onRemove={(userId) => onRemoveObserver?.('tarefa', tarefa.id, userId)}
             canEdit={canEditObservers}
@@ -384,6 +393,7 @@ const PlanoCard: React.FC<{
   onAddObserver?: (entity: 'prioridade' | 'plano' | 'tarefa', entityId: string, userId: string) => void;
   onRemoveObserver?: (entity: 'prioridade' | 'plano' | 'tarefa', entityId: string, userId: string) => void;
   canEditObservers?: boolean;
+  perfisCadastro?: UserProfile[] | null;
 }> = ({
   plano,
   tarefas,
@@ -411,6 +421,7 @@ const PlanoCard: React.FC<{
   onAddObserver,
   onRemoveObserver,
   canEditObservers = true,
+  perfisCadastro,
 }) => {
   const whoPool = whoUsers && whoUsers.length > 0 ? whoUsers : responsaveis;
   const myViewerIds = viewerMyResponsavelIds ?? EMPTY_ID_SET;
@@ -440,7 +451,7 @@ const PlanoCard: React.FC<{
   const statusCfg = STATUS_CFG[status] || STATUS_CFG.Execucao;
   const resp = whoPool.find((r) => normStr(r.id) === normStr(plano.who_id));
   const planWhoReadable =
-    displayNomeDonoPrioridade(plano.who_id, whoPool) || resp?.nome || plano.who_id || '';
+    displayNomeDonoPrioridade(plano.who_id, whoPool, perfisCadastro) || resp?.nome || plano.who_id || '';
   const displayWho = planWhoReadable || whoOverrideName || '—';
 
   // Usuário é dono do PLANO (who_id) — vê todas as tarefas deste plano.
@@ -467,7 +478,8 @@ const PlanoCard: React.FC<{
       .map((t) => ({
         id: t.id,
         titulo: t.titulo,
-        responsavel: displayNomeDonoPrioridade(t.responsavel_id, responsaveis) || t.responsavel_id,
+        responsavel:
+          displayNomeDonoPrioridade(t.responsavel_id, responsaveis, perfisCadastro) || t.responsavel_id,
         motivo: t.bloqueio_motivo || 'Motivo não informado',
       }));
   }, [tarefas, tarefasVisiveis, viewerIsAdmin, souDonoDestePlano, responsaveis]);
@@ -606,7 +618,9 @@ const PlanoCard: React.FC<{
             entityId={plano.id}
             observers={plano.observadores ?? []}
             allUsers={allUsers}
-            resolveUserName={(userId) => displayNomeDonoPrioridade(userId, responsaveis) || userId}
+            resolveUserName={(userId) =>
+              displayNomeDonoPrioridade(userId, responsaveis, perfisCadastro) || userId
+            }
             onAdd={(userId) => onAddObserver?.('plano', plano.id, userId)}
             onRemove={(userId) => onRemoveObserver?.('plano', plano.id, userId)}
             canEdit={canEditObservers}
@@ -774,7 +788,11 @@ const PlanoCard: React.FC<{
                   <p className="text-[11px] text-red-300 font-medium">Causa do Bloqueio</p>
                   {blockContext.map((c) => (
                     <p key={c.task_id} className="text-[11px] text-red-200/90 mt-1">
-                      ⛔ Tarefa: "{c.task_title}" · 👤 Responsável: {c.task_owner} · 📝 Motivo: {c.block_reason || '—'}
+                      ⛔ Tarefa: &quot;{c.task_title}&quot; · 👤 Responsável:{' '}
+                      {displayNomeDonoPrioridade(c.task_owner, responsaveis, perfisCadastro).trim() ||
+                        c.task_owner}{' '}
+                      · 📝 Motivo:{' '}
+                      {c.block_reason || '—'}
                     </p>
                   ))}
                 </div>
@@ -1036,6 +1054,7 @@ const PrioridadeCard: React.FC<{
   onRemoveObserver?: (entity: 'prioridade' | 'plano' | 'tarefa', entityId: string, userId: string) => void;
   onOpenDetalhe?: (p: Prioridade) => void;
   canEditObservers?: boolean;
+  perfisCadastro?: UserProfile[] | null;
 }> = ({
   prioridade,
   planos,
@@ -1072,6 +1091,7 @@ const PrioridadeCard: React.FC<{
   onRemoveObserver,
   onOpenDetalhe,
   canEditObservers = true,
+  perfisCadastro,
 }) => {
   const whoPool = whoUsers && whoUsers.length > 0 ? whoUsers : responsaveis;
   const myViewerIds = viewerMyResponsavelIds ?? EMPTY_ID_SET;
@@ -1126,7 +1146,10 @@ const PrioridadeCard: React.FC<{
 
   const dono = responsaveis.find((r) => normStr(r.id) === normStr(prioridade.dono_id));
   const donoNomeLegivel =
-    displayNomeDonoPrioridade(prioridade.dono_id, responsaveis) || dono?.nome || prioridade.dono_id || '';
+    displayNomeDonoPrioridade(prioridade.dono_id, responsaveis, perfisCadastro) ||
+    dono?.nome ||
+    prioridade.dono_id ||
+    '';
   const donoNomeDisplay =
     (priorityOwnerNameOverride && priorityOwnerNameOverride.trim()) || donoNomeLegivel;
   const statusCfg =
@@ -1397,6 +1420,7 @@ const PrioridadeCard: React.FC<{
                 onAddObserver={onAddObserver}
                 onRemoveObserver={onRemoveObserver}
                 canEditObservers={canEditObservers}
+                perfisCadastro={perfisCadastro}
               />
             ))}
           </div>
@@ -1436,6 +1460,7 @@ export const EstrategicoView: React.FC<EstrategicoViewProps> = (props) => {
     onFocusConsumed,
     onlyPrioridadeId,
     estrategicoCaps,
+    perfisCadastro,
   } = props;
 
   const caps = {
@@ -1459,7 +1484,8 @@ export const EstrategicoView: React.FC<EstrategicoViewProps> = (props) => {
   const viewerSeesAllTarefasNoPlano =
     loggedUserRole === 'administrador' || caps.verTodosPlanos;
   const [expandedByPrioridade, setExpandedByPrioridade] = useState<Record<string, boolean>>({});
-  const [visibilityMode, setVisibilityMode] = useState<'mine' | 'following'>('mine');
+  /** Mesmo padrão Operacional: multi-seleção independente; vazio = sem refino extra nesta camada */
+  const [taticoVisibilityFilters, setTaticoVisibilityFilters] = useState<VisibilityFilter[]>([]);
   const [visFilters, setVisFilters] = useState<VisibilityFilter[]>([]);
   const [detalheAberto, setDetalheAberto] = useState<Prioridade | null>(null);
 
@@ -1538,21 +1564,23 @@ export const EstrategicoView: React.FC<EstrategicoViewProps> = (props) => {
     let list = filteredPrioridades.filter((p) => p.status_prioridade !== 'Concluido');
     if (!seesAllPrioridades && myResponsavelIds.size > 0) {
       list = list.filter((p) => {
-        const mine =
+        const uid = normStr(loggedUserUid ?? '');
+        const lanzadosPorMim = !!uid && normStr(p.created_by) === uid;
+
+        const atribuidoParaMim =
           donoPrioridadeCorrespondeAoUsuario(p.dono_id, myResponsavelIds, responsaveis) ||
           planos.some(
             (pl) =>
               pl.prioridade_id === p.id &&
-              donoPrioridadeCorrespondeAoUsuario(pl.who_id, myResponsavelIds, responsaveis)
+              donoPrioridadeCorrespondeAoUsuario(pl.who_id, myResponsavelIds, responsaveis),
           ) ||
           tarefas.some((t) => {
             if (!tarefaAtribuidaAoUsuario(t, myResponsavelIds, responsaveis)) return false;
             const pl = planos.find((x) => x.id === t.plano_id);
             return pl?.prioridade_id === p.id;
           });
-        if (visibilityMode === 'mine') return mine;
-        // "Itens que sigo": observador da prioridade, de algum plano seu, ou de alguma tarefa sua.
-        const following =
+
+        const itensQueAcompanho =
           (Array.isArray(p.observadores) &&
             p.observadores.some((o) => myResponsavelIds.has(normStr(o.user_id)))) ||
           planos.some(
@@ -1561,13 +1589,32 @@ export const EstrategicoView: React.FC<EstrategicoViewProps> = (props) => {
               canViewByOwnershipOrObserver([], pl.observadores, myResponsavelIds, responsaveis),
           ) ||
           tarefas.some((t) => {
-            if (tarefaAtribuidaAoUsuario(t, myResponsavelIds, responsaveis)) return false; // já coberto por mine
-            if (!canViewByOwnershipOrObserver([t.responsavel_id], t.observadores, myResponsavelIds, responsaveis))
+            if (tarefaAtribuidaAoUsuario(t, myResponsavelIds, responsaveis)) return false;
+            if (
+              !canViewByOwnershipOrObserver(
+                [t.responsavel_id],
+                t.observadores,
+                myResponsavelIds,
+                responsaveis,
+              )
+            )
               return false;
             const pl = planos.find((x) => x.id === t.plano_id);
             return pl?.prioridade_id === p.id;
           });
-        return following && !mine;
+
+        if (taticoVisibilityFilters.length === 0) {
+          return lanzadosPorMim || atribuidoParaMim || itensQueAcompanho;
+        }
+
+        const matchCreated =
+          taticoVisibilityFilters.includes('created') && lanzadosPorMim;
+        const matchAssigned =
+          taticoVisibilityFilters.includes('assigned') && atribuidoParaMim;
+        const matchObserving =
+          taticoVisibilityFilters.includes('observing') && itensQueAcompanho;
+
+        return matchCreated || matchAssigned || matchObserving;
       });
     }
     if (!onlyPrioridadeId) return list;
@@ -1584,7 +1631,18 @@ export const EstrategicoView: React.FC<EstrategicoViewProps> = (props) => {
         (visFilters.includes('observing') && isObserver)
       );
     });
-  }, [filteredPrioridades, onlyPrioridadeId, myResponsavelIds, responsaveis, planos, tarefas, visibilityMode, isAdmin, visFilters, loggedUserUid]);
+  }, [
+    filteredPrioridades,
+    onlyPrioridadeId,
+    myResponsavelIds,
+    responsaveis,
+    planos,
+    tarefas,
+    taticoVisibilityFilters,
+    isAdmin,
+    visFilters,
+    loggedUserUid,
+  ]);
 
   useEffect(() => {
     const ids = new Set(ativas.map((p) => p.id));
@@ -1613,24 +1671,39 @@ export const EstrategicoView: React.FC<EstrategicoViewProps> = (props) => {
           </p>
           <h2 className="text-2xl font-bold text-slate-100">Prioridades Estratégicas</h2>
         </div>
-        <div className="inline-flex rounded-lg border border-slate-700 bg-slate-900/60 p-0.5">
+        <div className="inline-flex flex-wrap items-center gap-2 justify-end">
           <button
             type="button"
-            onClick={() => setVisibilityMode('mine')}
-            className={`px-2.5 py-1 text-[11px] rounded-md transition-colors ${
-              visibilityMode === 'mine' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-slate-200'
+            onClick={() => setTaticoVisibilityFilters((prev) => toggleVisibilityFilter(prev, 'created'))}
+            className={`px-2.5 py-1 text-[11px] rounded-md transition-colors border ${
+              taticoVisibilityFilters.includes('created')
+                ? 'bg-blue-600 text-white border-blue-500'
+                : 'bg-slate-900/60 border-slate-700 text-slate-300 hover:text-slate-100'
             }`}
           >
-            Meus itens
+            lançados por mim
           </button>
           <button
             type="button"
-            onClick={() => setVisibilityMode('following')}
-            className={`px-2.5 py-1 text-[11px] rounded-md transition-colors ${
-              visibilityMode === 'following' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-slate-200'
+            onClick={() => setTaticoVisibilityFilters((prev) => toggleVisibilityFilter(prev, 'assigned'))}
+            className={`px-2.5 py-1 text-[11px] rounded-md transition-colors border ${
+              taticoVisibilityFilters.includes('assigned')
+                ? 'bg-blue-600 text-white border-blue-500'
+                : 'bg-slate-900/60 border-slate-700 text-slate-300 hover:text-slate-100'
             }`}
           >
-            Itens que sigo
+            atribuídos para mim
+          </button>
+          <button
+            type="button"
+            onClick={() => setTaticoVisibilityFilters((prev) => toggleVisibilityFilter(prev, 'observing'))}
+            className={`px-2.5 py-1 text-[11px] rounded-md transition-colors border ${
+              taticoVisibilityFilters.includes('observing')
+                ? 'bg-blue-600 text-white border-blue-500'
+                : 'bg-slate-900/60 border-slate-700 text-slate-300 hover:text-slate-100'
+            }`}
+          >
+            itens que eu acompanho
           </button>
         </div>
         <button
@@ -1652,7 +1725,7 @@ export const EstrategicoView: React.FC<EstrategicoViewProps> = (props) => {
           </div>
         ) : (
           ativas.map((p) => {
-            const nomeDono = displayNomeDonoPrioridade(p.dono_id, responsaveis);
+            const nomeDono = displayNomeDonoPrioridade(p.dono_id, responsaveis, perfisCadastro);
             const priorityOwnerNameOverride =
               nomeDono ||
               (seesAllPrioridades ? p.dono_id : (loggedUserName ?? p.dono_id));
@@ -1717,6 +1790,7 @@ export const EstrategicoView: React.FC<EstrategicoViewProps> = (props) => {
                   onRemoveObserver={onRemoveObserver}
                   onOpenDetalhe={setDetalheAberto}
                   canEditObservers={caps.observerEdit}
+                  perfisCadastro={perfisCadastro}
                 />
               </div>
             );
@@ -1741,7 +1815,8 @@ export const EstrategicoView: React.FC<EstrategicoViewProps> = (props) => {
               <div>
                 <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Dono</p>
                 <p className="text-sm text-slate-200">
-                  {displayNomeDonoPrioridade(detalheAberto.dono_id, responsaveis) || detalheAberto.dono_id}
+                  {displayNomeDonoPrioridade(detalheAberto.dono_id, responsaveis, perfisCadastro) ||
+                    detalheAberto.dono_id}
                 </p>
               </div>
             )}
