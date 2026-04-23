@@ -137,6 +137,7 @@ export const AdminPanel: React.FC = () => {
     views: UserProfile['views'];
     modulePermissions: NonNullable<UserProfile['modulePermissions']>;
     empresas: string[];
+    externalWorkspaceLinks: NonNullable<UserProfile['externalWorkspaceLinks']>;
     ativo: boolean;
   }) => {
     setError('');
@@ -156,6 +157,7 @@ export const AdminPanel: React.FC = () => {
             }
           : {}),
         empresas: data.empresas,
+        externalWorkspaceLinks: data.externalWorkspaceLinks,
         ativo: data.ativo,
         criadoEm: Date.now(),
         criadoPor: currentAdmin?.uid ?? '',

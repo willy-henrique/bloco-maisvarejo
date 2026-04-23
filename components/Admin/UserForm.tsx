@@ -1,5 +1,11 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { PERMISSIONS_SCHEMA_VERSION, type UserProfile, type UserRole } from '../../types/user';
+import {
+  PERMISSIONS_SCHEMA_VERSION,
+  type UserProfile,
+  type UserRole,
+  type ExternalWorkspaceLink,
+  type ExternalWorkspaceLinkKind,
+} from '../../types/user';
 import type { ViewId } from '../Layout/Sidebar';
 import {
   ADMIN_SELECTABLE_VIEWS,
@@ -8,7 +14,7 @@ import {
   allActionIdsForView,
   defaultModulePermissionsForViews,
 } from '../../types/modulePermissions';
-import { Save, UserPlus, ChevronDown, ChevronRight } from 'lucide-react';
+import { Save, UserPlus, ChevronDown, ChevronRight, Plus, Trash2 } from 'lucide-react';
 
 const ROLES: { id: UserRole; label: string; hint: string }[] = [
   {
@@ -41,9 +47,28 @@ interface UserFormProps {
     views: ViewId[];
     modulePermissions: ModulePermissionMap;
     empresas: string[];
+    externalWorkspaceLinks: ExternalWorkspaceLink[];
     ativo: boolean;
   }) => Promise<void>;
   onUpdate: (uid: string, data: Partial<UserProfile>) => Promise<void>;
+}
+
+const EXTERNAL_LINK_KINDS: { id: ExternalWorkspaceLinkKind; label: string }[] = [
+  { id: 'drive', label: 'Google Drive' },
+  { id: 'docs', label: 'Google Docs' },
+  { id: 'sheet', label: 'Google Planilhas' },
+  { id: 'other', label: 'Outro' },
+];
+
+const normalizeWorkspace = (value: string) => value.trim().toLowerCase();
+
+function looksValidExternalUrl(raw: string): boolean {
+  try {
+    const url = new URL(raw.trim());
+    return url.protocol === 'https:';
+  } catch {
+    return false;
+  }
 }
 
 export const UserForm: React.FC<UserFormProps> = ({
@@ -65,6 +90,7 @@ export const UserForm: React.FC<UserFormProps> = ({
   const [modulePermissions, setModulePermissions] = useState<ModulePermissionMap>({});
   const [expandedModule, setExpandedModule] = useState<ViewId | null>(null);
   const [empresas, setEmpresas] = useState<string[]>([]);
+  const [externalWorkspaceLinks, setExternalWorkspaceLinks] = useState<ExternalWorkspaceLink[]>([]);
   const [ativo, setAtivo] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
@@ -105,6 +131,7 @@ export const UserForm: React.FC<UserFormProps> = ({
         setModulePermissions(defaultModulePermissionsForViews(safeViews));
       }
       setEmpresas(user.empresas);
+      setExternalWorkspaceLinks(Array.isArray(user.externalWorkspaceLinks) ? user.externalWorkspaceLinks : []);
       setAtivo(user.ativo);
       setExpandedModule(null);
     }
@@ -162,6 +189,79 @@ export const UserForm: React.FC<UserFormProps> = ({
     }
   };
 
+  const addExternalWorkspaceLink = () => {
+    setExternalWorkspaceLinks((prev) => [
+      ...prev,
+      {
+        id: `wsl-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        workspace: '',
+        label: '',
+        url: '',
+        kind: 'drive',
+        isPrimary: false,
+        active: true,
+      },
+    ]);
+  };
+
+  const updateExternalWorkspaceLink = (
+    id: string,
+    patch: Partial<ExternalWorkspaceLink>
+  ) => {
+    setExternalWorkspaceLinks((prev) =>
+      prev.map((link) => (link.id === id ? { ...link, ...patch, updatedAt: Date.now() } : link))
+    );
+  };
+
+  const removeExternalWorkspaceLink = (id: string) => {
+    setExternalWorkspaceLinks((prev) => prev.filter((link) => link.id !== id));
+  };
+
+  const setPrimaryExternalWorkspaceLink = (id: string) => {
+    setExternalWorkspaceLinks((prev) => {
+      const target = prev.find((link) => link.id === id);
+      if (!target) return prev;
+      const targetWorkspace = normalizeWorkspace(target.workspace ?? '');
+      return prev.map((link) => {
+        if (normalizeWorkspace(link.workspace ?? '') !== targetWorkspace) return link;
+        return { ...link, isPrimary: link.id === id, updatedAt: Date.now() };
+      });
+    });
+  };
+
+  const sanitizedExternalLinks = useMemo(() => {
+    const validByWorkspace = new Set(
+      (empresasDisponiveis ?? []).map((nome) => normalizeWorkspace(nome)).filter(Boolean)
+    );
+    const allowAll = empresas.includes('*');
+    const sanitized = externalWorkspaceLinks
+      .map((link) => ({
+        ...link,
+        workspace: (link.workspace ?? '').trim(),
+        label: (link.label ?? '').trim(),
+        url: (link.url ?? '').trim(),
+        kind: link.kind ?? 'other',
+        active: link.active !== false,
+      }))
+      .filter((link) => link.workspace && link.url && looksValidExternalUrl(link.url))
+      .filter((link) => allowAll || validByWorkspace.has(normalizeWorkspace(link.workspace)));
+
+    const primaryPerWorkspace = new Set<string>();
+    return sanitized.map((link) => {
+      const key = normalizeWorkspace(link.workspace);
+      const hasPrimary = primaryPerWorkspace.has(key);
+      const isPrimary = link.isPrimary === true && !hasPrimary;
+      if (isPrimary) primaryPerWorkspace.add(key);
+      return {
+        ...link,
+        label: link.label || 'Link externo',
+        isPrimary,
+        createdAt: link.createdAt ?? Date.now(),
+        updatedAt: Date.now(),
+      };
+    });
+  }, [externalWorkspaceLinks, empresasDisponiveis, empresas]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
@@ -182,10 +282,17 @@ export const UserForm: React.FC<UserFormProps> = ({
           views: role === 'administrador' ? [] : safeViews,
           modulePermissions: mp,
           empresas,
+          externalWorkspaceLinks: sanitizedExternalLinks,
           ativo,
         });
       } else if (user) {
-        const base: Partial<UserProfile> = { nome, role, empresas, ativo };
+        const base: Partial<UserProfile> = {
+          nome,
+          role,
+          empresas,
+          externalWorkspaceLinks: sanitizedExternalLinks,
+          ativo,
+        };
         if (role === 'usuario' || role === 'gerente') {
           const safeViews = ensureBacklogView(views);
           base.views = safeViews;
@@ -283,6 +390,130 @@ export const UserForm: React.FC<UserFormProps> = ({
             <p className="text-[10px] text-amber-400/90 mt-2">
               Você não pode remover seu próprio perfil de administrador nesta sessão.
             </p>
+          )}
+        </div>
+
+        <div className="border border-slate-800 rounded-lg p-3 bg-slate-950/40 space-y-3">
+          <div className="flex items-center justify-between gap-2">
+            <div>
+              <label className="block text-[10px] text-slate-500 uppercase tracking-wider font-medium">
+                Links externos por workspace
+              </label>
+              <p className="text-[10px] text-slate-600 mt-1">
+                Clique em Workspace abrirá o link padrão do workspace selecionado para este usuário.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={addExternalWorkspaceLink}
+              className="text-[11px] px-2.5 py-1.5 rounded-lg border border-slate-700 text-slate-300 hover:border-slate-500 inline-flex items-center gap-1.5"
+            >
+              <Plus size={12} /> Adicionar link
+            </button>
+          </div>
+
+          {externalWorkspaceLinks.length === 0 ? (
+            <p className="text-xs text-slate-500">Nenhum link externo cadastrado.</p>
+          ) : (
+            <div className="space-y-2">
+              {externalWorkspaceLinks.map((link) => {
+                const workspaceValue = (link.workspace ?? '').trim();
+                const workspaceIsKnown = empresasDisponiveis.some(
+                  (nome) => normalizeWorkspace(nome) === normalizeWorkspace(workspaceValue)
+                );
+                const workspaceMissing = !workspaceValue;
+                const invalidUrl = link.url.trim().length > 0 && !looksValidExternalUrl(link.url);
+                return (
+                  <div key={link.id} className="rounded-lg border border-slate-800 p-3 bg-slate-900/40 space-y-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <select
+                        value={link.workspace}
+                        onChange={(e) => updateExternalWorkspaceLink(link.id, { workspace: e.target.value })}
+                        className="w-full bg-slate-950/60 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-100 outline-none focus:border-blue-500"
+                      >
+                        <option value="">Workspace (empresa)</option>
+                        {empresasDisponiveis.map((empresa) => (
+                          <option key={empresa} value={empresa}>
+                            {empresa}
+                          </option>
+                        ))}
+                      </select>
+                      <input
+                        type="text"
+                        value={link.label}
+                        onChange={(e) => updateExternalWorkspaceLink(link.id, { label: e.target.value })}
+                        placeholder="Rótulo (ex.: Pasta Comercial)"
+                        className="w-full bg-slate-950/60 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-100 outline-none focus:border-blue-500"
+                      />
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      <input
+                        type="url"
+                        value={link.url}
+                        onChange={(e) => updateExternalWorkspaceLink(link.id, { url: e.target.value })}
+                        placeholder="https://..."
+                        className={`w-full bg-slate-950/60 border rounded-lg px-3 py-2 text-xs text-slate-100 outline-none focus:border-blue-500 ${
+                          invalidUrl ? 'border-red-600/80' : 'border-slate-700'
+                        }`}
+                      />
+                      <select
+                        value={link.kind ?? 'other'}
+                        onChange={(e) =>
+                          updateExternalWorkspaceLink(link.id, {
+                            kind: e.target.value as ExternalWorkspaceLinkKind,
+                          })
+                        }
+                        className="w-full bg-slate-950/60 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-100 outline-none focus:border-blue-500"
+                      >
+                        {EXTERNAL_LINK_KINDS.map((kind) => (
+                          <option key={kind.id} value={kind.id}>
+                            {kind.label}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        onClick={() => removeExternalWorkspaceLink(link.id)}
+                        className="w-full rounded-lg border border-red-500/50 text-red-400 hover:bg-red-500/10 text-xs px-3 py-2 inline-flex items-center justify-center gap-1.5"
+                      >
+                        <Trash2 size={12} /> Remover
+                      </button>
+                    </div>
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <label className="inline-flex items-center gap-1.5 text-[11px] text-slate-400">
+                        <input
+                          type="checkbox"
+                          checked={link.active !== false}
+                          onChange={(e) => updateExternalWorkspaceLink(link.id, { active: e.target.checked })}
+                        />
+                        Ativo
+                      </label>
+                      <button
+                        type="button"
+                        disabled={workspaceMissing}
+                        onClick={() => setPrimaryExternalWorkspaceLink(link.id)}
+                        className={`text-[11px] px-2.5 py-1 rounded border ${
+                          link.isPrimary
+                            ? 'bg-emerald-600/90 border-emerald-500 text-white'
+                            : 'border-slate-700 text-slate-300 hover:border-slate-500'
+                        } ${workspaceMissing ? 'opacity-50 cursor-not-allowed' : ''}`}
+                      >
+                        {link.isPrimary ? 'Link padrão deste workspace' : 'Definir como padrão'}
+                      </button>
+                    </div>
+                    {(workspaceMissing || invalidUrl || (!workspaceIsKnown && !empresas.includes('*'))) && (
+                      <p className="text-[10px] text-amber-400/90">
+                        {workspaceMissing
+                          ? 'Informe o workspace.'
+                          : invalidUrl
+                          ? 'URL inválida. Use https://...'
+                          : 'Workspace não encontrado na lista de empresas permitidas deste usuário.'}
+                      </p>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           )}
         </div>
 

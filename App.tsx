@@ -22,6 +22,7 @@ import { subscribeAppSettings, getDefaultAppSettings } from './services/appSetti
 import type { UserProfile } from './types/user';
 import type { AppSettings } from './types/appSettings';
 import { mergeResponsaveisComPerfis } from './utils/mergeResponsaveisComPerfis';
+import { resolvePrimaryExternalLinkForWorkspace } from './utils/externalWorkspaceLinks';
 import {
   Plus,
   Search,
@@ -752,6 +753,37 @@ function AppContent() {
     setActiveView(view);
   }, []);
 
+  const handleWorkspaceShortcutClick = useCallback(() => {
+    if (workspaceAtivo === 'all') {
+      setToast({
+        message: 'Selecione um workspace específico para abrir o link externo.',
+        type: 'error',
+      });
+      return;
+    }
+    const target = resolvePrimaryExternalLinkForWorkspace(
+      profile?.externalWorkspaceLinks,
+      workspaceAtivo
+    );
+    if (!target?.url?.trim()) {
+      setToast({
+        message: 'Sem link externo configurado para este workspace.',
+        type: 'error',
+      });
+      return;
+    }
+    window.open(target.url, '_blank', 'noopener,noreferrer');
+  }, [workspaceAtivo, profile?.externalWorkspaceLinks]);
+
+  const handleOpenWorkspaceExternalLink = useCallback((url: string) => {
+    const href = url.trim();
+    if (!href) {
+      setToast({ message: 'Link externo inválido.', type: 'error' });
+      return;
+    }
+    window.open(href, '_blank', 'noopener,noreferrer');
+  }, []);
+
   const openItemModal = useCallback(
     (
       item: ActionItem | null,
@@ -966,6 +998,9 @@ function AppContent() {
         userRole={profile?.role}
         allowedViews={profile?.views}
         userName={profile?.nome}
+        onWorkspaceShortcutClick={handleWorkspaceShortcutClick}
+        externalWorkspaceLinks={profile?.externalWorkspaceLinks}
+        onOpenWorkspaceExternalLink={handleOpenWorkspaceExternalLink}
       />
 
       <main className="flex-1 flex flex-col overflow-hidden relative min-h-0">
@@ -1657,7 +1692,7 @@ function AppContent() {
             <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
             Conectado
           </div>
-          <span>MAVO 2.0.2</span>
+          <span>MAVO 2.0.3</span>
         </footer>
       </main>
     </div>

@@ -1,7 +1,8 @@
-import React from 'react';
-import { LogOut, ShieldCheck, PieChart, Briefcase, X, ListTodo, Bot, Target, FileText } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { LogOut, ShieldCheck, PieChart, Briefcase, X, ListTodo, Bot, Target, FileText, ChevronDown, ExternalLink } from 'lucide-react';
 import { EstrategicoGridIcon } from '../icons/EstrategicoGridIcon';
-import type { UserRole } from '../../types/user';
+import type { ExternalWorkspaceLink, UserRole } from '../../types/user';
+import { listActiveExternalLinksByWorkspace } from '../../utils/externalWorkspaceLinks';
 
 export type ViewId = 'workspace' | 'dashboard' | 'table' | 'backlog' | 'performance' | 'roadmap' | 'ia' | 'operacional';
 
@@ -19,6 +20,9 @@ interface SidebarProps {
   userRole?: UserRole | null;
   allowedViews?: ViewId[];
   userName?: string;
+  onWorkspaceShortcutClick?: () => void;
+  externalWorkspaceLinks?: ExternalWorkspaceLink[];
+  onOpenWorkspaceExternalLink?: (url: string) => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -35,7 +39,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
   userRole,
   allowedViews,
   userName,
+  onWorkspaceShortcutClick,
+  externalWorkspaceLinks,
+  onOpenWorkspaceExternalLink,
 }) => {
+  const [workspaceLinksOpen, setWorkspaceLinksOpen] = useState(false);
 
   const isAdmin = userRole === 'administrador';
   /** Gerente sem views cadastradas = acesso a todas (compatível com perfis antigos). */
@@ -60,6 +68,34 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const handleNavClick = (view: ViewId) => {
     setView(view);
     if (window.innerWidth < 1024) onClose();
+  };
+
+  const handleWorkspaceButton = () => {
+    if (userRole === 'administrador') {
+      handleNavClick('workspace');
+      return;
+    }
+    onWorkspaceShortcutClick?.();
+    if (window.innerWidth < 1024) onClose();
+  };
+
+  const workspaceQuickLinks = useMemo(() => {
+    if (workspaceAtivo === 'all') return [];
+    return listActiveExternalLinksByWorkspace(externalWorkspaceLinks, workspaceAtivo);
+  }, [externalWorkspaceLinks, workspaceAtivo]);
+
+  useEffect(() => {
+    setWorkspaceLinksOpen(false);
+  }, [workspaceAtivo]);
+
+  const handleOpenQuickLink = (url: string) => {
+    if (onOpenWorkspaceExternalLink) {
+      onOpenWorkspaceExternalLink(url);
+      setWorkspaceLinksOpen(false);
+      return;
+    }
+    window.open(url, '_blank', 'noopener,noreferrer');
+    setWorkspaceLinksOpen(false);
   };
 
   return (
@@ -96,12 +132,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <X size={18} />
             </button>
           </div>
-          <div className="flex items-center gap-2">
-            <span className="text-[10px] text-slate-500 uppercase tracking-wider font-medium shrink-0">Workspace</span>
+          <div className="relative flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => setWorkspaceLinksOpen((prev) => !prev)}
+              className="inline-flex items-center gap-1 text-[10px] text-slate-500 hover:text-slate-300 uppercase tracking-wider font-medium shrink-0 min-w-[72px]"
+            >
+              Workspace <ChevronDown size={12} className={workspaceLinksOpen ? 'rotate-180 transition-transform' : 'transition-transform'} />
+            </button>
             <select
               value={workspaceAtivo}
               onChange={(e) => onChangeWorkspace(e.target.value as 'all' | string)}
-              className="flex-1 min-w-0 bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-[11px] text-slate-100 outline-none focus:border-blue-500 cursor-pointer"
+              className="flex-1 min-w-0 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-[11px] text-slate-100 outline-none focus:border-blue-500 cursor-pointer"
             >
               {allowAllWorkspaces && (
                 <option value="all">Todas as empresas</option>
@@ -112,6 +154,41 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 </option>
               ))}
             </select>
+            {workspaceLinksOpen && (
+              <div className="absolute left-0 top-full mt-2 w-full rounded-lg border border-slate-700 bg-slate-900/95 shadow-xl z-50 p-2 space-y-1">
+                {workspaceAtivo === 'all' ? (
+                  <p className="text-[11px] text-slate-400 px-2 py-1">
+                    Selecione um workspace para ver os links.
+                  </p>
+                ) : workspaceQuickLinks.length > 0 ? (
+                  workspaceQuickLinks.map((link) => (
+                    <button
+                      key={link.id}
+                      type="button"
+                      onClick={() => handleOpenQuickLink(link.url)}
+                      className="w-full text-left px-2.5 py-2 rounded-lg hover:bg-slate-800/80 transition-colors"
+                    >
+                      <span className="text-[11px] text-slate-200 inline-flex items-center gap-1.5">
+                        <ExternalLink size={12} />
+                        {link.label || 'Link externo'}
+                        {link.isPrimary ? <span className="text-[10px] text-emerald-400">(padrão)</span> : null}
+                      </span>
+                    </button>
+                  ))
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onWorkspaceShortcutClick?.();
+                      setWorkspaceLinksOpen(false);
+                    }}
+                    className="w-full text-left px-2.5 py-2 rounded-lg text-[11px] text-slate-300 hover:bg-slate-800/80 transition-colors"
+                  >
+                    Nenhum link neste workspace. Tentar link padrão
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
@@ -160,19 +237,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
               </button>
             )}
 
-            {userRole === 'administrador' && (
-              <button
-                type="button"
-                onClick={() => handleNavClick('workspace')}
-                className={`flex items-center gap-2.5 px-3 py-2.5 min-h-[44px] rounded-lg text-sm font-medium transition-all text-left w-full touch-manipulation ${
-                  activeView === 'workspace'
-                    ? 'bg-blue-600 text-white'
-                    : 'text-slate-400 hover:bg-slate-800/60 hover:text-slate-100'
-                }`}
-              >
-                <ShieldCheck size={18} /> Workspace
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={handleWorkspaceButton}
+              className={`flex items-center gap-2.5 px-3 py-2.5 min-h-[44px] rounded-lg text-sm font-medium transition-all text-left w-full touch-manipulation ${
+                userRole === 'administrador' && activeView === 'workspace'
+                  ? 'bg-blue-600 text-white'
+                  : 'text-slate-400 hover:bg-slate-800/60 hover:text-slate-100'
+              }`}
+            >
+              <ShieldCheck size={18} /> Workspace
+            </button>
           </div>
 
           {canAccessView('ia') && (

@@ -59,16 +59,16 @@ export const UserList: React.FC<UserListProps> = ({
   return (
     <div className="bg-slate-900/50 border border-slate-800 rounded-xl overflow-hidden">
       <div className="overflow-x-auto">
-        <table className="w-full text-sm">
+        <table className="w-full table-fixed text-sm">
           <thead>
             <tr className="border-b border-slate-800">
-              <th className="text-left px-4 py-3 text-[10px] text-slate-500 uppercase tracking-wider font-medium">Nome</th>
-              <th className="text-left px-4 py-3 text-[10px] text-slate-500 uppercase tracking-wider font-medium">Email</th>
-              <th className="text-left px-4 py-3 text-[10px] text-slate-500 uppercase tracking-wider font-medium">Perfil</th>
-              <th className="text-left px-4 py-3 text-[10px] text-slate-500 uppercase tracking-wider font-medium">Views</th>
-              <th className="text-left px-4 py-3 text-[10px] text-slate-500 uppercase tracking-wider font-medium">Empresas</th>
-              <th className="text-center px-4 py-3 text-[10px] text-slate-500 uppercase tracking-wider font-medium">Status</th>
-              <th className="text-center px-4 py-3 text-[10px] text-slate-500 uppercase tracking-wider font-medium">
+              <th className="w-[16%] text-left px-4 py-3 text-[10px] text-slate-500 uppercase tracking-wider font-medium">Nome</th>
+              <th className="w-[18%] text-left px-4 py-3 text-[10px] text-slate-500 uppercase tracking-wider font-medium">Email</th>
+              <th className="w-[10%] text-left px-4 py-3 text-[10px] text-slate-500 uppercase tracking-wider font-medium">Perfil</th>
+              <th className="w-[22%] text-left px-4 py-3 text-[10px] text-slate-500 uppercase tracking-wider font-medium">Views</th>
+              <th className="w-[13%] text-left px-4 py-3 text-[10px] text-slate-500 uppercase tracking-wider font-medium">Empresas</th>
+              <th className="w-[9%] text-center px-4 py-3 text-[10px] text-slate-500 uppercase tracking-wider font-medium">Status</th>
+              <th className="w-[12%] text-center px-4 py-3 text-[10px] text-slate-500 uppercase tracking-wider font-medium">
                 Ações
               </th>
             </tr>
@@ -77,7 +77,11 @@ export const UserList: React.FC<UserListProps> = ({
             {users.map((u) => (
               <tr key={u.uid} className="border-b border-slate-800/50 hover:bg-slate-800/30 transition-colors">
                 <td className="px-4 py-3 font-medium text-slate-100">{u.nome}</td>
-                <td className="px-4 py-3 text-slate-400">{u.email}</td>
+                <td className="px-4 py-3 text-slate-400">
+                  <span className="block truncate" title={u.email}>
+                    {u.email}
+                  </span>
+                </td>
                 <td className="px-4 py-3">
                   <span className={`text-[10px] font-medium uppercase tracking-wider px-2 py-0.5 rounded border ${ROLE_COLORS[u.role]}`}>
                     {ROLE_LABELS[u.role]}
