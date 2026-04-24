@@ -1670,7 +1670,10 @@ function AppContent() {
           empresaSuggestions={empresasAtivas}
           loggedUserName={profile?.nome}
           lockWhoToLoggedUser={true}
-          canEditWho={profile?.role === 'administrador'}
+          canEditWho={
+            modalContext !== 'backlog' &&
+            (activeView === 'roadmap' ? perm.roadmap.edit : perm.dashboard.edit)
+          }
           responsaveis={responsaveisParaAtribuicao}
           hideWhereEmpresa={modalContext === 'backlog'}
           hideStatusUrgency={modalContext === 'backlog'}

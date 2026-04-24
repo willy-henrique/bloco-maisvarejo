@@ -348,50 +348,48 @@ export const ActionItemModal: React.FC<ActionItemModalProps> = ({
             </>
           )}
           {!isBacklogLike && (
-            <>
-              <div>
-                <label className="block text-[10px] font-medium text-slate-500 uppercase tracking-wider mb-1.5">
-                  Quem?
-                </label>
-                {isWhoReadOnly ? (
-                  <div className="relative">
-                    <User size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-                    <div className="w-full bg-slate-800/50 border border-slate-700 rounded-lg pl-9 pr-3 py-2.5 text-sm text-slate-200">
-                      {whoDisplay || '—'}
-                    </div>
-                  </div>
-                ) : (
-                  <div className="relative">
-                    <User size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
-                    <div className="pl-9">
-                      <ResponsavelAutocomplete
-                        responsaveis={responsaveis}
-                        valueId={form.who}
-                        onCommit={(id) => update('who', id)}
-                        disabled={readOnly}
-                        placeholder="Buscar responsável..."
-                      />
-                    </div>
-                  </div>
-                )}
-              </div>
-              <div>
-                <label className="block text-[10px] font-medium text-slate-500 uppercase tracking-wider mb-1.5">
-                  Quando?
-                </label>
+            <div>
+              <label className="block text-[10px] font-medium text-slate-500 uppercase tracking-wider mb-1.5">
+                Quem?
+              </label>
+              {isWhoReadOnly ? (
                 <div className="relative">
-                  <Calendar size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-                  <input
-                    type="date"
-                    value={form.when}
-                    onChange={(e) => update('when', e.target.value)}
-                    disabled={readOnly}
-                    className="w-full bg-slate-800/50 border border-slate-700 rounded-lg pl-9 pr-3 py-2.5 text-sm text-slate-200 outline-none focus:border-slate-600 disabled:opacity-70 disabled:cursor-not-allowed"
-                  />
+                  <User size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                  <div className="w-full bg-slate-800/50 border border-slate-700 rounded-lg pl-9 pr-3 py-2.5 text-sm text-slate-200">
+                    {whoDisplay || '—'}
+                  </div>
                 </div>
-              </div>
-            </>
+              ) : (
+                <div className="relative">
+                  <User size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
+                  <div className="pl-9">
+                    <ResponsavelAutocomplete
+                      responsaveis={responsaveis}
+                      valueId={form.who}
+                      onCommit={(id) => update('who', id)}
+                      disabled={readOnly}
+                      placeholder="Buscar responsável..."
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
           )}
+          <div>
+            <label className="block text-[10px] font-medium text-slate-500 uppercase tracking-wider mb-1.5">
+              Quando?
+            </label>
+            <div className="relative">
+              <Calendar size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+              <input
+                type="date"
+                value={form.when}
+                onChange={(e) => update('when', e.target.value)}
+                disabled={readOnly}
+                className="w-full bg-slate-800/50 border border-slate-700 rounded-lg pl-9 pr-3 py-2.5 text-sm text-slate-200 outline-none focus:border-slate-600 disabled:opacity-70 disabled:cursor-not-allowed"
+              />
+            </div>
+          </div>
           {!effectiveHideStatusUrgency && (
             <>
               <div>
