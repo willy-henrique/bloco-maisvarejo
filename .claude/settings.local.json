@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep -n \"responsavelSearchUtils\\\\|taskAssignmentUtils\" /c/willydev/bloco-maisvarejo-1/components/Dashboard/*.tsx)",
+      "Bash(npx tsc:*)"
+    ]
+  }
+}
