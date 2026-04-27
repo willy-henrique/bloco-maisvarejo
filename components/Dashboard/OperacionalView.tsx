@@ -10,6 +10,7 @@ import {
 } from './responsavelSearchUtils';
 import { canViewByOwnershipOrObserver, tarefaAtribuidaAoUsuario } from './taskAssignmentUtils';
 import { ObserversPanel } from './ObserversPanel';
+import { TaskBlockReasonModal } from './TaskBlockReasonModal';
 import { apiGetBlockContext } from '../../services/ritmoCollabApi';
 import { type VisibilityFilter } from '../Shared/VisibilityFilterBar';
 
@@ -110,6 +111,7 @@ const TarefaRow: React.FC<{
   tarefa: Tarefa;
   responsaveis: Responsavel[];
   onUpdate: (u: Partial<Tarefa>) => void;
+  onRequestBlock: () => void;
   onDelete: () => void;
   canWriteTarefa?: boolean;
   canAssignTarefa?: boolean;
@@ -123,6 +125,7 @@ const TarefaRow: React.FC<{
   tarefa,
   responsaveis,
   onUpdate,
+  onRequestBlock,
   onDelete,
   canWriteTarefa = true,
   canAssignTarefa = true,
@@ -148,6 +151,16 @@ const TarefaRow: React.FC<{
   const isOverdue = tarefa.data_vencimento < Date.now() && tarefa.status_tarefa !== 'Concluida';
   const askDeleteConfirmation = (): boolean =>
     window.confirm(`Tem certeza que deseja excluir a tarefa "${tarefa.titulo}"? Esta ação não pode ser desfeita.`);
+  const handleStatusChange = (next: StatusTarefa) => {
+    if (next === 'Bloqueada' && tarefa.status_tarefa !== 'Bloqueada') {
+      onRequestBlock();
+      return;
+    }
+    onUpdate({
+      status_tarefa: next,
+      ...(next === 'Concluida' ? { data_conclusao: Date.now() } : {}),
+    });
+  };
 
   return (
     <>
@@ -160,10 +173,7 @@ const TarefaRow: React.FC<{
             onClick={() => {
               const idx = TAREFA_ORDER.indexOf(tarefa.status_tarefa);
               const next = TAREFA_ORDER[(idx + 1) % TAREFA_ORDER.length];
-              onUpdate({
-                status_tarefa: next,
-                ...(next === 'Concluida' ? { data_conclusao: Date.now() } : {}),
-              });
+              handleStatusChange(next);
             }}
             className="mt-0.5 shrink-0 text-slate-500 hover:text-slate-200 disabled:opacity-40 disabled:pointer-events-none"
             title="Alternar status"
@@ -273,10 +283,7 @@ const TarefaRow: React.FC<{
             value={tarefa.status_tarefa}
             onChange={(e) => {
               const next = e.target.value as StatusTarefa;
-              onUpdate({
-                status_tarefa: next,
-                ...(next === 'Concluida' ? { data_conclusao: Date.now() } : {}),
-              });
+              handleStatusChange(next);
             }}
             disabled={!canWriteTarefa}
             className="text-[10px] font-semibold px-2 py-1 rounded-sm uppercase bg-slate-800 border border-slate-700 text-slate-200 outline-none focus:border-slate-500 disabled:opacity-50"
@@ -396,6 +403,8 @@ const OperacionalPlanoCard: React.FC<{
   const [expanded, setExpanded] = useState(false);
   const [showAddTarefa, setShowAddTarefa] = useState(false);
   const [concluidasNoPlanoOpen, setConcluidasNoPlanoOpen] = useState(false);
+  const [tarefaParaBloquear, setTarefaParaBloquear] = useState<Tarefa | null>(null);
+  const [motivoBloqueio, setMotivoBloqueio] = useState('');
   const [novaTarefa, setNovaTarefa] = useState({
     titulo: '',
     responsavel_id: loggedUserResponsavelId ?? '',
@@ -505,6 +514,24 @@ const OperacionalPlanoCard: React.FC<{
       descricao: '',
     });
     setShowAddTarefa(false);
+  };
+  const openBlockReasonModal = (tarefa: Tarefa) => {
+    onUpdateTarefa(tarefa.id, { status_tarefa: 'Bloqueada' });
+    setTarefaParaBloquear(tarefa);
+    setMotivoBloqueio(tarefa.bloqueio_motivo ?? '');
+  };
+  const closeBlockReasonModal = () => {
+    setTarefaParaBloquear(null);
+    setMotivoBloqueio('');
+  };
+  const confirmBlockReason = () => {
+    if (!tarefaParaBloquear) return;
+    const motivo = motivoBloqueio.trim();
+    onUpdateTarefa(tarefaParaBloquear.id, {
+      status_tarefa: 'Bloqueada',
+      bloqueio_motivo: motivo || undefined,
+    });
+    closeBlockReasonModal();
   };
 
   return (
@@ -700,6 +727,7 @@ const OperacionalPlanoCard: React.FC<{
                           tarefa={t}
                           responsaveis={responsaveis}
                           onUpdate={(u) => onUpdateTarefa(t.id, u)}
+                          onRequestBlock={() => openBlockReasonModal(t)}
                           onDelete={() => onDeleteTarefa(t.id)}
                           canWriteTarefa={canWriteTarefa}
                           canAssignTarefa={canAssignTarefa}
@@ -750,6 +778,7 @@ const OperacionalPlanoCard: React.FC<{
                               tarefa={t}
                               responsaveis={responsaveis}
                               onUpdate={(u) => onUpdateTarefa(t.id, u)}
+                              onRequestBlock={() => openBlockReasonModal(t)}
                               onDelete={() => onDeleteTarefa(t.id)}
                               canWriteTarefa={canWriteTarefa}
                               canAssignTarefa={canAssignTarefa}
@@ -864,6 +893,14 @@ const OperacionalPlanoCard: React.FC<{
               </div>
             </div>
           )}
+          <TaskBlockReasonModal
+            isOpen={tarefaParaBloquear !== null}
+            taskTitle={tarefaParaBloquear?.titulo}
+            value={motivoBloqueio}
+            onChange={setMotivoBloqueio}
+            onClose={closeBlockReasonModal}
+            onConfirm={confirmBlockReason}
+          />
         </div>
       )}
     </div>
@@ -896,6 +933,8 @@ export const OperacionalView: React.FC<OperacionalProps> = ({
   const [tarefasConcluidasOpen, setTarefasConcluidasOpen] = useState(false);
   const [planosConcluidosOpen, setPlanosConcluidosOpen] = useState(false);
   const [openTaskObservers, setOpenTaskObservers] = useState<Record<string, boolean>>({});
+  const [tarefaParaBloquear, setTarefaParaBloquear] = useState<Tarefa | null>(null);
+  const [motivoBloqueio, setMotivoBloqueio] = useState('');
   const oc = {
     planoWrite: operacionalCaps?.planoWrite !== false,
     tarefaWrite: operacionalCaps?.tarefaWrite !== false,
@@ -939,6 +978,34 @@ export const OperacionalView: React.FC<OperacionalProps> = ({
       : undefined;
     return matchByName?.id ?? (loggedUserName?.trim() || (loggedUserUid ? String(loggedUserUid) : ''));
   }, [loggedUserUid, loggedUserName, responsaveis]);
+  const openBlockReasonModal = (tarefa: Tarefa) => {
+    onUpdateTarefa(tarefa.id, { status_tarefa: 'Bloqueada' });
+    setTarefaParaBloquear(tarefa);
+    setMotivoBloqueio(tarefa.bloqueio_motivo ?? '');
+  };
+  const closeBlockReasonModal = () => {
+    setTarefaParaBloquear(null);
+    setMotivoBloqueio('');
+  };
+  const confirmBlockReason = () => {
+    if (!tarefaParaBloquear) return;
+    const motivo = motivoBloqueio.trim();
+    onUpdateTarefa(tarefaParaBloquear.id, {
+      status_tarefa: 'Bloqueada',
+      bloqueio_motivo: motivo || undefined,
+    });
+    closeBlockReasonModal();
+  };
+  const handleTaskStatusChange = (tarefa: Tarefa, next: StatusTarefa) => {
+    if (next === 'Bloqueada' && tarefa.status_tarefa !== 'Bloqueada') {
+      openBlockReasonModal(tarefa);
+      return;
+    }
+    onUpdateTarefa(tarefa.id, {
+      status_tarefa: next,
+      ...(next === 'Concluida' ? { data_conclusao: Date.now() } : {}),
+    });
+  };
 
   const visiblePrioridades = useMemo(() => {
     if (seesAllPrioridades) return prioridades;
@@ -1265,10 +1332,7 @@ export const OperacionalView: React.FC<OperacionalProps> = ({
                                   onClick={() => {
                                     const idx = TAREFA_ORDER.indexOf(t.status_tarefa);
                                     const next = TAREFA_ORDER[(idx + 1) % TAREFA_ORDER.length];
-                                    onUpdateTarefa(t.id, {
-                                      status_tarefa: next,
-                                      ...(next === 'Concluida' ? { data_conclusao: Date.now() } : {}),
-                                    });
+                                    handleTaskStatusChange(t, next);
                                   }}
                                   className="mt-0.5 shrink-0 text-slate-500 hover:text-slate-200 disabled:opacity-40 disabled:pointer-events-none"
                                   title="Alternar status"
@@ -1308,10 +1372,7 @@ export const OperacionalView: React.FC<OperacionalProps> = ({
                                   value={t.status_tarefa}
                                   onChange={(e) => {
                                     const next = e.target.value as StatusTarefa;
-                                    onUpdateTarefa(t.id, {
-                                      status_tarefa: next,
-                                      ...(next === 'Concluida' ? { data_conclusao: Date.now() } : {}),
-                                    });
+                                    handleTaskStatusChange(t, next);
                                   }}
                                   disabled={!oc.tarefaWrite}
                                   className="text-[10px] font-semibold px-2 py-1 rounded-sm uppercase bg-slate-800 border border-slate-700 text-slate-200 outline-none focus:border-slate-500 disabled:opacity-50"
@@ -1427,10 +1488,7 @@ export const OperacionalView: React.FC<OperacionalProps> = ({
                                         onClick={() => {
                                           const idx = TAREFA_ORDER.indexOf(t.status_tarefa);
                                           const next = TAREFA_ORDER[(idx + 1) % TAREFA_ORDER.length];
-                                          onUpdateTarefa(t.id, {
-                                            status_tarefa: next,
-                                            ...(next === 'Concluida' ? { data_conclusao: Date.now() } : {}),
-                                          });
+                                          handleTaskStatusChange(t, next);
                                         }}
                                         className="mt-0.5 shrink-0 text-slate-500 hover:text-slate-200 disabled:opacity-40 disabled:pointer-events-none"
                                         title="Alternar status"
@@ -1451,10 +1509,7 @@ export const OperacionalView: React.FC<OperacionalProps> = ({
                                         value={t.status_tarefa}
                                         onChange={(e) => {
                                           const next = e.target.value as StatusTarefa;
-                                          onUpdateTarefa(t.id, {
-                                            status_tarefa: next,
-                                            ...(next === 'Concluida' ? { data_conclusao: Date.now() } : {}),
-                                          });
+                                          handleTaskStatusChange(t, next);
                                         }}
                                         disabled={!oc.tarefaWrite}
                                         className="text-[10px] font-semibold px-2 py-1 rounded-sm uppercase bg-slate-800 border border-slate-700 text-slate-200 outline-none focus:border-slate-500 disabled:opacity-50"
@@ -1540,8 +1595,15 @@ export const OperacionalView: React.FC<OperacionalProps> = ({
           )}
         </div>
       )}
+      <TaskBlockReasonModal
+        isOpen={tarefaParaBloquear !== null}
+        taskTitle={tarefaParaBloquear?.titulo}
+        value={motivoBloqueio}
+        onChange={setMotivoBloqueio}
+        onClose={closeBlockReasonModal}
+        onConfirm={confirmBlockReason}
+      />
       </section>
     </div>
   );
 };
-

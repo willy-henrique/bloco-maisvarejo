@@ -38,6 +38,7 @@ import { canViewByOwnershipOrObserver, tarefaAtribuidaAoUsuario } from './taskAs
 import { ObserversPanel } from './ObserversPanel';
 import { apiGetBlockContext } from '../../services/ritmoCollabApi';
 import { Modal } from '../Shared/Modal';
+import { TaskBlockReasonModal } from './TaskBlockReasonModal';
 import { VisibilityFilterBar, type VisibilityFilter } from '../Shared/VisibilityFilterBar';
 
 function toggleVisibilityFilter(prev: VisibilityFilter[], filter: VisibilityFilter): VisibilityFilter[] {
@@ -175,6 +176,7 @@ const TarefaRow: React.FC<{
   tarefa: Tarefa;
   responsaveis: Responsavel[];
   onUpdate: (u: Partial<Tarefa>) => void;
+  onRequestBlock: () => void;
   /**
    * Pede ao parent (PlanoCard) que abra o modal de confirmação.
    * NUNCA renderizamos o Modal aqui dentro: o JSX da TarefaRow é filho de
@@ -195,6 +197,7 @@ const TarefaRow: React.FC<{
   tarefa,
   responsaveis,
   onUpdate,
+  onRequestBlock,
   onRequestDelete,
   canWriteTarefa = true,
   canAssignTarefa = true,
@@ -219,6 +222,16 @@ const TarefaRow: React.FC<{
   const cfg = TAREFA_CFG[tarefa.status_tarefa] || TAREFA_CFG.Pendente;
   const StatusIcon = cfg.Icon;
   const isOverdue = tarefa.data_vencimento < Date.now() && tarefa.status_tarefa !== 'Concluida';
+  const handleStatusChange = (next: StatusTarefa) => {
+    if (next === 'Bloqueada' && tarefa.status_tarefa !== 'Bloqueada') {
+      onRequestBlock();
+      return;
+    }
+    onUpdate({
+      status_tarefa: next,
+      ...(next === 'Concluida' ? { data_conclusao: Date.now() } : {}),
+    });
+  };
 
   return (
     <>
@@ -232,10 +245,7 @@ const TarefaRow: React.FC<{
               const order: StatusTarefa[] = ['Pendente', 'EmExecucao', 'Bloqueada', 'Concluida'];
               const idx = order.indexOf(tarefa.status_tarefa);
               const next = order[(idx + 1) % order.length];
-              onUpdate({
-                status_tarefa: next,
-                ...(next === 'Concluida' ? { data_conclusao: Date.now() } : {}),
-              });
+              handleStatusChange(next);
             }}
             className="mt-0.5 shrink-0 text-slate-500 hover:text-slate-200 disabled:opacity-40 disabled:pointer-events-none"
           >
@@ -338,10 +348,7 @@ const TarefaRow: React.FC<{
             value={tarefa.status_tarefa}
             onChange={(e) => {
               const next = e.target.value as StatusTarefa;
-              onUpdate({
-                status_tarefa: next,
-                ...(next === 'Concluida' ? { data_conclusao: Date.now() } : {}),
-              });
+              handleStatusChange(next);
             }}
             disabled={!canWriteTarefa}
             className="text-[10px] font-semibold px-2 py-1 rounded-sm uppercase bg-slate-800 border border-slate-700 text-slate-200 outline-none focus:border-slate-500 disabled:opacity-50"
@@ -488,6 +495,8 @@ const PlanoCard: React.FC<{
   // React, e em alguns casos o clique do botão fica capturado pelo <tr>,
   // impedindo a exclusão. Lift state up resolve ambos os problemas.
   const [tarefaParaExcluir, setTarefaParaExcluir] = useState<Tarefa | null>(null);
+  const [tarefaParaBloquear, setTarefaParaBloquear] = useState<Tarefa | null>(null);
+  const [motivoBloqueio, setMotivoBloqueio] = useState('');
   const [blockContext, setBlockContext] = useState<
     { task_id: string; task_title: string; task_owner: string; block_reason: string }[]
   >([]);
@@ -584,6 +593,24 @@ const PlanoCard: React.FC<{
       descricao: '',
     });
     setShowAddTarefa(false);
+  };
+  const openBlockReasonModal = (tarefa: Tarefa) => {
+    onUpdateTarefa(tarefa.id, { status_tarefa: 'Bloqueada' });
+    setTarefaParaBloquear(tarefa);
+    setMotivoBloqueio(tarefa.bloqueio_motivo ?? '');
+  };
+  const closeBlockReasonModal = () => {
+    setTarefaParaBloquear(null);
+    setMotivoBloqueio('');
+  };
+  const confirmBlockReason = () => {
+    if (!tarefaParaBloquear) return;
+    const motivo = motivoBloqueio.trim();
+    onUpdateTarefa(tarefaParaBloquear.id, {
+      status_tarefa: 'Bloqueada',
+      bloqueio_motivo: motivo || undefined,
+    });
+    closeBlockReasonModal();
   };
 
   const W2H: Array<{ key: keyof PlanoDeAcao; label: string; sub: string; type: 'textarea' | 'input' | 'date' | 'resp' }> = [
@@ -826,6 +853,7 @@ const PlanoCard: React.FC<{
                         tarefa={t}
                         responsaveis={responsaveis}
                         onUpdate={(u) => onUpdateTarefa(t.id, u)}
+                        onRequestBlock={() => openBlockReasonModal(t)}
                         onRequestDelete={() => setTarefaParaExcluir(t)}
                         canWriteTarefa={canWriteTarefa}
                         canAssignTarefa={canAssignTarefa}
@@ -992,6 +1020,14 @@ const PlanoCard: React.FC<{
           </div>
         </Modal>
       )}
+      <TaskBlockReasonModal
+        isOpen={tarefaParaBloquear !== null}
+        taskTitle={tarefaParaBloquear?.titulo}
+        value={motivoBloqueio}
+        onChange={setMotivoBloqueio}
+        onClose={closeBlockReasonModal}
+        onConfirm={confirmBlockReason}
+      />
     </div>
   );
 };

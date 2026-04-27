@@ -204,10 +204,12 @@ export const ActionItemModal: React.FC<ActionItemModalProps> = ({
       : isBacklogLike
       ? 'Item Backlog'
       : null;
-  const slimFormSpacing = isBacklogLike ? 'space-y-3.5' : 'space-y-4';
-  const slimGridGap = isBacklogLike ? 'gap-3.5' : 'gap-4';
-  const descriptionRows = isBacklogLike ? 5 : 3;
-  const descriptionClassName = isBacklogLike
+  const slimFormSpacing = isEstrategicoKanban ? 'space-y-3' : isBacklogLike ? 'space-y-3.5' : 'space-y-4';
+  const slimGridGap = isEstrategicoKanban ? 'gap-3' : isBacklogLike ? 'gap-3.5' : 'gap-4';
+  const descriptionRows = isEstrategicoKanban ? 4 : isBacklogLike ? 5 : 3;
+  const descriptionClassName = isEstrategicoKanban
+    ? 'w-full bg-slate-800/50 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-300 placeholder:text-slate-500 outline-none focus:border-slate-600 resize-y min-h-[108px] md:min-h-[140px] disabled:opacity-60'
+    : isBacklogLike
     ? 'w-full bg-slate-800/50 border border-slate-700 rounded-lg px-3 py-2.5 text-sm text-slate-300 placeholder:text-slate-500 outline-none focus:border-slate-600 resize-y min-h-[128px] md:min-h-[168px] disabled:opacity-60'
     : 'w-full bg-slate-800/50 border border-slate-700 rounded-lg px-3 py-2.5 text-sm text-slate-300 placeholder:text-slate-500 outline-none focus:border-slate-600 resize-y min-h-[140px] md:min-h-[180px] disabled:opacity-60';
 
