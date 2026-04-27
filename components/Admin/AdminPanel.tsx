@@ -42,6 +42,7 @@ export const AdminPanel: React.FC = () => {
   const [estrategicoFiltrarKanbanPorWho, setEstrategicoFiltrarKanbanPorWho] = useState(false);
   const [backlogPermiteAlterarEmpresa, setBacklogPermiteAlterarEmpresa] = useState(false);
   const [backlogPermiteAlterarData, setBacklogPermiteAlterarData] = useState(false);
+  const [tarefaPermiteAlterarData, setTarefaPermiteAlterarData] = useState(false);
   const [loadingAppSettings, setLoadingAppSettings] = useState(true);
   const [removeModalUser, setRemoveModalUser] = useState<UserProfile | null>(null);
   const [removeAuditLoading, setRemoveAuditLoading] = useState(false);
@@ -97,12 +98,14 @@ export const AdminPanel: React.FC = () => {
           setEstrategicoFiltrarKanbanPorWho(s.estrategicoFiltrarKanbanPorWho);
           setBacklogPermiteAlterarEmpresa(Boolean(s.backlogPermiteAlterarEmpresa));
           setBacklogPermiteAlterarData(Boolean(s.backlogPermiteAlterarData));
+          setTarefaPermiteAlterarData(Boolean(s.tarefaPermiteAlterarData));
         }
       } catch {
         if (!cancelled) {
           setEstrategicoFiltrarKanbanPorWho(false);
           setBacklogPermiteAlterarEmpresa(false);
           setBacklogPermiteAlterarData(false);
+          setTarefaPermiteAlterarData(false);
         }
       } finally {
         if (!cancelled) setLoadingAppSettings(false);
@@ -728,6 +731,40 @@ export const AdminPanel: React.FC = () => {
                     <span className="block text-[11px] text-slate-500 mt-1 leading-relaxed">
                       Quando desativado, o campo de data no modal de backlog fica bloqueado. Quando ativado,
                       a data volta a ser editável na criação e edição do card.
+                    </span>
+                  </span>
+                </label>
+                <div className="my-4 border-t border-slate-800" />
+                <label className="flex items-start gap-3 cursor-pointer group">
+                  <input
+                    type="checkbox"
+                    className="mt-1 rounded border-slate-600 bg-slate-950 text-amber-600 focus:ring-amber-500/40"
+                    checked={tarefaPermiteAlterarData}
+                    disabled={loadingAppSettings}
+                    onChange={async (e) => {
+                      const next = e.target.checked;
+                      setTarefaPermiteAlterarData(next);
+                      setError('');
+                      try {
+                        await saveAppSettings({ tarefaPermiteAlterarData: next });
+                        setSuccess(
+                          next
+                            ? 'Tático configurado para permitir alterar o prazo das tarefas.'
+                            : 'Tático configurado para manter o prazo das tarefas bloqueado.',
+                        );
+                      } catch {
+                        setTarefaPermiteAlterarData(!next);
+                        setError('Não foi possível salvar a configuração. Verifique o Firestore e as regras de segurança.');
+                      }
+                    }}
+                  />
+                  <span>
+                    <span className="text-sm font-medium text-slate-200 group-hover:text-white transition-colors">
+                      Permitir alterar prazo das Tarefas (Tático)
+                    </span>
+                    <span className="block text-[11px] text-slate-500 mt-1 leading-relaxed">
+                      Quando desativado, o campo de prazo (data de vencimento) das tarefas no Tático fica somente leitura.
+                      Quando ativado, o prazo pode ser editado diretamente na linha da tarefa.
                     </span>
                   </span>
                 </label>

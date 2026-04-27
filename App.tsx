@@ -52,6 +52,7 @@ import { Toast, type ToastType } from './components/Shared/Toast';
 import { ChatView } from './components/Chat/ChatView';
 import { Modal } from './components/Shared/Modal';
 import { EstrategicoGridIcon } from './components/icons/EstrategicoGridIcon';
+import { VisibilityFilterBar, type VisibilityFilter } from './components/Shared/VisibilityFilterBar';
 
 function normKey(s: string | null | undefined): string {
   return (s ?? '').trim().toLowerCase();
@@ -105,6 +106,7 @@ function AppContent() {
   const [dashboardOpenConcluidas, setDashboardOpenConcluidas] = useState(false);
   const [tableOpenConcluidas, setTableOpenConcluidas] = useState(false);
   const [backlogOpenConcluidas, setBacklogOpenConcluidas] = useState(false);
+  const [backlogVisFilters, setBacklogVisFilters] = useState<VisibilityFilter[]>([]);
   const [quadroVerConcluidas, setQuadroVerConcluidas] = useState(false);
   const [focusPrioridadeId, setFocusPrioridadeId] = useState<string | null>(null);
   const focusedPrioridadeId = useRef<string | null>(null);
@@ -459,11 +461,26 @@ function AppContent() {
 
   const backlogViewItems = useMemo(() => {
     return items.filter((i) => {
+      // Regra de backlog: usuário enxerga apenas itens do workspace em foco
+      // OU itens criados por ele mesmo (mesmo que em outro workspace).
       if (matchWorkspaceStrict(i.empresa)) return true;
-      if (profile?.role === 'administrador') return true;
       return isCreatedByMe(i.created_by, i.who);
     });
-  }, [items, matchWorkspaceStrict, profile?.role, isCreatedByMe]);
+  }, [items, matchWorkspaceStrict, isCreatedByMe]);
+
+  const backlogViewItemsFiltrados = useMemo(() => {
+    if (backlogVisFilters.length === 0) return backlogViewItems;
+    return backlogViewItems.filter((item) => {
+      if (backlogVisFilters.includes('created') && isCreatedByMe(item.created_by, item.who)) return true;
+      if (backlogVisFilters.includes('assigned') && donoPrioridadeCorrespondeAoUsuario(
+        item.who,
+        myResponsavelIdsForBoard,
+        responsaveisParaAtribuicao,
+      )) return true;
+      // ActionItem não possui campo observadores; filtro "acompanho" não produz matches.
+      return false;
+    });
+  }, [backlogVisFilters, backlogViewItems, isCreatedByMe, myResponsavelIdsForBoard, responsaveisParaAtribuicao]);
 
   useEffect(() => {
     if (!isAuthenticated || !isFirebaseConfigured) {
@@ -539,8 +556,8 @@ function AppContent() {
   );
 
   const backlogViewItemsComPesquisa = useMemo(
-    () => filterActionItemsByHeaderSearch(backlogViewItems),
-    [backlogViewItems, filterActionItemsByHeaderSearch],
+    () => filterActionItemsByHeaderSearch(backlogViewItemsFiltrados),
+    [backlogViewItemsFiltrados, filterActionItemsByHeaderSearch],
   );
 
   /** Prioridade entra na lista mesmo com empresa “errada” se o usuário é dono, WHO de algum plano ou tem tarefa atribuída. */
@@ -980,6 +997,11 @@ function AppContent() {
     setPrioridadeToDelete(p);
   }, []);
 
+  const handleTaticoFocusConsumed = useCallback(() => {
+    focusedPrioridadeId.current = null;
+    setFocusPrioridadeId(null);
+  }, []);
+
   if (!isAuthenticated) return <UserLogin />;
 
   return (
@@ -1382,9 +1404,7 @@ function AppContent() {
                   loggedUserDisplayName={firebaseUser?.displayName ?? undefined}
                   focusPrioridadeId={focusPrioridadeId}
                   focusCardId={focusedPrioridadeId.current}
-                  onFocusConsumed={() => {
-                    focusedPrioridadeId.current = null;
-                  }}
+                  onFocusConsumed={handleTaticoFocusConsumed}
                   onlyPrioridadeId={tableOnlyPrioridadeId}
                   onAddPlano={(p) =>
                     ritmo.addPlano({
@@ -1461,9 +1481,13 @@ function AppContent() {
                     tarefaWrite: perm.operacional.tarefaWrite,
                     tarefaAssign: perm.operacional.tarefaAssign || perm.operacional.tarefaWrite,
                     tarefaDelete: perm.operacional.tarefaDelete,
+                    tarefaEditPrazo: appSettings.tarefaPermiteAlterarData,
                     observerEdit: perm.operacional.observerEdit,
                   }}
                 />
+              )}
+              {activeView === 'backlog' && (
+                <VisibilityFilterBar active={backlogVisFilters} onChange={setBacklogVisFilters} />
               )}
               {activeView === 'backlog' && (
                 <BacklogView
@@ -1759,7 +1783,7 @@ function AppContent() {
             <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
             Conectado
           </div>
-          <span>MAVO 2.0.4</span>
+          <span>MAVO 2.0.5</span>
         </footer>
       </main>
     </div>

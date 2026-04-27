@@ -1,4 +1,5 @@
 import React, { useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 
 interface ModalProps {
@@ -42,8 +43,8 @@ export const Modal: React.FC<ModalProps> = ({
 
   if (!isOpen) return null;
 
-  return (
-<div
+  return createPortal((
+    <div
         className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4"
         role="dialog"
         aria-modal="true"
@@ -74,5 +75,5 @@ export const Modal: React.FC<ModalProps> = ({
         <div className="flex-1 overflow-y-auto overflow-x-hidden min-h-0 p-4 sm:p-5">{children}</div>
       </div>
     </div>
-  );
+  ), document.body);
 };

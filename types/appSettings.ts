@@ -19,4 +19,9 @@ export interface AppSettings {
    * Quando false: a data fica bloqueada no Backlog, usando o valor padrão do sistema.
    */
   backlogPermiteAlterarData: boolean;
+  /**
+   * Quando true: usuários podem alterar o prazo (data de vencimento) das tarefas no Tático.
+   * Quando false: o campo prazo fica somente leitura.
+   */
+  tarefaPermiteAlterarData: boolean;
 }

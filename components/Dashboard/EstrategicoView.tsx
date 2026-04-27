@@ -128,6 +128,8 @@ export interface EstrategicoCaps {
   /** Pode escolher outro responsável na tarefa (senão só a si). */
   tarefaAssign?: boolean;
   tarefaDelete?: boolean;
+  /** Quando true, permite editar o prazo (data de vencimento) da tarefa diretamente na linha. */
+  tarefaEditPrazo?: boolean;
   /** Pode adicionar/remover observadores no Tático. */
   observerEdit?: boolean;
 }
@@ -173,29 +175,40 @@ const TarefaRow: React.FC<{
   tarefa: Tarefa;
   responsaveis: Responsavel[];
   onUpdate: (u: Partial<Tarefa>) => void;
-  onDeleteTarefa: () => void;
+  /**
+   * Pede ao parent (PlanoCard) que abra o modal de confirmação.
+   * NUNCA renderizamos o Modal aqui dentro: o JSX da TarefaRow é filho de
+   * <tbody>, e React/HTML não permite <div> nesse contexto. Mesmo com portal,
+   * a checagem dispara warning de hidratação. Lift state up.
+   */
+  onRequestDelete: () => void;
   canWriteTarefa?: boolean;
   canAssignTarefa?: boolean;
   canDeleteTarefa?: boolean;
+  canEditPrazo?: boolean;
   allUsers: Array<{ id: string; label: string }>;
   onAddObserver?: (entity: 'prioridade' | 'plano' | 'tarefa', entityId: string, userId: string) => void;
   onRemoveObserver?: (entity: 'prioridade' | 'plano' | 'tarefa', entityId: string, userId: string) => void;
   canEditObservers?: boolean;
+  perfisCadastro?: UserProfile[] | null;
 }> = ({
   tarefa,
   responsaveis,
   onUpdate,
-  onDeleteTarefa,
+  onRequestDelete,
   canWriteTarefa = true,
   canAssignTarefa = true,
   canDeleteTarefa = true,
+  canEditPrazo = false,
   allUsers,
   onAddObserver,
   onRemoveObserver,
   canEditObservers = true,
+  perfisCadastro,
 }) => {
-  const [confirmDelete, setConfirmDelete] = useState(false);
   const [showObservers, setShowObservers] = useState(false);
+  const [editingTitulo, setEditingTitulo] = useState(false);
+  const [tituloInput, setTituloInput] = useState(tarefa.titulo);
   const byAllUsers = allUsers.find((u) => normStr(u.id) === normStr(tarefa.responsavel_id));
   const resp = responsaveis.find(
     (r) =>
@@ -219,7 +232,10 @@ const TarefaRow: React.FC<{
               const order: StatusTarefa[] = ['Pendente', 'EmExecucao', 'Bloqueada', 'Concluida'];
               const idx = order.indexOf(tarefa.status_tarefa);
               const next = order[(idx + 1) % order.length];
-              onUpdate({ status_tarefa: next });
+              onUpdate({
+                status_tarefa: next,
+                ...(next === 'Concluida' ? { data_conclusao: Date.now() } : {}),
+              });
             }}
             className="mt-0.5 shrink-0 text-slate-500 hover:text-slate-200 disabled:opacity-40 disabled:pointer-events-none"
           >
@@ -237,9 +253,32 @@ const TarefaRow: React.FC<{
             />
           </button>
           <div className="min-w-0">
-            <p className={`text-sm font-medium ${tarefa.status_tarefa === 'Concluida' ? 'line-through text-slate-500' : 'text-slate-200'}`}>
-              {tarefa.titulo}
-            </p>
+            {canWriteTarefa && editingTitulo ? (
+              <input
+                autoFocus
+                className="w-full bg-slate-800 border border-slate-600 rounded px-2 py-0.5 text-sm font-medium text-slate-100 outline-none focus:border-blue-500"
+                value={tituloInput}
+                onChange={(e) => setTituloInput(e.target.value)}
+                onBlur={() => {
+                  const v = tituloInput.trim();
+                  if (v && v !== tarefa.titulo) onUpdate({ titulo: v });
+                  else setTituloInput(tarefa.titulo);
+                  setEditingTitulo(false);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') { e.currentTarget.blur(); }
+                  if (e.key === 'Escape') { setTituloInput(tarefa.titulo); setEditingTitulo(false); }
+                }}
+              />
+            ) : (
+              <p
+                className={`text-sm font-medium ${tarefa.status_tarefa === 'Concluida' ? 'line-through text-slate-500' : 'text-slate-200'} ${canWriteTarefa ? 'cursor-text hover:text-blue-300 transition-colors' : ''}`}
+                onClick={() => { if (canWriteTarefa) { setTituloInput(tarefa.titulo); setEditingTitulo(true); } }}
+                title={canWriteTarefa ? 'Clique para editar o nome da tarefa' : undefined}
+              >
+                {tarefa.titulo}
+              </p>
+            )}
             {tarefa.descricao && <p className="text-[11px] text-slate-500 mt-0.5 truncate max-w-[280px]">{tarefa.descricao}</p>}
             {tarefa.status_tarefa === 'Bloqueada' && tarefa.bloqueio_motivo && (
               <p className="text-[11px] text-red-400/80 mt-0.5 flex items-center gap-1">
@@ -275,16 +314,35 @@ const TarefaRow: React.FC<{
         </div>
       </td>
       <td className="px-4 py-3">
-        <span className={`text-xs flex items-center gap-1 ${isOverdue ? 'text-red-400 font-medium' : 'text-slate-400'}`}>
-          {isOverdue && <AlertTriangle size={10} />}
-          {fmtDate(tarefa.data_vencimento)}
-        </span>
+        {canEditPrazo && canWriteTarefa ? (
+          <input
+            type="date"
+            className="bg-slate-800 border border-slate-700 rounded px-2 py-0.5 text-xs text-slate-200 outline-none focus:border-blue-500 cursor-pointer"
+            value={dateInputValue(tarefa.data_vencimento)}
+            onChange={(e) => {
+              const ts = tsFromDateInput(e.target.value);
+              if (ts && !isNaN(ts)) onUpdate({ data_vencimento: ts });
+            }}
+          />
+        ) : (
+          <span className={`text-xs flex items-center gap-1 ${isOverdue ? 'text-red-400 font-medium' : 'text-slate-400'}`}>
+            {isOverdue && <AlertTriangle size={10} />}
+            {fmtDate(tarefa.data_vencimento)}
+          </span>
+        )}
       </td>
       <td className="px-4 py-3">
-        <div className="flex items-center gap-2">
+        <div className="flex flex-col gap-1">
+          <div className="flex items-center gap-2">
           <select
             value={tarefa.status_tarefa}
-            onChange={(e) => onUpdate({ status_tarefa: e.target.value as StatusTarefa })}
+            onChange={(e) => {
+              const next = e.target.value as StatusTarefa;
+              onUpdate({
+                status_tarefa: next,
+                ...(next === 'Concluida' ? { data_conclusao: Date.now() } : {}),
+              });
+            }}
             disabled={!canWriteTarefa}
             className="text-[10px] font-semibold px-2 py-1 rounded-sm uppercase bg-slate-800 border border-slate-700 text-slate-200 outline-none focus:border-slate-500 disabled:opacity-50"
           >
@@ -306,13 +364,20 @@ const TarefaRow: React.FC<{
           >
             <Eye size={13} />
           </button>
+          </div>
+          {tarefa.status_tarefa === 'Concluida' && tarefa.data_conclusao && (
+            <span className="inline-flex items-center gap-1 text-[10px] text-emerald-300/70">
+              <Calendar size={9} />
+              {fmtDate(tarefa.data_conclusao)}
+            </span>
+          )}
         </div>
       </td>
       <td className="px-2 py-3 text-right w-16">
         {canDeleteTarefa && (
           <button
             type="button"
-            onClick={() => setConfirmDelete(true)}
+            onClick={onRequestDelete}
             className="p-1.5 rounded text-slate-600 hover:text-red-400 hover:bg-red-500/10 transition-colors"
             title="Excluir tarefa"
           >
@@ -339,21 +404,6 @@ const TarefaRow: React.FC<{
           />
         </td>
       </tr>
-    )}
-    {confirmDelete && (
-      <Modal isOpen onClose={() => setConfirmDelete(false)} title="Remover item" maxWidth="sm">
-        <div className="space-y-4 text-sm text-slate-200">
-          <p>Tem certeza que deseja excluir este item? Esta ação não pode ser desfeita.</p>
-          <div className="flex justify-end gap-2 pt-2">
-            <button type="button" onClick={() => setConfirmDelete(false)} className="px-4 py-2 text-xs font-medium text-slate-300 border border-slate-600 rounded-lg hover:bg-slate-800">
-              Cancelar
-            </button>
-            <button type="button" onClick={() => { onDeleteTarefa(); setConfirmDelete(false); }} className="px-4 py-2 text-xs font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg">
-              Remover
-            </button>
-          </div>
-        </div>
-      </Modal>
     )}
     </>
   );
@@ -385,6 +435,7 @@ const PlanoCard: React.FC<{
   canWriteTarefa?: boolean;
   canAssignTarefa?: boolean;
   canDeleteTarefa?: boolean;
+  canEditPrazo?: boolean;
   /** Dono da prioridade pai (para filtrar tarefas no perfil do executante) */
   prioridadeDonoId?: string;
   viewerIsAdmin?: boolean;
@@ -414,6 +465,7 @@ const PlanoCard: React.FC<{
   canWriteTarefa = true,
   canAssignTarefa = true,
   canDeleteTarefa = true,
+  canEditPrazo = false,
   prioridadeDonoId = '',
   viewerIsAdmin = true,
   viewerMyResponsavelIds,
@@ -430,6 +482,12 @@ const PlanoCard: React.FC<{
   const [showAddTarefa, setShowAddTarefa] = useState(false);
   const [showPlanoObservers, setShowPlanoObservers] = useState(false);
   const [confirmDeletePlano, setConfirmDeletePlano] = useState(false);
+  // Estado de confirmação de exclusão de tarefa fica AQUI (no PlanoCard) e não
+  // dentro de TarefaRow. Motivo: TarefaRow renderiza dentro de <tbody>; um
+  // <Modal> ali (mesmo via portal) dispara warning de validateDOMNesting do
+  // React, e em alguns casos o clique do botão fica capturado pelo <tr>,
+  // impedindo a exclusão. Lift state up resolve ambos os problemas.
+  const [tarefaParaExcluir, setTarefaParaExcluir] = useState<Tarefa | null>(null);
   const [blockContext, setBlockContext] = useState<
     { task_id: string; task_title: string; task_owner: string; block_reason: string }[]
   >([]);
@@ -644,7 +702,15 @@ const PlanoCard: React.FC<{
                     <textarea
                       key={`${plano.id}-${key}`}
                       defaultValue={(plano[key] as string) || ''}
-                      onBlur={canWritePlano ? (e) => onUpdate({ [key]: e.target.value }) : undefined}
+                      onBlur={
+                        canWritePlano
+                          ? (e) => {
+                              const value = e.target.value;
+                              const current = String((plano[key] as string) || '');
+                              if (value !== current) onUpdate({ [key]: value });
+                            }
+                          : undefined
+                      }
                       readOnly={!canWritePlano}
                       disabled={!canWritePlano}
                       rows={2}
@@ -655,7 +721,15 @@ const PlanoCard: React.FC<{
                     <input
                       key={`${plano.id}-${key}`}
                       defaultValue={(plano[key] as string) || ''}
-                      onBlur={canWritePlano ? (e) => onUpdate({ [key]: e.target.value }) : undefined}
+                      onBlur={
+                        canWritePlano
+                          ? (e) => {
+                              const value = e.target.value;
+                              const current = String((plano[key] as string) || '');
+                              if (value !== current) onUpdate({ [key]: value });
+                            }
+                          : undefined
+                      }
                       readOnly={!canWritePlano}
                       disabled={!canWritePlano}
                       className="w-full bg-transparent text-sm text-slate-200 outline-none border-b border-transparent focus:border-slate-600 transition-colors py-0.5 placeholder:text-slate-700 disabled:opacity-60"
@@ -669,7 +743,7 @@ const PlanoCard: React.FC<{
                         canWritePlano
                           ? (e) => {
                               const parsed = parseDateBR(e.target.value);
-                              if (parsed) onUpdate({ when_fim: parsed });
+                              if (parsed && parsed !== plano.when_fim) onUpdate({ when_fim: parsed });
                             }
                           : undefined
                       }
@@ -752,14 +826,16 @@ const PlanoCard: React.FC<{
                         tarefa={t}
                         responsaveis={responsaveis}
                         onUpdate={(u) => onUpdateTarefa(t.id, u)}
-                        onDeleteTarefa={() => onDeleteTarefa(t.id)}
+                        onRequestDelete={() => setTarefaParaExcluir(t)}
                         canWriteTarefa={canWriteTarefa}
                         canAssignTarefa={canAssignTarefa}
                         canDeleteTarefa={canDeleteTarefa}
+                        canEditPrazo={canEditPrazo}
                         allUsers={allUsers}
                         onAddObserver={onAddObserver}
                         onRemoveObserver={onRemoveObserver}
                         canEditObservers={canEditObservers}
+                        perfisCadastro={perfisCadastro}
                       />
                     ))}
                   </tbody>
@@ -846,12 +922,72 @@ const PlanoCard: React.FC<{
         </div>
       )}
       {confirmDeletePlano && (
-        <Modal isOpen onClose={() => setConfirmDeletePlano(false)} title="Remover item" maxWidth="sm">
-          <div className="space-y-4 text-sm text-slate-200">
-            <p>Tem certeza que deseja excluir este item? Esta ação não pode ser desfeita.</p>
-            <div className="flex justify-end gap-2 pt-2">
-              <button type="button" onClick={() => setConfirmDeletePlano(false)} className="px-4 py-2 text-xs font-medium text-slate-300 border border-slate-600 rounded-lg hover:bg-slate-800">Cancelar</button>
-              <button type="button" onClick={() => { onDelete(); setConfirmDeletePlano(false); }} className="px-4 py-2 text-xs font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg">Remover</button>
+        <Modal isOpen onClose={() => setConfirmDeletePlano(false)} title="Excluir plano" maxWidth="sm">
+          <div className="space-y-4">
+            <div className="flex items-start gap-3 rounded-lg border border-red-500/30 bg-red-500/10 p-3">
+              <AlertTriangle size={16} className="mt-0.5 text-red-300 shrink-0" />
+              <p className="text-sm text-slate-200">
+                Tem certeza que deseja excluir o plano{' '}
+                <span className="font-semibold text-white">&quot;{plano.titulo}&quot;</span>?
+                Esta ação não pode ser desfeita.
+              </p>
+            </div>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setConfirmDeletePlano(false)}
+                className="px-4 py-2 rounded-lg border border-slate-600 text-xs font-medium text-slate-300 hover:bg-slate-800 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => { onDelete(); setConfirmDeletePlano(false); }}
+                className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-xs font-semibold text-white transition-colors"
+              >
+                Excluir
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+      {tarefaParaExcluir && (
+        <Modal
+          isOpen
+          onClose={() => setTarefaParaExcluir(null)}
+          title="Excluir tarefa"
+          maxWidth="sm"
+        >
+          <div className="space-y-4">
+            <div className="flex items-start gap-3 rounded-lg border border-red-500/30 bg-red-500/10 p-3">
+              <AlertTriangle size={16} className="mt-0.5 text-red-300 shrink-0" />
+              <p className="text-sm text-slate-200">
+                Tem certeza que deseja excluir a tarefa{' '}
+                <span className="font-semibold text-white">&quot;{tarefaParaExcluir.titulo}&quot;</span>?
+                Esta ação não pode ser desfeita.
+              </p>
+            </div>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setTarefaParaExcluir(null)}
+                className="px-4 py-2 rounded-lg border border-slate-600 text-xs font-medium text-slate-300 hover:bg-slate-800 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  // Capturamos o id antes de fechar pra não perder a referência
+                  // caso o estado seja zerado antes da chamada (paranoia).
+                  const idParaExcluir = tarefaParaExcluir.id;
+                  setTarefaParaExcluir(null);
+                  onDeleteTarefa(idParaExcluir);
+                }}
+                className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-xs font-semibold text-white transition-colors"
+              >
+                Excluir
+              </button>
             </div>
           </div>
         </Modal>
@@ -1513,55 +1649,33 @@ export const EstrategicoView: React.FC<EstrategicoViewProps> = (props) => {
 
   const loggedUserResponsavelNomeDisplay = loggedUserName ?? '';
 
-  const filteredPrioridades = useMemo(() => {
-    if (seesAllPrioridades) return prioridades;
-    if (myResponsavelIds.size > 0) {
-      const prioIds = new Set<string>();
-      for (const p of prioridades) {
-        if (
-          donoPrioridadeCorrespondeAoUsuario(p.dono_id, myResponsavelIds, responsaveis) ||
-          canViewByOwnershipOrObserver([p.dono_id], p.observadores, myResponsavelIds, responsaveis)
-        ) {
-          prioIds.add(p.id);
-        }
-      }
-      for (const pl of planos) {
-        if (
-          donoPrioridadeCorrespondeAoUsuario(pl.who_id, myResponsavelIds, responsaveis) ||
-          canViewByOwnershipOrObserver([pl.who_id], pl.observadores, myResponsavelIds, responsaveis)
-        ) {
-          prioIds.add(pl.prioridade_id);
-        }
-      }
-      for (const t of tarefas) {
-        if (
-          !tarefaAtribuidaAoUsuario(t, myResponsavelIds, responsaveis) &&
-          !canViewByOwnershipOrObserver([t.responsavel_id], t.observadores, myResponsavelIds, responsaveis)
-        ) continue;
-        const pl = planos.find((p) => p.id === t.plano_id);
-        if (pl) prioIds.add(pl.prioridade_id);
-      }
-      return prioridades.filter((p) => prioIds.has(p.id));
-    }
-    const uid = normStr(loggedUserUid ?? '');
-    if (!uid) return [];
-    // Fallback: evita "sumir tudo" quando o mapeamento de responsável ainda não carregou.
-    return prioridades.filter((p) => {
-      if (normStr(p.created_by) === uid) return true;
-      return planos.some((pl) => {
-        if (pl.prioridade_id !== p.id) return false;
-        if (normStr(pl.created_by) === uid) return true;
-        return tarefas.some((t) => t.plano_id === pl.id && normStr(t.created_by) === uid);
-      });
-    });
-  }, [prioridades, seesAllPrioridades, myResponsavelIds, tarefas, planos, responsaveis, loggedUserUid]);
+  /**
+   * As prioridades chegam aqui já filtradas por workspace e por visibilidade
+   * (criador / dono / observador / planos atribuídos / tarefas atribuídas) no `App.tsx`.
+   * Filtrar de novo aqui sem considerar `created_by` causava sumiço dos planos
+   * recém-criados após refresh. Mantemos apenas a passthrough — os filtros
+   * visuais "lançados por mim / atribuídos / acompanho" continuam aplicados em `ativas`.
+   */
+  const filteredPrioridades = useMemo(() => prioridades, [prioridades]);
 
   const ativas = useMemo(() => {
     let list = filteredPrioridades.filter((p) => p.status_prioridade !== 'Concluido');
     if (!seesAllPrioridades && myResponsavelIds.size > 0) {
       list = list.filter((p) => {
         const uid = normStr(loggedUserUid ?? '');
-        const lanzadosPorMim = !!uid && normStr(p.created_by) === uid;
+        // "Lançado por mim" inclui prioridade, plano OU tarefa criados por mim
+        // (evita sumir prioridade onde só criei plano/tarefa para outra pessoa).
+        const lanzadosPorMim =
+          !!uid &&
+          (normStr(p.created_by) === uid ||
+            planos.some(
+              (pl) => pl.prioridade_id === p.id && normStr(pl.created_by) === uid,
+            ) ||
+            tarefas.some((t) => {
+              if (normStr(t.created_by) !== uid) return false;
+              const pl = planos.find((x) => x.id === t.plano_id);
+              return pl?.prioridade_id === p.id;
+            }));
 
         const atribuidoParaMim =
           donoPrioridadeCorrespondeAoUsuario(p.dono_id, myResponsavelIds, responsaveis) ||

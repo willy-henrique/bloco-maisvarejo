@@ -79,6 +79,7 @@ export type OperacionalCaps = {
   tarefaWrite?: boolean;
   tarefaAssign?: boolean;
   tarefaDelete?: boolean;
+  tarefaEditPrazo?: boolean;
   observerEdit?: boolean;
 };
 
@@ -113,6 +114,7 @@ const TarefaRow: React.FC<{
   canWriteTarefa?: boolean;
   canAssignTarefa?: boolean;
   canDeleteTarefa?: boolean;
+  canEditPrazo?: boolean;
   canEditObservers?: boolean;
   allUsers: Array<{ id: string; label: string }>;
   onAddObserver?: (entity: 'prioridade' | 'plano' | 'tarefa', entityId: string, userId: string) => void;
@@ -125,12 +127,15 @@ const TarefaRow: React.FC<{
   canWriteTarefa = true,
   canAssignTarefa = true,
   canDeleteTarefa = true,
+  canEditPrazo = false,
   canEditObservers = true,
   allUsers,
   onAddObserver,
   onRemoveObserver,
 }) => {
   const [showObservers, setShowObservers] = useState(false);
+  const [editingTitulo, setEditingTitulo] = useState(false);
+  const [tituloInput, setTituloInput] = useState(tarefa.titulo);
   const byAllUsers = allUsers.find((u) => normStr(u.id) === normStr(tarefa.responsavel_id));
   const resp = responsaveis.find(
     (r) =>
@@ -155,7 +160,10 @@ const TarefaRow: React.FC<{
             onClick={() => {
               const idx = TAREFA_ORDER.indexOf(tarefa.status_tarefa);
               const next = TAREFA_ORDER[(idx + 1) % TAREFA_ORDER.length];
-              onUpdate({ status_tarefa: next });
+              onUpdate({
+                status_tarefa: next,
+                ...(next === 'Concluida' ? { data_conclusao: Date.now() } : {}),
+              });
             }}
             className="mt-0.5 shrink-0 text-slate-500 hover:text-slate-200 disabled:opacity-40 disabled:pointer-events-none"
             title="Alternar status"
@@ -172,9 +180,32 @@ const TarefaRow: React.FC<{
             />
           </button>
           <div className="min-w-0">
-            <p className={`text-sm font-medium ${tarefa.status_tarefa === 'Concluida' ? 'line-through text-slate-500' : 'text-slate-200'}`}>
-              {tarefa.titulo}
-            </p>
+            {canWriteTarefa && editingTitulo ? (
+              <input
+                autoFocus
+                className="w-full bg-slate-800 border border-slate-600 rounded px-2 py-0.5 text-sm font-medium text-slate-100 outline-none focus:border-blue-500"
+                value={tituloInput}
+                onChange={(e) => setTituloInput(e.target.value)}
+                onBlur={() => {
+                  const v = tituloInput.trim();
+                  if (v && v !== tarefa.titulo) onUpdate({ titulo: v });
+                  else setTituloInput(tarefa.titulo);
+                  setEditingTitulo(false);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') { e.currentTarget.blur(); }
+                  if (e.key === 'Escape') { setTituloInput(tarefa.titulo); setEditingTitulo(false); }
+                }}
+              />
+            ) : (
+              <p
+                className={`text-sm font-medium ${tarefa.status_tarefa === 'Concluida' ? 'line-through text-slate-500' : 'text-slate-200'} ${canWriteTarefa ? 'cursor-text hover:text-blue-300 transition-colors' : ''}`}
+                onClick={() => { if (canWriteTarefa) { setTituloInput(tarefa.titulo); setEditingTitulo(true); } }}
+                title={canWriteTarefa ? 'Clique para editar o nome da tarefa' : undefined}
+              >
+                {tarefa.titulo}
+              </p>
+            )}
             {tarefa.descricao && tarefa.descricao.trim() !== '' && (
               <p className="text-[11px] text-slate-500 mt-0.5 truncate max-w-[280px]">{tarefa.descricao}</p>
             )}
@@ -218,16 +249,35 @@ const TarefaRow: React.FC<{
         </div>
       </td>
       <td className="px-4 py-3">
-        <span className={`text-xs flex items-center gap-1 ${isOverdue ? 'text-red-400 font-medium' : 'text-slate-400'}`}>
-          {isOverdue && <AlertTriangle size={10} />}
-          {fmtDate(tarefa.data_vencimento)}
-        </span>
+        {canEditPrazo && canWriteTarefa ? (
+          <input
+            type="date"
+            className="bg-slate-800 border border-slate-700 rounded px-2 py-0.5 text-xs text-slate-200 outline-none focus:border-blue-500 cursor-pointer"
+            value={dateInputValue(tarefa.data_vencimento)}
+            onChange={(e) => {
+              const ts = tsFromDateInput(e.target.value);
+              if (ts && !isNaN(ts)) onUpdate({ data_vencimento: ts });
+            }}
+          />
+        ) : (
+          <span className={`text-xs flex items-center gap-1 ${isOverdue ? 'text-red-400 font-medium' : 'text-slate-400'}`}>
+            {isOverdue && <AlertTriangle size={10} />}
+            {fmtDate(tarefa.data_vencimento)}
+          </span>
+        )}
       </td>
       <td className="px-4 py-3">
-        <div className="flex items-center gap-2">
+        <div className="flex flex-col gap-1">
+          <div className="flex items-center gap-2">
           <select
             value={tarefa.status_tarefa}
-            onChange={(e) => onUpdate({ status_tarefa: e.target.value as StatusTarefa })}
+            onChange={(e) => {
+              const next = e.target.value as StatusTarefa;
+              onUpdate({
+                status_tarefa: next,
+                ...(next === 'Concluida' ? { data_conclusao: Date.now() } : {}),
+              });
+            }}
             disabled={!canWriteTarefa}
             className="text-[10px] font-semibold px-2 py-1 rounded-sm uppercase bg-slate-800 border border-slate-700 text-slate-200 outline-none focus:border-slate-500 disabled:opacity-50"
           >
@@ -249,6 +299,13 @@ const TarefaRow: React.FC<{
           >
             <Eye size={13} />
           </button>
+          </div>
+          {tarefa.status_tarefa === 'Concluida' && tarefa.data_conclusao && (
+            <span className="inline-flex items-center gap-1 text-[10px] text-blue-300/70">
+              <Calendar size={9} />
+              {fmtDate(tarefa.data_conclusao)}
+            </span>
+          )}
         </div>
       </td>
       <td className="px-2 py-3 text-right w-16">
@@ -306,6 +363,7 @@ const OperacionalPlanoCard: React.FC<{
   canWriteTarefa?: boolean;
   canAssignTarefa?: boolean;
   canDeleteTarefa?: boolean;
+  canEditPrazo?: boolean;
   canEditObservers?: boolean;
   allUsers: Array<{ id: string; label: string }>;
   onAddObserver?: (entity: 'prioridade' | 'plano' | 'tarefa', entityId: string, userId: string) => void;
@@ -328,6 +386,7 @@ const OperacionalPlanoCard: React.FC<{
   canWriteTarefa = true,
   canAssignTarefa = true,
   canDeleteTarefa = true,
+  canEditPrazo = false,
   canEditObservers = true,
   allUsers,
   onAddObserver,
@@ -645,6 +704,7 @@ const OperacionalPlanoCard: React.FC<{
                           canWriteTarefa={canWriteTarefa}
                           canAssignTarefa={canAssignTarefa}
                           canDeleteTarefa={canDeleteTarefa}
+                          canEditPrazo={canEditPrazo}
                           canEditObservers={canEditObservers}
                           allUsers={allUsers}
                           onAddObserver={onAddObserver}
@@ -694,6 +754,7 @@ const OperacionalPlanoCard: React.FC<{
                               canWriteTarefa={canWriteTarefa}
                               canAssignTarefa={canAssignTarefa}
                               canDeleteTarefa={canDeleteTarefa}
+                              canEditPrazo={canEditPrazo}
                               canEditObservers={canEditObservers}
                               allUsers={allUsers}
                               onAddObserver={onAddObserver}
@@ -840,6 +901,7 @@ export const OperacionalView: React.FC<OperacionalProps> = ({
     tarefaWrite: operacionalCaps?.tarefaWrite !== false,
     tarefaAssign: operacionalCaps?.tarefaAssign !== false,
     tarefaDelete: operacionalCaps?.tarefaDelete !== false,
+    tarefaEditPrazo: operacionalCaps?.tarefaEditPrazo === true,
     observerEdit: operacionalCaps?.observerEdit !== false,
   };
   const whoPool = whoUsers && whoUsers.length > 0 ? whoUsers : responsaveis;
@@ -1096,6 +1158,7 @@ export const OperacionalView: React.FC<OperacionalProps> = ({
                     canWriteTarefa={oc.tarefaWrite}
                     canAssignTarefa={oc.tarefaAssign}
                     canDeleteTarefa={oc.tarefaDelete}
+                    canEditPrazo={oc.tarefaEditPrazo}
                     canEditObservers={oc.observerEdit}
                     allUsers={observerPool.map((r) => ({ id: r.id, label: r.nome }))}
                     onAddObserver={onAddObserver}
@@ -1147,6 +1210,7 @@ export const OperacionalView: React.FC<OperacionalProps> = ({
                         canWriteTarefa={oc.tarefaWrite}
                         canAssignTarefa={oc.tarefaAssign}
                         canDeleteTarefa={oc.tarefaDelete}
+                        canEditPrazo={oc.tarefaEditPrazo}
                         canEditObservers={oc.observerEdit}
                         allUsers={observerPool.map((r) => ({ id: r.id, label: r.nome }))}
                         onAddObserver={onAddObserver}
@@ -1201,7 +1265,10 @@ export const OperacionalView: React.FC<OperacionalProps> = ({
                                   onClick={() => {
                                     const idx = TAREFA_ORDER.indexOf(t.status_tarefa);
                                     const next = TAREFA_ORDER[(idx + 1) % TAREFA_ORDER.length];
-                                    onUpdateTarefa(t.id, { status_tarefa: next });
+                                    onUpdateTarefa(t.id, {
+                                      status_tarefa: next,
+                                      ...(next === 'Concluida' ? { data_conclusao: Date.now() } : {}),
+                                    });
                                   }}
                                   className="mt-0.5 shrink-0 text-slate-500 hover:text-slate-200 disabled:opacity-40 disabled:pointer-events-none"
                                   title="Alternar status"
@@ -1239,7 +1306,13 @@ export const OperacionalView: React.FC<OperacionalProps> = ({
                               <div className="flex items-center gap-2">
                                 <select
                                   value={t.status_tarefa}
-                                  onChange={(e) => onUpdateTarefa(t.id, { status_tarefa: e.target.value as StatusTarefa })}
+                                  onChange={(e) => {
+                                    const next = e.target.value as StatusTarefa;
+                                    onUpdateTarefa(t.id, {
+                                      status_tarefa: next,
+                                      ...(next === 'Concluida' ? { data_conclusao: Date.now() } : {}),
+                                    });
+                                  }}
                                   disabled={!oc.tarefaWrite}
                                   className="text-[10px] font-semibold px-2 py-1 rounded-sm uppercase bg-slate-800 border border-slate-700 text-slate-200 outline-none focus:border-slate-500 disabled:opacity-50"
                                 >
@@ -1266,7 +1339,7 @@ export const OperacionalView: React.FC<OperacionalProps> = ({
                               </div>
                             </td>
                             <td className="px-4 py-3 text-slate-400">{pl?.titulo ?? '—'}</td>
-                            <td className="px-2 py-3 text-right">
+                            <td className="px-2 py-3 text-right w-16">
                               {oc.tarefaDelete && (
                                 <button
                                   type="button"
@@ -1354,7 +1427,10 @@ export const OperacionalView: React.FC<OperacionalProps> = ({
                                         onClick={() => {
                                           const idx = TAREFA_ORDER.indexOf(t.status_tarefa);
                                           const next = TAREFA_ORDER[(idx + 1) % TAREFA_ORDER.length];
-                                          onUpdateTarefa(t.id, { status_tarefa: next });
+                                          onUpdateTarefa(t.id, {
+                                            status_tarefa: next,
+                                            ...(next === 'Concluida' ? { data_conclusao: Date.now() } : {}),
+                                          });
                                         }}
                                         className="mt-0.5 shrink-0 text-slate-500 hover:text-slate-200 disabled:opacity-40 disabled:pointer-events-none"
                                         title="Alternar status"
@@ -1373,7 +1449,13 @@ export const OperacionalView: React.FC<OperacionalProps> = ({
                                     <div className="flex items-center gap-2">
                                       <select
                                         value={t.status_tarefa}
-                                        onChange={(e) => onUpdateTarefa(t.id, { status_tarefa: e.target.value as StatusTarefa })}
+                                        onChange={(e) => {
+                                          const next = e.target.value as StatusTarefa;
+                                          onUpdateTarefa(t.id, {
+                                            status_tarefa: next,
+                                            ...(next === 'Concluida' ? { data_conclusao: Date.now() } : {}),
+                                          });
+                                        }}
                                         disabled={!oc.tarefaWrite}
                                         className="text-[10px] font-semibold px-2 py-1 rounded-sm uppercase bg-slate-800 border border-slate-700 text-slate-200 outline-none focus:border-slate-500 disabled:opacity-50"
                                       >

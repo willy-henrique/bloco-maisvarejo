@@ -93,7 +93,10 @@ function secureCompare(a: string, b: string): boolean {
  */
 export async function exportKeyToBase64(key: CryptoKey): Promise<string> {
   const raw = await crypto.subtle.exportKey('raw', key);
-  return btoa(String.fromCharCode(...new Uint8Array(raw)));
+  const bytes = new Uint8Array(raw);
+  let binary = '';
+  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+  return btoa(binary);
 }
 
 /**
@@ -131,7 +134,9 @@ export async function encryptWithKey(data: string | object, key: CryptoKey): Pro
   const combined = new Uint8Array(iv.length + ciphertext.byteLength);
   combined.set(iv, 0);
   combined.set(new Uint8Array(ciphertext), iv.length);
-  return btoa(String.fromCharCode(...combined));
+  let binary = '';
+  for (let i = 0; i < combined.length; i++) binary += String.fromCharCode(combined[i]);
+  return btoa(binary);
 }
 
 /**

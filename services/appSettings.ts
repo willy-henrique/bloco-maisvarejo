@@ -9,6 +9,7 @@ const DEFAULTS: AppSettings = {
   estrategicoFiltrarKanbanPorWho: false,
   backlogPermiteAlterarEmpresa: false,
   backlogPermiteAlterarData: false,
+  tarefaPermiteAlterarData: false,
 };
 
 export function getDefaultAppSettings(): AppSettings {

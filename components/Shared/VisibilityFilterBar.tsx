@@ -12,9 +12,9 @@ export function VisibilityFilterBar({ active, onChange }: VisibilityFilterBarPro
     onChange(active.includes(f) ? active.filter((x) => x !== f) : [...active, f]);
 
   const chips: { id: VisibilityFilter; label: string }[] = [
-    { id: 'created', label: 'Criados por mim' },
-    { id: 'assigned', label: 'Atribuídos a mim' },
-    { id: 'observing', label: 'Acompanhados por mim' },
+    { id: 'created', label: 'lançados por mim' },
+    { id: 'assigned', label: 'atribuídos para mim' },
+    { id: 'observing', label: 'itens que eu acompanho' },
   ];
 
   return (

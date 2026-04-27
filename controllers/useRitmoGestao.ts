@@ -1,6 +1,12 @@
 /**
  * Controller do Sistema de Ritmo de Gestão.
  * Regras: máx 3 prioridades ativas, dono obrigatório, propagação de bloqueios (tarefa → plano → prioridade).
+ *
+ * Sincronização:
+ *  - `setBoard` com functional updater é a ÚNICA fonte de "prev" — evita ler ref stale.
+ *  - Subscribe handler faz merge dentro do updater (preserva extras locais ainda não ecoados).
+ *  - Persist é enfileirado (last-write-wins controlado pela aplicação) e idempotente.
+ *  - NUNCA escrevemos board vazio sobre dados existentes no Firestore (proteção anti-wipeout).
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -27,6 +33,107 @@ import {
 import { apiAddObserver, apiGetBlockContext, apiRemoveObserver } from '../services/ritmoCollabApi';
 
 const MAX_PRIORIDADES_ATIVAS = 3;
+const PENDING_DELETION_GUARD_MS = 15_000;
+
+type PendingDeletionBucket = 'backlog' | 'prioridades' | 'planos' | 'tarefas';
+type PendingDeletionRegistry = Record<PendingDeletionBucket, Map<string, number>>;
+type PendingDeletionSnapshot = Record<PendingDeletionBucket, Set<string>>;
+
+function createPendingDeletionRegistry(): PendingDeletionRegistry {
+  return {
+    backlog: new Map(),
+    prioridades: new Map(),
+    planos: new Map(),
+    tarefas: new Map(),
+  };
+}
+
+function emptyPendingDeletionSnapshot(): PendingDeletionSnapshot {
+  return {
+    backlog: new Set(),
+    prioridades: new Set(),
+    planos: new Set(),
+    tarefas: new Set(),
+  };
+}
+
+const EMPTY_PENDING_DELETIONS = emptyPendingDeletionSnapshot();
+
+function markPendingDeletion(
+  registry: PendingDeletionRegistry,
+  bucket: PendingDeletionBucket,
+  ids: Iterable<string>,
+  at = Date.now(),
+): void {
+  for (const rawId of ids) {
+    const id = String(rawId ?? '').trim();
+    if (!id) continue;
+    registry[bucket].set(id, at);
+  }
+}
+
+function snapshotPendingDeletions(
+  registry: PendingDeletionRegistry,
+  now = Date.now(),
+): PendingDeletionSnapshot {
+  const snapshot = emptyPendingDeletionSnapshot();
+  (Object.keys(registry) as PendingDeletionBucket[]).forEach((bucket) => {
+    registry[bucket].forEach((ts, id) => {
+      if (now - ts > PENDING_DELETION_GUARD_MS) {
+        registry[bucket].delete(id);
+        return;
+      }
+      snapshot[bucket].add(id);
+    });
+  });
+  return snapshot;
+}
+
+function acknowledgeRemotePendingDeletions(
+  registry: PendingDeletionRegistry,
+  remote: RitmoGestaoBoard,
+): void {
+  const remoteIds: PendingDeletionSnapshot = {
+    backlog: new Set(remote.backlog.map((item) => item.id)),
+    prioridades: new Set(remote.prioridades.map((item) => item.id)),
+    planos: new Set(remote.planos.map((item) => item.id)),
+    tarefas: new Set(remote.tarefas.map((item) => item.id)),
+  };
+  (Object.keys(registry) as PendingDeletionBucket[]).forEach((bucket) => {
+    registry[bucket].forEach((_ts, id) => {
+      if (!remoteIds[bucket].has(id)) registry[bucket].delete(id);
+    });
+  });
+}
+
+function filterBoardPendingDeletions(
+  board: RitmoGestaoBoard,
+  pending: PendingDeletionSnapshot = EMPTY_PENDING_DELETIONS,
+): RitmoGestaoBoard {
+  if (
+    pending.backlog.size === 0 &&
+    pending.prioridades.size === 0 &&
+    pending.planos.size === 0 &&
+    pending.tarefas.size === 0
+  ) {
+    return board;
+  }
+  return {
+    ...board,
+    backlog: board.backlog.filter((item) => !pending.backlog.has(item.id)),
+    prioridades: board.prioridades.filter((item) => !pending.prioridades.has(item.id)),
+    planos: board.planos.filter(
+      (item) =>
+        !pending.planos.has(item.id) &&
+        !pending.prioridades.has(item.prioridade_id),
+    ),
+    tarefas: board.tarefas.filter(
+      (item) =>
+        !pending.tarefas.has(item.id) &&
+        !pending.planos.has(item.plano_id),
+    ),
+  };
+}
 
 function defaultBoard(): RitmoGestaoBoard {
   return {
@@ -79,7 +186,19 @@ function normalizeBoard(raw: RitmoGestaoBoard | undefined | null): RitmoGestaoBo
       ? raw.planos.map((pl) => ({ ...pl, observadores: normalizeObservers((pl as PlanoDeAcao).observadores) }))
       : base.planos,
     tarefas: Array.isArray(raw.tarefas)
-      ? raw.tarefas.map((t) => ({ ...t, observadores: normalizeObservers((t as Tarefa).observadores) }))
+      ? raw.tarefas.map((t) => {
+          const tarefa = t as Tarefa;
+          const concluidaSemData =
+            tarefa.status_tarefa === 'Concluida' &&
+            (tarefa.data_conclusao === undefined || tarefa.data_conclusao === null);
+          return {
+            ...tarefa,
+            // Backfill defensivo: registros antigos concluídos podem não ter data_conclusao.
+            // Nesses casos usamos a melhor aproximação estável (data_vencimento) para exibição.
+            data_conclusao: concluidaSemData ? tarefa.data_vencimento : tarefa.data_conclusao,
+            observadores: normalizeObservers(tarefa.observadores),
+          };
+        })
       : base.tarefas,
     responsaveis:
       Array.isArray(raw.responsaveis) && raw.responsaveis.length > 0
@@ -153,9 +272,10 @@ function alinharPlanosWhoAoDonoMesclado(
 function mergeBoardRemotoComLocal(
   remote: RitmoGestaoBoard,
   local: RitmoGestaoBoard,
+  pending: PendingDeletionSnapshot = EMPTY_PENDING_DELETIONS,
 ): RitmoGestaoBoard {
-  const rNorm = normalizeBoard(remote);
-  const lNorm = normalizeBoard(local);
+  const rNorm = filterBoardPendingDeletions(normalizeBoard(remote), pending);
+  const lNorm = filterBoardPendingDeletions(normalizeBoard(local), pending);
   const rP = rNorm.prioridades;
   const mergedPrios = mergePrioridadesPreservandoDonoMaisRecente(rP, lNorm.prioridades);
   const mergedPrioIds = new Set(mergedPrios.map((p) => p.id));
@@ -170,11 +290,15 @@ function mergeBoardRemotoComLocal(
   const tarefaIds = new Set(rNorm.tarefas.map((t) => t.id));
   const extraTarefas = lNorm.tarefas.filter((t) => !tarefaIds.has(t.id));
 
+  const backlogIds = new Set(rNorm.backlog.map((b) => b.id));
+  const extraBacklog = lNorm.backlog.filter((b) => !backlogIds.has(b.id));
+
   const mergedEmpresas =
     Array.isArray(rNorm.empresas) && rNorm.empresas.length > 0 ? rNorm.empresas : lNorm.empresas;
 
   return normalizeBoard({
     ...rNorm,
+    backlog: [...rNorm.backlog, ...extraBacklog],
     empresas: mergedEmpresas,
     prioridades: allPrios,
     planos: mergedPlanos,
@@ -183,6 +307,89 @@ function mergeBoardRemotoComLocal(
       rNorm.responsaveis.length > 0 ? rNorm.responsaveis : lNorm.responsaveis,
   });
 }
+
+/**
+ * Mescla um snapshot remoto recebido no `onSnapshot` com o estado React atual (`prev`).
+ * Preserva itens locais que ainda não chegaram no remote (extras), garantindo que
+ * planos/tarefas recém-criados não sumam ao receber um eco antigo.
+ */
+function mergeRemoteSnapshotIntoPrev(
+  remote: RitmoGestaoBoard,
+  prev: RitmoGestaoBoard,
+  pending: PendingDeletionSnapshot = EMPTY_PENDING_DELETIONS,
+): RitmoGestaoBoard {
+  const rNorm = filterBoardPendingDeletions(normalizeBoard(remote), pending);
+  const prevNorm = filterBoardPendingDeletions(normalizeBoard(prev), pending);
+  const remotePrios = rNorm.prioridades;
+  const remotePlanos = rNorm.planos;
+  const remoteTarefas = rNorm.tarefas;
+  const remoteBacklog = rNorm.backlog;
+
+  const mergedPriosBase = mergePrioridadesPreservandoDonoMaisRecente(remotePrios, prevNorm.prioridades);
+  const mergedPrioIds = new Set(mergedPriosBase.map((p) => p.id));
+  const extraPrios = prevNorm.prioridades.filter((p) => !mergedPrioIds.has(p.id));
+  const mergedPrios = [...mergedPriosBase, ...extraPrios];
+
+  const mergedPlanosBase = alinharPlanosWhoAoDonoMesclado(remotePlanos, mergedPrios, remotePrios).map((rpl) => {
+    const lpl = prevNorm.planos.find((p) => p.id === rpl.id);
+    if (!lpl) return rpl;
+    const localObs = Array.isArray(lpl.observadores) ? lpl.observadores : [];
+    const remoteObs = Array.isArray(rpl.observadores) ? rpl.observadores : [];
+    return { ...rpl, observadores: localObs.length >= remoteObs.length ? localObs : remoteObs };
+  });
+  const mergedPlanoIds = new Set(mergedPlanosBase.map((pl) => pl.id));
+  const extraPlanos = prevNorm.planos.filter((pl) => !mergedPlanoIds.has(pl.id));
+  const mergedPlanos = [...mergedPlanosBase, ...extraPlanos];
+
+  const mergedTarefasBase = remoteTarefas.map((rt) => {
+    const lt = prevNorm.tarefas.find((t) => t.id === rt.id);
+    if (!lt) return rt;
+    const localObs = Array.isArray(lt.observadores) ? lt.observadores : [];
+    const remoteObs = Array.isArray(rt.observadores) ? rt.observadores : [];
+    return { ...rt, observadores: localObs.length >= remoteObs.length ? localObs : remoteObs };
+  });
+  const mergedTarefaIds = new Set(mergedTarefasBase.map((t) => t.id));
+  const extraTarefas = prevNorm.tarefas.filter((t) => !mergedTarefaIds.has(t.id));
+  const mergedTarefas = [...mergedTarefasBase, ...extraTarefas];
+
+  const mergedBacklogIds = new Set(remoteBacklog.map((b) => b.id));
+  const extraBacklog = prevNorm.backlog.filter((b) => !mergedBacklogIds.has(b.id));
+  const mergedBacklog = [...remoteBacklog, ...extraBacklog];
+
+  return normalizeBoard({
+    ...rNorm,
+    backlog: mergedBacklog,
+    empresas:
+      Array.isArray(rNorm.empresas) && rNorm.empresas.length > 0 ? rNorm.empresas : prev.empresas,
+    prioridades: mergedPrios,
+    planos: mergedPlanos,
+    tarefas: mergedTarefas,
+    responsaveis: rNorm.responsaveis.length > 0 ? rNorm.responsaveis : prev.responsaveis,
+  });
+}
+
+function boardItemCount(b: RitmoGestaoBoard): number {
+  return (
+    (Array.isArray(b.prioridades) ? b.prioridades.length : 0) +
+    (Array.isArray(b.planos) ? b.planos.length : 0) +
+    (Array.isArray(b.tarefas) ? b.tarefas.length : 0) +
+    (Array.isArray(b.backlog) ? b.backlog.length : 0)
+  );
+}
+
+function boardHasAnyContent(b: RitmoGestaoBoard): boolean {
+  return boardItemCount(b) > 0 || (Array.isArray(b.empresas) && b.empresas.length > 0);
+}
+
+/** Verdadeiro se `a` contém ao menos um item por dimensão a mais que `b`. */
+function boardHasMoreContentThan(a: RitmoGestaoBoard, b: RitmoGestaoBoard): boolean {
+  const aP = a.prioridades.length, bP = b.prioridades.length;
+  const aPl = a.planos.length, bPl = b.planos.length;
+  const aT = a.tarefas.length, bT = b.tarefas.length;
+  const aB = a.backlog.length, bB = b.backlog.length;
+  return aP > bP || aPl > bPl || aT > bT || aB > bB;
+}
+
 
 /** Propagação de bloqueio: tarefa bloqueada → plano bloqueado; plano bloqueado → prioridade bloqueada. */
 export function computeStatusPlano(planoId: string, tarefas: Tarefa[]): StatusPlano | null {
@@ -249,6 +456,46 @@ export function useRitmoGestao(encryptionKey: CryptoKey | null) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const unsubRef = useRef<(() => void) | null>(null);
+  const pendingDeletionsRef = useRef<PendingDeletionRegistry>(createPendingDeletionRegistry());
+  /**
+   * Espelho síncrono do `board`. Atualizado a cada commit React via useEffect,
+   * para uso estritamente READ-ONLY em handlers que precisem do estado fora de
+   * render (ex: callback de subscribe). NUNCA usar como "prev" para mutações:
+   * mutações sempre usam o updater funcional do `setBoard`, que garante prev
+   * fresco mesmo durante batching.
+   */
+  const latestBoardRef = useRef<RitmoGestaoBoard>(defaultBoard());
+  /**
+   * Marca timestamp do último write local. Usamos para distinguir "eco" do
+   * Firestore (snapshot que reflete nosso próprio write) de updates de outras
+   * sessões — evita reescrever em loop quando recebemos nosso próprio eco.
+   */
+  const lastLocalWriteAtRef = useRef<number>(0);
+  /**
+   * Indica se o load inicial já completou. Antes disso, ignoramos certos
+   * side-effects (ex: enqueue de re-persist) para evitar reescrever o Firestore
+   * com estado parcial durante o boot.
+   */
+  const initialLoadedRef = useRef<boolean>(false);
+  /**
+   * Fila de escrita: garante que escritas no Firestore aconteçam em ordem
+   * (last-write-wins controlado pela aplicação, evitando race condition em rede).
+   * Sempre escreve `pendingPersistRef.current`, que é o último alvo enfileirado.
+   */
+  const persistChainRef = useRef<Promise<void>>(Promise.resolve());
+  const pendingPersistRef = useRef<RitmoGestaoBoard | null>(null);
+  /**
+   * Ref espelho de `encryptionKey`. Atualizado sincronicamente a cada render para
+   * que callbacks estabilizados (saveBoard) sempre leiam a chave atual, evitando
+   * closures stale quando componentes filhos memorizam callbacks do ritmo.
+   */
+  const encryptionKeyRef = useRef<CryptoKey | null>(encryptionKey);
+  encryptionKeyRef.current = encryptionKey;
+
+  // Mantém o ref espelhado com o estado committed do React.
+  useEffect(() => {
+    latestBoardRef.current = board;
+  }, [board]);
 
   const persist = useCallback(
     async (key: CryptoKey, data: RitmoGestaoBoard) => {
@@ -256,6 +503,41 @@ export function useRitmoGestao(encryptionKey: CryptoKey | null) {
       if (isFirebaseConfigured) await saveRitmoBoardFirestore(data, key);
     },
     []
+  );
+
+  /**
+   * Enfileira uma persistência. Sempre persiste o último alvo enfileirado;
+   * intermediários são descartados se um novo write chegar antes da fila esvaziar.
+   * Idempotente: chamar 2x com a mesma referência apenas atualiza pendingPersistRef.
+   *
+   * IMPORTANTE: erros são LOGADOS (não silenciados) para evitar bugs invisíveis
+   * — já tivemos um caso de RangeError em String.fromCharCode(...) que ficou
+   * mascarado por try/catch silencioso, fazendo planos aparecerem na UI mas
+   * nunca serem salvos no Firestore.
+   */
+  const enqueuePersist = useCallback(
+    (key: CryptoKey, data: RitmoGestaoBoard) => {
+      pendingPersistRef.current = data;
+      const run = async () => {
+        const target = pendingPersistRef.current;
+        if (!target) return;
+        pendingPersistRef.current = null;
+        try {
+          await persist(key, target);
+          lastLocalWriteAtRef.current = Date.now();
+        } catch (err) {
+          // Falha de criptografia/serialização/rede: NUNCA silenciar.
+          // Bugs determinísticos (ex.: RangeError em btoa de payload grande)
+          // ficavam invisíveis e faziam o plano sumir só no Firestore.
+          if (typeof console !== 'undefined' && console.error) {
+            console.error('[useRitmoGestao] persist falhou:', err);
+          }
+        }
+        if (pendingPersistRef.current) await run();
+      };
+      persistChainRef.current = persistChainRef.current.then(run, run);
+    },
+    [persist]
   );
 
   const load = useCallback(async () => {
@@ -266,36 +548,44 @@ export function useRitmoGestao(encryptionKey: CryptoKey | null) {
     }
     try {
       setLoading(true);
-      let localData = normalizeBoard(await StorageService.getRitmoBoard(encryptionKey));
+      const pendingDeletes = snapshotPendingDeletions(pendingDeletionsRef.current);
+      const localData = filterBoardPendingDeletions(
+        normalizeBoard(await StorageService.getRitmoBoard(encryptionKey)),
+        pendingDeletes,
+      );
       let data = localData;
       if (isFirebaseConfigured) {
         const remote = await getRitmoBoardOnce(encryptionKey);
-        const remoteHasData = remote && (
-          remote.prioridades.length > 0 || remote.backlog.length > 0 ||
-          (Array.isArray(remote.empresas) && remote.empresas.length > 0)
-        );
-        if (remoteHasData && remote) {
-          data = mergeBoardRemotoComLocal(remote, localData);
-          void persist(encryptionKey, data).catch(() => {});
-        } else if (
-          data.backlog.length === 0 &&
-          data.prioridades.length === 0 &&
-          data.empresas.length === 0
-        ) {
-          await persist(encryptionKey, data);
+        if (remote) {
+          const remoteNorm = normalizeBoard(remote);
+          acknowledgeRemotePendingDeletions(pendingDeletionsRef.current, remoteNorm);
+          const nextPendingDeletes = snapshotPendingDeletions(pendingDeletionsRef.current);
+          const remoteVisible = filterBoardPendingDeletions(remoteNorm, nextPendingDeletes);
+          data = mergeBoardRemotoComLocal(remoteVisible, localData, nextPendingDeletes);
+          if (boardHasMoreContentThan(data, remoteVisible)) {
+            enqueuePersist(encryptionKey, data);
+          }
         }
       }
-      setBoard(data);
+      setBoard((prev) =>
+        mergeRemoteSnapshotIntoPrev(
+          data,
+          prev,
+          snapshotPendingDeletions(pendingDeletionsRef.current),
+        ),
+      );
+      initialLoadedRef.current = true;
     } catch (e) {
       setError('Erro ao carregar Ritmo de Gestão.');
     } finally {
       setLoading(false);
     }
-  }, [encryptionKey, persist]);
+  }, [encryptionKey, enqueuePersist]);
 
   useEffect(() => {
     if (!encryptionKey) {
       setBoard(defaultBoard());
+      initialLoadedRef.current = false;
       setLoading(false);
       return;
     }
@@ -303,103 +593,114 @@ export function useRitmoGestao(encryptionKey: CryptoKey | null) {
       load();
       return;
     }
-    if (isFirebaseConfigured) {
-      let cancelled = false;
-      (async () => {
-        try {
-          const remote = await getRitmoBoardOnce(encryptionKey);
-          if (cancelled) return;
-          const remoteHasData = remote && (
-            remote.prioridades.length > 0 || remote.backlog.length > 0 ||
-            (Array.isArray(remote.empresas) && remote.empresas.length > 0)
-          );
-          if (remoteHasData && remote) {
-            const local = normalizeBoard(await StorageService.getRitmoBoard(encryptionKey));
-            const mergedInit = mergeBoardRemotoComLocal(remote, local);
-            setBoard(mergedInit);
-            void persist(encryptionKey, mergedInit).catch(() => {});
-          } else {
-            const local = normalizeBoard(await StorageService.getRitmoBoard(encryptionKey));
-            const localHasData = local.prioridades.length > 0 || local.backlog.length > 0 || local.empresas.length > 0;
-            if (localHasData) {
-              setBoard(local);
-              await saveRitmoBoardFirestore(local, encryptionKey);
-            } else {
-              const def = defaultBoard();
-              setBoard(def);
-              await persist(encryptionKey, def);
-            }
-          }
-        } catch {
-          const local = normalizeBoard(await StorageService.getRitmoBoard(encryptionKey));
-          const localHasData = local.prioridades.length > 0 || local.backlog.length > 0 || local.empresas.length > 0;
-          if (localHasData) setBoard(local);
-          else setBoard(defaultBoard());
-        } finally {
-          if (!cancelled) setLoading(false);
+
+    let cancelled = false;
+    initialLoadedRef.current = false;
+
+    // Carga inicial — busca remote+local, faz merge e seta estado.
+    // Usamos updater funcional para preservar quaisquer alterações que possam
+    // ter chegado pelo subscribe (ou saveBoard) entre o início desta async fn e o setBoard.
+    (async () => {
+      try {
+        const [remote, localRaw] = await Promise.all([
+          getRitmoBoardOnce(encryptionKey),
+          StorageService.getRitmoBoard(encryptionKey),
+        ]);
+        if (cancelled) return;
+        const pendingDeletes = snapshotPendingDeletions(pendingDeletionsRef.current);
+        const local = filterBoardPendingDeletions(normalizeBoard(localRaw), pendingDeletes);
+        const remoteNorm = remote ? normalizeBoard(remote) : null;
+        if (remoteNorm) acknowledgeRemotePendingDeletions(pendingDeletionsRef.current, remoteNorm);
+        const nextPendingDeletes = snapshotPendingDeletions(pendingDeletionsRef.current);
+        const remoteVisible = remoteNorm
+          ? filterBoardPendingDeletions(remoteNorm, nextPendingDeletes)
+          : null;
+        const serverData = remoteVisible
+          ? mergeBoardRemotoComLocal(remoteVisible, local, nextPendingDeletes)
+          : local;
+        setBoard((prev) => mergeRemoteSnapshotIntoPrev(serverData, prev, nextPendingDeletes));
+        // Reescreve no Firestore se houver dados locais não propagados (ou se nada
+        // remoto mas há local). Nunca grava defaultBoard sobre conteúdo existente.
+        if (remoteVisible && boardHasMoreContentThan(serverData, remoteVisible)) {
+          enqueuePersist(encryptionKey, serverData);
+        } else if (!remoteVisible && boardHasAnyContent(local)) {
+          enqueuePersist(encryptionKey, local);
         }
-      })();
-      const unsub = subscribeRitmoBoard(encryptionKey, (next) =>
-        setBoard((prev) => {
-          const raw = next as RitmoGestaoBoard;
-          const remotePrios = Array.isArray(raw.prioridades) ? raw.prioridades : [];
-          const remotePlanos = Array.isArray(raw.planos) ? raw.planos : [];
-          const remoteTarefas = Array.isArray(raw.tarefas) ? raw.tarefas : [];
-          const mergedPriosBase = mergePrioridadesPreservandoDonoMaisRecente(remotePrios, prev.prioridades);
-          const mergedPrioIds = new Set(mergedPriosBase.map((p) => p.id));
-          const extraPrios = prev.prioridades.filter((p) => !mergedPrioIds.has(p.id));
-          const mergedPrios = [...mergedPriosBase, ...extraPrios];
-          const mergedPlanosBase = alinharPlanosWhoAoDonoMesclado(remotePlanos, mergedPrios, remotePrios).map((rpl) => {
-            const lpl = prev.planos.find((p) => p.id === rpl.id);
-            if (!lpl) return rpl;
-            const localObs = Array.isArray(lpl.observadores) ? lpl.observadores : [];
-            const remoteObs = Array.isArray(rpl.observadores) ? rpl.observadores : [];
-            return { ...rpl, observadores: localObs.length >= remoteObs.length ? localObs : remoteObs };
-          });
-          const mergedPlanoIds = new Set(mergedPlanosBase.map((pl) => pl.id));
-          const extraPlanos = prev.planos.filter((pl) => !mergedPlanoIds.has(pl.id));
-          const mergedPlanos = [...mergedPlanosBase, ...extraPlanos];
-          const mergedTarefasBase = remoteTarefas.map((rt) => {
-            const lt = prev.tarefas.find((t) => t.id === rt.id);
-            if (!lt) return rt;
-            const localObs = Array.isArray(lt.observadores) ? lt.observadores : [];
-            const remoteObs = Array.isArray(rt.observadores) ? rt.observadores : [];
-            return { ...rt, observadores: localObs.length >= remoteObs.length ? localObs : remoteObs };
-          });
-          const mergedTarefaIds = new Set(mergedTarefasBase.map((t) => t.id));
-          const extraTarefas = prev.tarefas.filter((t) => !mergedTarefaIds.has(t.id));
-          const mergedTarefas = [...mergedTarefasBase, ...extraTarefas];
-          return normalizeBoard({
-            ...raw,
-            empresas: Array.isArray(raw.empresas) ? raw.empresas : prev.empresas,
-            prioridades: mergedPrios,
-            planos: mergedPlanos,
-            tarefas: mergedTarefas,
-          });
-        })
-      );
-      unsubRef.current = unsub ?? null;
-      return () => {
-        cancelled = true;
-        if (unsubRef.current) unsubRef.current();
-        unsubRef.current = null;
-      };
-    } else {
-      load();
-    }
-  }, [encryptionKey, load, persist]);
+      } catch {
+        const local = filterBoardPendingDeletions(
+          normalizeBoard(await StorageService.getRitmoBoard(encryptionKey)),
+          snapshotPendingDeletions(pendingDeletionsRef.current),
+        );
+        if (!cancelled) {
+          setBoard((prev) =>
+            mergeRemoteSnapshotIntoPrev(
+              local,
+              prev,
+              snapshotPendingDeletions(pendingDeletionsRef.current),
+            ),
+          );
+        }
+      } finally {
+        if (!cancelled) {
+          initialLoadedRef.current = true;
+          setLoading(false);
+        }
+      }
+    })();
+
+    // Subscribe — recebe ecos remotos e mescla com estado React atual (via prev do updater).
+    const unsub = subscribeRitmoBoard(encryptionKey, (next) => {
+      const raw = normalizeBoard(next as RitmoGestaoBoard);
+      acknowledgeRemotePendingDeletions(pendingDeletionsRef.current, raw);
+      const pendingDeletes = snapshotPendingDeletions(pendingDeletionsRef.current);
+      const remoteVisible = filterBoardPendingDeletions(raw, pendingDeletes);
+      setBoard((prev) => {
+        const merged = mergeRemoteSnapshotIntoPrev(remoteVisible, prev, pendingDeletes);
+
+        // Se nosso merge tem MAIS conteúdo que o snapshot remoto (porque havia
+        // extras locais), reescreve assincronamente para propagar os locais.
+        // Janela de 8s evita loop com nossos próprios ecos. initialLoadedRef
+        // evita reescrita durante boot, antes do load resolver.
+        const recentLocalWrite = Date.now() - lastLocalWriteAtRef.current < 8000;
+        if (
+          initialLoadedRef.current &&
+          !recentLocalWrite &&
+          encryptionKey &&
+          boardHasMoreContentThan(merged, remoteVisible)
+        ) {
+          enqueuePersist(encryptionKey, merged);
+        }
+        return merged;
+      });
+    });
+    unsubRef.current = unsub ?? null;
+
+    return () => {
+      cancelled = true;
+      if (unsubRef.current) unsubRef.current();
+      unsubRef.current = null;
+    };
+  }, [encryptionKey, load, enqueuePersist]);
 
   type BoardUpdater = RitmoGestaoBoard | ((prev: RitmoGestaoBoard) => RitmoGestaoBoard);
 
+  /**
+   * Atualiza o board e enfileira persistência. Usa o updater funcional do React,
+   * garantindo que `prev` é sempre o estado committed mais recente (não pode estar
+   * stale como aconteceria com refs lidos fora do callback).
+   * Lê encryptionKey via ref para não ficar stale em closures memoizadas de filhos.
+   */
   const saveBoard = useCallback(
     (update: BoardUpdater) => {
       setBoard((prev) => {
         const next = typeof update === 'function' ? update(prev) : update;
-        if (encryptionKey && next !== prev) void persist(encryptionKey, next);
+        if (next === prev) return prev;
+        const key = encryptionKeyRef.current;
+        if (key) enqueuePersist(key, next);
         return next;
       });
     },
-    [encryptionKey, persist]
+    [enqueuePersist]
   );
 
   // --- Backlog
@@ -430,7 +731,10 @@ export function useRitmoGestao(encryptionKey: CryptoKey | null) {
 
   const deleteBacklog = useCallback(
     (id: string) => {
-      saveBoard((prev) => ({ ...prev, backlog: prev.backlog.filter((b) => b.id !== id) }));
+      saveBoard((prev) => {
+        markPendingDeletion(pendingDeletionsRef.current, 'backlog', [id]);
+        return { ...prev, backlog: prev.backlog.filter((b) => b.id !== id) };
+      });
     },
     [saveBoard]
   );
@@ -550,15 +854,24 @@ export function useRitmoGestao(encryptionKey: CryptoKey | null) {
 
   const deletePrioridade = useCallback(
     (id: string) => {
-      saveBoard((prev) => ({
-        ...prev,
-        prioridades: prev.prioridades.filter((p) => p.id !== id),
-        planos: prev.planos.filter((p) => p.prioridade_id !== id),
-        tarefas: prev.tarefas.filter((t) => {
-          const plano = prev.planos.find((pl) => pl.id === t.plano_id);
-          return plano?.prioridade_id !== id;
-        }),
-      }));
+      saveBoard((prev) => {
+        const planoIds = prev.planos
+          .filter((p) => p.prioridade_id === id)
+          .map((p) => p.id);
+        const planoIdsSet = new Set(planoIds);
+        const tarefaIds = prev.tarefas
+          .filter((t) => planoIdsSet.has(t.plano_id))
+          .map((t) => t.id);
+        markPendingDeletion(pendingDeletionsRef.current, 'prioridades', [id]);
+        markPendingDeletion(pendingDeletionsRef.current, 'planos', planoIds);
+        markPendingDeletion(pendingDeletionsRef.current, 'tarefas', tarefaIds);
+        return {
+          ...prev,
+          prioridades: prev.prioridades.filter((p) => p.id !== id),
+          planos: prev.planos.filter((p) => p.prioridade_id !== id),
+          tarefas: prev.tarefas.filter((t) => !planoIdsSet.has(t.plano_id)),
+        };
+      });
     },
     [saveBoard]
   );
@@ -590,11 +903,18 @@ export function useRitmoGestao(encryptionKey: CryptoKey | null) {
 
   const deletePlano = useCallback(
     (id: string) => {
-      saveBoard((prev) => ({
-        ...prev,
-        planos: prev.planos.filter((p) => p.id !== id),
-        tarefas: prev.tarefas.filter((t) => t.plano_id !== id),
-      }));
+      saveBoard((prev) => {
+        const tarefaIds = prev.tarefas
+          .filter((t) => t.plano_id === id)
+          .map((t) => t.id);
+        markPendingDeletion(pendingDeletionsRef.current, 'planos', [id]);
+        markPendingDeletion(pendingDeletionsRef.current, 'tarefas', tarefaIds);
+        return {
+          ...prev,
+          planos: prev.planos.filter((p) => p.id !== id),
+          tarefas: prev.tarefas.filter((t) => t.plano_id !== id),
+        };
+      });
     },
     [saveBoard]
   );
@@ -628,6 +948,13 @@ export function useRitmoGestao(encryptionKey: CryptoKey | null) {
           if (safeUpdates.status_tarefa && safeUpdates.status_tarefa !== 'Bloqueada') {
             next.bloqueada_em = undefined;
           }
+          // Regra única de domínio: ao concluir tarefa, fixa timestamp de conclusão;
+          // ao sair de concluída, limpa esse timestamp.
+          if (safeUpdates.status_tarefa === 'Concluida') {
+            next.data_conclusao = t.data_conclusao ?? Date.now();
+          } else if (safeUpdates.status_tarefa) {
+            next.data_conclusao = undefined;
+          }
           return next;
         }),
       }));
@@ -637,7 +964,10 @@ export function useRitmoGestao(encryptionKey: CryptoKey | null) {
 
   const deleteTarefa = useCallback(
     (id: string) => {
-      saveBoard((prev) => ({ ...prev, tarefas: prev.tarefas.filter((t) => t.id !== id) }));
+      saveBoard((prev) => {
+        markPendingDeletion(pendingDeletionsRef.current, 'tarefas', [id]);
+        return { ...prev, tarefas: prev.tarefas.filter((t) => t.id !== id) };
+      });
     },
     [saveBoard]
   );
@@ -825,8 +1155,7 @@ export function useRitmoGestao(encryptionKey: CryptoKey | null) {
       if (!changed) return prev;
       return { ...prev, planos: nextPlanos };
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [board.tarefas, loading]);
+  }, [board.tarefas, loading, saveBoard]);
 
   // Regra 8: Propagação de bloqueios (plano → prioridade)
   useEffect(() => {
@@ -844,8 +1173,7 @@ export function useRitmoGestao(encryptionKey: CryptoKey | null) {
       if (!changed) return prev;
       return { ...prev, prioridades: nextPrioridades };
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [board.planos, loading]);
+  }, [board.planos, loading, saveBoard]);
 
   const ativasCount = prioridadesAtivas(board.prioridades).length;
   const podeAdicionarPrioridade = ativasCount < MAX_PRIORIDADES_ATIVAS;

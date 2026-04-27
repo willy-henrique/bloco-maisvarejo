@@ -204,6 +204,12 @@ export const ActionItemModal: React.FC<ActionItemModalProps> = ({
       : isBacklogLike
       ? 'Item Backlog'
       : null;
+  const slimFormSpacing = isBacklogLike ? 'space-y-3.5' : 'space-y-4';
+  const slimGridGap = isBacklogLike ? 'gap-3.5' : 'gap-4';
+  const descriptionRows = isBacklogLike ? 5 : 3;
+  const descriptionClassName = isBacklogLike
+    ? 'w-full bg-slate-800/50 border border-slate-700 rounded-lg px-3 py-2.5 text-sm text-slate-300 placeholder:text-slate-500 outline-none focus:border-slate-600 resize-y min-h-[128px] md:min-h-[168px] disabled:opacity-60'
+    : 'w-full bg-slate-800/50 border border-slate-700 rounded-lg px-3 py-2.5 text-sm text-slate-300 placeholder:text-slate-500 outline-none focus:border-slate-600 resize-y min-h-[140px] md:min-h-[180px] disabled:opacity-60';
 
   return (
     <Modal
@@ -212,13 +218,13 @@ export const ActionItemModal: React.FC<ActionItemModalProps> = ({
       title={slimFormTitle ?? (isEdit ? 'Editar Iniciativa' : 'Novo')}
       maxWidth="xl"
     >
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form onSubmit={handleSubmit} className={slimFormSpacing}>
         {readOnly && (
           <p className="text-xs text-amber-400/90 bg-amber-500/10 border border-amber-500/25 rounded-lg px-3 py-2">
             Você não tem permissão para editar este item. Os campos estão bloqueados.
           </p>
         )}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className={`grid grid-cols-1 md:grid-cols-2 ${slimGridGap}`}>
           <div className="md:col-span-2">
             <label className="block text-[10px] font-medium text-slate-500 uppercase tracking-wider mb-1.5">
               {isBacklogLike ? 'Titulo' : 'Descrição'}
@@ -242,8 +248,8 @@ export const ActionItemModal: React.FC<ActionItemModalProps> = ({
               value={form.why}
               onChange={(e) => update('why', e.target.value)}
               placeholder={isBacklogLike ? 'Descrição do backlog' : 'Justificativa estratégica'}
-              rows={isBacklogLike ? 6 : 3}
-              className="w-full bg-slate-800/50 border border-slate-700 rounded-lg px-3 py-2.5 text-sm text-slate-300 placeholder:text-slate-500 outline-none focus:border-slate-600 resize-y min-h-[140px] md:min-h-[180px] disabled:opacity-60"
+              rows={descriptionRows}
+              className={descriptionClassName}
               readOnly={readOnly}
               disabled={readOnly}
             />

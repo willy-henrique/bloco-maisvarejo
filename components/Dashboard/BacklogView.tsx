@@ -79,7 +79,6 @@ export const BacklogView: React.FC<BacklogViewProps> = ({
     canWorkflow: capabilities?.canWorkflow !== false,
   };
   const backlogItems = useMemo(() => {
-    // Itens em demanda (BACKLOG)
     return items
       .filter((i) => i.status === ItemStatus.BACKLOG)
       .sort((a, b) => (a.createdAt ?? 0) - (b.createdAt ?? 0));

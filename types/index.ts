@@ -145,6 +145,8 @@ export interface Tarefa {
   bloqueio_motivo?: string;
   /** Momento em que a tarefa foi marcada como bloqueada. */
   bloqueada_em?: number;
+  /** Momento em que a tarefa foi marcada como Concluida. */
+  data_conclusao?: number;
   /** Empresa / workspace associada a esta tarefa (opcional) */
   empresa?: string;
   /** Usuário que criou o registro (uid/nome), usado para visibilidade. */
