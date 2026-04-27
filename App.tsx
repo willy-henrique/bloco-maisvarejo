@@ -1665,9 +1665,25 @@ function AppContent() {
           item={selectedItem}
           initialStatus={selectedItem === null ? defaultStatusForNew ?? undefined : undefined}
           onSave={(item) => {
+            const adminCriandoBacklogEmTodasEmpresas =
+              modalContext === 'backlog' &&
+              selectedItem === null &&
+              profile?.role === 'administrador' &&
+              workspaceAtivo === 'all';
             const workspaceCriacao =
-              workspaceAtivo !== 'all' ? String(workspaceAtivo).trim() : (empresasAtivas[0] ?? '').trim();
+              workspaceAtivo !== 'all'
+                ? String(workspaceAtivo).trim()
+                : adminCriandoBacklogEmTodasEmpresas
+                ? ''
+                : (empresasAtivas[0] ?? '').trim();
             const empresaDigitada = item.empresa?.trim() ?? '';
+            if (adminCriandoBacklogEmTodasEmpresas && !empresaDigitada) {
+              setToast({
+                type: 'error',
+                message: 'Selecione a empresa/workspace para criar o item no Backlog quando estiver em "Todas as empresas".',
+              });
+              return false;
+            }
             const empresa =
               modalContext === 'backlog'
                 ? appSettings.backlogPermiteAlterarEmpresa
@@ -1679,9 +1695,19 @@ function AppContent() {
               empresa,
               created_by: firebaseUser?.uid ?? '',
             });
+            return true;
           }}
           onUpdate={updateItem}
-          defaultEmpresa={workspaceAtivo === 'all' ? (empresasAtivas[0] ?? '') : workspaceAtivo}
+          defaultEmpresa={
+            modalContext === 'backlog' &&
+            selectedItem === null &&
+            profile?.role === 'administrador' &&
+            workspaceAtivo === 'all'
+              ? ''
+              : workspaceAtivo === 'all'
+              ? (empresasAtivas[0] ?? '')
+              : workspaceAtivo
+          }
           empresaSuggestions={modalContext === 'backlog' ? empresasDisponiveis : empresasAtivas}
           loggedUserName={profile?.nome}
           lockWhoToLoggedUser={true}
@@ -1692,7 +1718,15 @@ function AppContent() {
           responsaveis={responsaveisParaAtribuicao}
           hideWhereEmpresa={modalContext === 'backlog'}
           hideStatusUrgency={modalContext === 'backlog'}
-          canEditBacklogEmpresa={appSettings.backlogPermiteAlterarEmpresa}
+          canEditBacklogEmpresa={
+            appSettings.backlogPermiteAlterarEmpresa ||
+            (
+              modalContext === 'backlog' &&
+              selectedItem === null &&
+              profile?.role === 'administrador' &&
+              workspaceAtivo === 'all'
+            )
+          }
           canEditBacklogDate={appSettings.backlogPermiteAlterarData}
           itemModalContext={modalContext}
           currentUserId={firebaseUser?.uid ?? undefined}

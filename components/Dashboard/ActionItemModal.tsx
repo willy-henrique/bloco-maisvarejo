@@ -11,7 +11,7 @@ interface ActionItemModalProps {
   onClose: () => void;
   item: ActionItem | null;
   initialStatus?: ItemStatus;
-  onSave: (data: Omit<ActionItem, 'id' | 'createdAt' | 'updatedAt'>) => void;
+  onSave: (data: Omit<ActionItem, 'id' | 'createdAt' | 'updatedAt'>) => void | boolean;
   onUpdate: (id: string, data: Partial<ActionItem>) => void;
   defaultEmpresa?: string;
   empresaSuggestions?: string[];
@@ -107,6 +107,7 @@ export const ActionItemModal: React.FC<ActionItemModalProps> = ({
   const isWhoReadOnly = !canEditWho;
   /** Backlog: só lançamento; quem lança é fixo e exibido só em leitura. Estratégico (Kanban): pode atribuir responsável conforme permissão. */
   const isBacklogTabContext = itemModalContext === 'backlog';
+  const useChipEmpresaField = isBacklogTabContext || isEstrategicoKanban;
   const isEmpresaReadOnly = readOnly || (isBacklogTabContext && !canEditBacklogEmpresa);
   const isDateReadOnly = readOnly || (isBacklogTabContext && !canEditBacklogDate);
   const showSlimWhoEditor = isEstrategicoKanban && !readOnly && canEditWho;
@@ -184,7 +185,8 @@ export const ActionItemModal: React.FC<ActionItemModalProps> = ({
         onUpdate(item.id, { ...form });
       }
     } else {
-      onSave(form);
+      const shouldClose = onSave(form);
+      if (shouldClose === false) return;
     }
     onClose();
   };
@@ -335,7 +337,7 @@ export const ActionItemModal: React.FC<ActionItemModalProps> = ({
               <label className="block text-[10px] font-medium text-slate-500 uppercase tracking-wider mb-1.5">
                 Empresa / Workspace
               </label>
-              {isBacklogTabContext ? (
+              {useChipEmpresaField ? (
                 <div className="relative">
                   <button
                     type="button"
