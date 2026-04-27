@@ -1183,6 +1183,7 @@ const PrioridadeCard: React.FC<{
   canTarefaWrite?: boolean;
   canTarefaAssign?: boolean;
   canTarefaDelete?: boolean;
+  canEditPrazo?: boolean;
   viewerIsAdmin?: boolean;
   viewerMyResponsavelIds?: Set<string>;
   allUsers: Array<{ id: string; label: string }>;
@@ -1220,6 +1221,7 @@ const PrioridadeCard: React.FC<{
   canTarefaWrite = true,
   canTarefaAssign = true,
   canTarefaDelete = true,
+  canEditPrazo = false,
   viewerIsAdmin = true,
   viewerMyResponsavelIds,
   allUsers,
@@ -1535,6 +1537,7 @@ const PrioridadeCard: React.FC<{
                 canWriteTarefa={canTarefaWrite}
                 canAssignTarefa={canTarefaAssign}
                 canDeleteTarefa={canTarefaDelete}
+                canEditPrazo={canEditPrazo}
                 prioridadeDonoId={prioridade.dono_id}
                 viewerIsAdmin={viewerIsAdmin}
                 viewerMyResponsavelIds={myViewerIds}
