@@ -457,10 +457,13 @@ function AppContent() {
     [workspaceAtivo, canReadCrossWorkspaceGlobal, matchWorkspaceStrict],
   );
 
-  const backlogViewItems = useMemo(
-    () => items.filter((i) => matchWorkspaceStrict(i.empresa)),
-    [items, matchWorkspaceStrict],
-  );
+  const backlogViewItems = useMemo(() => {
+    return items.filter((i) => {
+      if (matchWorkspaceStrict(i.empresa)) return true;
+      if (profile?.role === 'administrador') return true;
+      return isCreatedByMe(i.created_by, i.who);
+    });
+  }, [items, matchWorkspaceStrict, profile?.role, isCreatedByMe]);
 
   useEffect(() => {
     if (!isAuthenticated || !isFirebaseConfigured) {
@@ -618,10 +621,12 @@ function AppContent() {
 
   const ritmoPlanosEscopoVisivel = useMemo(
     () => {
-      const porEmpresa = ritmo.board.planos.filter((pl) => matchWorkspaceRitmo(pl.empresa));
-      if (profile?.role === 'administrador') return porEmpresa;
+      const base = ritmo.board.planos.filter(
+        (pl) => matchWorkspaceRitmo(pl.empresa) || idsPrioridadesEscopoRitmo.has(pl.prioridade_id),
+      );
+      if (profile?.role === 'administrador') return base;
       if (myResponsavelIdsForBoard.size === 0) return [];
-      return porEmpresa.filter(
+      return base.filter(
         (pl) =>
           isCreatedByMe(pl.created_by, pl.who_id) ||
           canViewByOwnershipOrObserver([pl.who_id], pl.observadores, myResponsavelIdsForBoard, responsaveisParaAtribuicao) ||
@@ -635,6 +640,7 @@ function AppContent() {
     [
       ritmo.board.planos,
       matchWorkspaceRitmo,
+      idsPrioridadesEscopoRitmo,
       profile?.role,
       myResponsavelIdsForBoard,
       isCreatedByMe,
@@ -649,10 +655,12 @@ function AppContent() {
 
   const ritmoTarefasEscopoVisivel = useMemo(
     () => {
-      const porEmpresa = ritmo.board.tarefas.filter((t) => matchWorkspaceRitmo(t.empresa));
-      if (profile?.role === 'administrador') return porEmpresa;
+      const base = ritmo.board.tarefas.filter(
+        (t) => matchWorkspaceRitmo(t.empresa) || idsPlanosEscopoVisivel.has(t.plano_id),
+      );
+      if (profile?.role === 'administrador') return base;
       if (myResponsavelIdsForBoard.size === 0) return [];
-      return porEmpresa.filter(
+      return base.filter(
         (t) =>
           isCreatedByMe(t.created_by, t.responsavel_id) ||
           canViewByOwnershipOrObserver([t.responsavel_id], t.observadores, myResponsavelIdsForBoard, responsaveisParaAtribuicao) ||
@@ -662,6 +670,7 @@ function AppContent() {
     [
       ritmo.board.tarefas,
       matchWorkspaceRitmo,
+      idsPlanosEscopoVisivel,
       profile?.role,
       myResponsavelIdsForBoard,
       isCreatedByMe,
@@ -1667,7 +1676,7 @@ function AppContent() {
           }}
           onUpdate={updateItem}
           defaultEmpresa={workspaceAtivo === 'all' ? (empresasAtivas[0] ?? '') : workspaceAtivo}
-          empresaSuggestions={empresasAtivas}
+          empresaSuggestions={itemModalContext === 'backlog' ? empresasDisponiveis : empresasAtivas}
           loggedUserName={profile?.nome}
           lockWhoToLoggedUser={true}
           canEditWho={
@@ -1695,7 +1704,7 @@ function AppContent() {
             <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
             Conectado
           </div>
-          <span>MAVO 2.0.3</span>
+          <span>MAVO 2.0.4</span>
         </footer>
       </main>
     </div>

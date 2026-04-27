@@ -94,6 +94,8 @@ export const ActionItemModal: React.FC<ActionItemModalProps> = ({
     (hideWhereEmpresa && hideStatusUrgency) || isBacklogItem || isEstrategicoKanban;
   const effectiveHideWhereEmpresa = hideWhereEmpresa || isBacklogLike;
   const effectiveHideStatusUrgency = hideStatusUrgency || isBacklogLike;
+  const showWhereField = !effectiveHideWhereEmpresa && !isBacklogLike;
+  const showEmpresaField = !effectiveHideWhereEmpresa || isBacklogLike;
   const isWhoLocked = lockWhoToLoggedUser && !!loggedUserName?.trim();
   const shouldLockWho = isWhoLocked && !isEdit;
   const isWhoReadOnly = !canEditWho;
@@ -284,68 +286,68 @@ export const ActionItemModal: React.FC<ActionItemModalProps> = ({
               )}
             </div>
           )}
-          {!effectiveHideWhereEmpresa && (
-            <>
-              <div>
-                <label className="block text-[10px] font-medium text-slate-500 uppercase tracking-wider mb-1.5">
-                  Onde?
-                </label>
-                <div className="relative">
-                  <MapPin size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-                  <input
-                    type="text"
-                    value={form.where}
-                    onChange={(e) => update('where', e.target.value)}
-                    placeholder="Setor / local"
-                    className="w-full bg-slate-800/50 border border-slate-700 rounded-lg pl-9 pr-3 py-2.5 text-sm text-slate-200 placeholder:text-slate-500 outline-none focus:border-slate-600 disabled:opacity-60"
-                    readOnly={readOnly}
-                    disabled={readOnly}
-                  />
-                </div>
+          {showWhereField && (
+            <div>
+              <label className="block text-[10px] font-medium text-slate-500 uppercase tracking-wider mb-1.5">
+                Onde?
+              </label>
+              <div className="relative">
+                <MapPin size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                <input
+                  type="text"
+                  value={form.where}
+                  onChange={(e) => update('where', e.target.value)}
+                  placeholder="Setor / local"
+                  className="w-full bg-slate-800/50 border border-slate-700 rounded-lg pl-9 pr-3 py-2.5 text-sm text-slate-200 placeholder:text-slate-500 outline-none focus:border-slate-600 disabled:opacity-60"
+                  readOnly={readOnly}
+                  disabled={readOnly}
+                />
               </div>
-              <div className="md:col-span-2">
-                <label className="block text-[10px] font-medium text-slate-500 uppercase tracking-wider mb-1.5">
-                  Empresa / Workspace
-                </label>
-                <div className="relative">
-                  <input
-                    type="text"
-                    value={form.empresa ?? ''}
-                    onChange={(e) => update('empresa', e.target.value)}
-                    placeholder="Cliente / unidade / grupo"
-                    className="w-full bg-slate-800/50 border border-slate-700 rounded-lg px-3 py-2.5 text-sm text-slate-200 placeholder:text-slate-500 outline-none focus:border-slate-600 disabled:opacity-60"
-                    autoComplete="off"
-                    readOnly={readOnly}
-                    disabled={readOnly}
-                  />
-                  {form.empresa &&
-                    (empresaSuggestions ?? [])
-                      .filter((nome) =>
-                        nome.toLowerCase().startsWith(form.empresa!.toLowerCase())
-                      )
-                      .slice(0, 6).length > 0 && (
-                      <div className="absolute z-20 mt-1 w-full bg-slate-900 border border-slate-700 rounded-lg shadow-lg max-h-40 overflow-auto">
-                        {(empresaSuggestions ?? [])
-                          .filter((nome) =>
-                            nome.toLowerCase().startsWith(form.empresa!.toLowerCase())
-                          )
-                          .slice(0, 6)
-                          .map((nome) => (
-                            <button
-                              key={nome}
-                              type="button"
-                              disabled={readOnly}
-                              onClick={() => update('empresa', nome)}
-                              className="w-full text-left px-3 py-1.5 text-[12px] text-slate-100 hover:bg-slate-800"
-                            >
-                              {nome}
-                            </button>
-                          ))}
-                      </div>
-                    )}
-                </div>
+            </div>
+          )}
+          {showEmpresaField && (
+            <div className="md:col-span-2">
+              <label className="block text-[10px] font-medium text-slate-500 uppercase tracking-wider mb-1.5">
+                Empresa / Workspace
+              </label>
+              <div className="relative">
+                <input
+                  type="text"
+                  value={form.empresa ?? ''}
+                  onChange={(e) => update('empresa', e.target.value)}
+                  placeholder="Cliente / unidade / grupo"
+                  className="w-full bg-slate-800/50 border border-slate-700 rounded-lg px-3 py-2.5 text-sm text-slate-200 placeholder:text-slate-500 outline-none focus:border-slate-600 disabled:opacity-60"
+                  autoComplete="off"
+                  readOnly={readOnly}
+                  disabled={readOnly}
+                />
+                {form.empresa &&
+                  (empresaSuggestions ?? [])
+                    .filter((nome) =>
+                      nome.toLowerCase().startsWith(form.empresa!.toLowerCase())
+                    )
+                    .slice(0, 6).length > 0 && (
+                    <div className="absolute z-20 mt-1 w-full bg-slate-900 border border-slate-700 rounded-lg shadow-lg max-h-40 overflow-auto">
+                      {(empresaSuggestions ?? [])
+                        .filter((nome) =>
+                          nome.toLowerCase().startsWith(form.empresa!.toLowerCase())
+                        )
+                        .slice(0, 6)
+                        .map((nome) => (
+                          <button
+                            key={nome}
+                            type="button"
+                            disabled={readOnly}
+                            onClick={() => update('empresa', nome)}
+                            className="w-full text-left px-3 py-1.5 text-[12px] text-slate-100 hover:bg-slate-800"
+                          >
+                            {nome}
+                          </button>
+                        ))}
+                    </div>
+                  )}
               </div>
-            </>
+            </div>
           )}
           {!isBacklogLike && (
             <div>
