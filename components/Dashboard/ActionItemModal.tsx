@@ -108,6 +108,16 @@ export const ActionItemModal: React.FC<ActionItemModalProps> = ({
   const showSlimWhoEditor = isEstrategicoKanban && !readOnly && canEditWho;
   const whoDefault = shouldLockWho ? loggedUserName!.trim() : '';
   const [form, setForm] = useState(emptyForm(whoDefault));
+  const empresaQuery = (form.empresa ?? '').trim().toLowerCase();
+  const empresaAutocompleteOptions =
+    isEmpresaReadOnly || !empresaQuery
+      ? []
+      : (empresaSuggestions ?? [])
+          .filter((nome) => {
+            const normalized = nome.trim().toLowerCase();
+            return normalized.startsWith(empresaQuery) && normalized !== empresaQuery;
+          })
+          .slice(0, 6);
   const whoKey = (form.who || whoDefault || '').trim();
   const whoDisplay =
     (whoKey && resolveUserDisplay ? resolveUserDisplay(whoKey) : '') ||
@@ -329,19 +339,9 @@ export const ActionItemModal: React.FC<ActionItemModalProps> = ({
                   readOnly={isEmpresaReadOnly}
                   disabled={isEmpresaReadOnly}
                 />
-                {form.empresa &&
-                  (empresaSuggestions ?? [])
-                    .filter((nome) =>
-                      nome.toLowerCase().startsWith(form.empresa!.toLowerCase())
-                    )
-                    .slice(0, 6).length > 0 && (
+                {empresaAutocompleteOptions.length > 0 && (
                     <div className="absolute z-20 mt-1 w-full bg-slate-900 border border-slate-700 rounded-lg shadow-lg max-h-40 overflow-auto">
-                      {(empresaSuggestions ?? [])
-                        .filter((nome) =>
-                          nome.toLowerCase().startsWith(form.empresa!.toLowerCase())
-                        )
-                        .slice(0, 6)
-                        .map((nome) => (
+                      {empresaAutocompleteOptions.map((nome) => (
                           <button
                             key={nome}
                             type="button"
