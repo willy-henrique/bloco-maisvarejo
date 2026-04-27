@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ActionItem, ItemStatus, UrgencyLevel, Responsavel } from '../../types';
 import { Modal } from '../Shared/Modal';
-import { MapPin, User, Calendar, ExternalLink } from 'lucide-react';
+import { MapPin, User, Calendar, ExternalLink, Building2, ChevronDown } from 'lucide-react';
 import { ResponsavelAutocomplete } from './ResponsavelAutocomplete';
 import { resolveResponsavelDisplay } from './responsavelSearchUtils';
 import { toExternalHttpUrl } from '../../utils/externalLink';
@@ -31,6 +31,8 @@ interface ActionItemModalProps {
   readOnly?: boolean;
   /** No contexto Backlog, controla se a empresa/workspace pode ser alterada manualmente. */
   canEditBacklogEmpresa?: boolean;
+  /** No contexto Backlog, controla se a data pode ser alterada manualmente. */
+  canEditBacklogDate?: boolean;
   /**
    * Estratégico (Kanban): mesmo formulário “slim” do Backlog (Título, Descrição, Quem?, Quando?),
    * com título de modal “Item Estratégico”.
@@ -85,6 +87,7 @@ export const ActionItemModal: React.FC<ActionItemModalProps> = ({
   responsaveis = [],
   readOnly = false,
   canEditBacklogEmpresa = false,
+  canEditBacklogDate = false,
   itemModalContext = 'default',
   currentUserId,
   resolveUserDisplay,
@@ -105,9 +108,11 @@ export const ActionItemModal: React.FC<ActionItemModalProps> = ({
   /** Backlog: só lançamento; quem lança é fixo e exibido só em leitura. Estratégico (Kanban): pode atribuir responsável conforme permissão. */
   const isBacklogTabContext = itemModalContext === 'backlog';
   const isEmpresaReadOnly = readOnly || (isBacklogTabContext && !canEditBacklogEmpresa);
+  const isDateReadOnly = readOnly || (isBacklogTabContext && !canEditBacklogDate);
   const showSlimWhoEditor = isEstrategicoKanban && !readOnly && canEditWho;
   const whoDefault = shouldLockWho ? loggedUserName!.trim() : '';
   const [form, setForm] = useState(emptyForm(whoDefault));
+  const [empresaPickerOpen, setEmpresaPickerOpen] = useState(false);
   const empresaQuery = (form.empresa ?? '').trim().toLowerCase();
   const empresaAutocompleteOptions =
     isEmpresaReadOnly || !empresaQuery
@@ -161,6 +166,7 @@ export const ActionItemModal: React.FC<ActionItemModalProps> = ({
         who: whoDefault,
       });
     }
+    setEmpresaPickerOpen(false);
   }, [item, initialStatus, isOpen, defaultEmpresa, whoDefault]);
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -172,6 +178,7 @@ export const ActionItemModal: React.FC<ActionItemModalProps> = ({
           ...form,
           who: item.who,
           empresa: canEditBacklogEmpresa ? form.empresa : item.empresa,
+          when: canEditBacklogDate ? form.when : item.when,
         });
       } else {
         onUpdate(item.id, { ...form });
@@ -328,33 +335,88 @@ export const ActionItemModal: React.FC<ActionItemModalProps> = ({
               <label className="block text-[10px] font-medium text-slate-500 uppercase tracking-wider mb-1.5">
                 Empresa / Workspace
               </label>
-              <div className="relative">
-                <input
-                  type="text"
-                  value={form.empresa ?? ''}
-                  onChange={(e) => update('empresa', e.target.value)}
-                  placeholder="Cliente / unidade / grupo"
-                  className="w-full bg-slate-800/50 border border-slate-700 rounded-lg px-3 py-2.5 text-sm text-slate-200 placeholder:text-slate-500 outline-none focus:border-slate-600 disabled:opacity-60"
-                  autoComplete="off"
-                  readOnly={isEmpresaReadOnly}
-                  disabled={isEmpresaReadOnly}
-                />
-                {empresaAutocompleteOptions.length > 0 && (
-                    <div className="absolute z-20 mt-1 w-full bg-slate-900 border border-slate-700 rounded-lg shadow-lg max-h-40 overflow-auto">
-                      {empresaAutocompleteOptions.map((nome) => (
-                          <button
-                            key={nome}
-                            type="button"
-                            disabled={isEmpresaReadOnly}
-                            onClick={() => update('empresa', nome)}
-                            className="w-full text-left px-3 py-1.5 text-[12px] text-slate-100 hover:bg-slate-800"
-                          >
-                            {nome}
-                          </button>
-                        ))}
+              {isBacklogTabContext ? (
+                <div className="relative">
+                  <button
+                    type="button"
+                    disabled={isEmpresaReadOnly}
+                    onClick={() => {
+                      if (isEmpresaReadOnly) return;
+                      setEmpresaPickerOpen((prev) => !prev);
+                    }}
+                    className="inline-flex max-w-full items-center gap-2 rounded-full border border-slate-700 bg-slate-900/70 px-2.5 py-1 text-[12px] text-slate-100 disabled:opacity-80"
+                    title={
+                      isEmpresaReadOnly
+                        ? 'Empresa definida automaticamente pelo workspace ativo.'
+                        : 'Selecionar empresa/workspace'
+                    }
+                  >
+                    <span className="w-5 h-5 rounded-full bg-slate-700 text-slate-200 text-[9px] font-bold flex items-center justify-center shrink-0">
+                      <Building2 size={10} />
+                    </span>
+                    <span className="truncate max-w-[280px]">{form.empresa?.trim() || 'Selecionar workspace'}</span>
+                    {!isEmpresaReadOnly && <ChevronDown size={12} className="text-slate-400" />}
+                  </button>
+                  {!isEmpresaReadOnly && empresaPickerOpen && (
+                    <div className="absolute z-20 mt-2 w-full max-w-sm bg-slate-900 border border-slate-700 rounded-lg shadow-lg max-h-52 overflow-auto">
+                      {(empresaSuggestions ?? []).length === 0 ? (
+                        <div className="px-3 py-2 text-[12px] text-slate-500">
+                          Nenhum workspace disponível.
+                        </div>
+                      ) : (
+                        (empresaSuggestions ?? []).map((nome) => {
+                          const selected = nome.trim().toLowerCase() === (form.empresa ?? '').trim().toLowerCase();
+                          return (
+                            <button
+                              key={nome}
+                              type="button"
+                              onClick={() => {
+                                update('empresa', nome);
+                                setEmpresaPickerOpen(false);
+                              }}
+                              className={`w-full text-left px-3 py-2 text-[12px] transition-colors ${
+                                selected
+                                  ? 'bg-blue-500/20 text-blue-200'
+                                  : 'text-slate-100 hover:bg-slate-800'
+                              }`}
+                            >
+                              {nome}
+                            </button>
+                          );
+                        })
+                      )}
                     </div>
                   )}
-              </div>
+                </div>
+              ) : (
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={form.empresa ?? ''}
+                    onChange={(e) => update('empresa', e.target.value)}
+                    placeholder="Cliente / unidade / grupo"
+                    className="w-full bg-slate-800/50 border border-slate-700 rounded-lg px-3 py-2.5 text-sm text-slate-200 placeholder:text-slate-500 outline-none focus:border-slate-600 disabled:opacity-60"
+                    autoComplete="off"
+                    readOnly={isEmpresaReadOnly}
+                    disabled={isEmpresaReadOnly}
+                  />
+                  {empresaAutocompleteOptions.length > 0 && (
+                    <div className="absolute z-20 mt-1 w-full bg-slate-900 border border-slate-700 rounded-lg shadow-lg max-h-40 overflow-auto">
+                      {empresaAutocompleteOptions.map((nome) => (
+                        <button
+                          key={nome}
+                          type="button"
+                          disabled={isEmpresaReadOnly}
+                          onClick={() => update('empresa', nome)}
+                          className="w-full text-left px-3 py-1.5 text-[12px] text-slate-100 hover:bg-slate-800"
+                        >
+                          {nome}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
           {!isBacklogLike && (
@@ -395,7 +457,7 @@ export const ActionItemModal: React.FC<ActionItemModalProps> = ({
                 type="date"
                 value={form.when}
                 onChange={(e) => update('when', e.target.value)}
-                disabled={readOnly}
+                disabled={isDateReadOnly}
                 className="w-full bg-slate-800/50 border border-slate-700 rounded-lg pl-9 pr-3 py-2.5 text-sm text-slate-200 outline-none focus:border-slate-600 disabled:opacity-70 disabled:cursor-not-allowed"
               />
             </div>

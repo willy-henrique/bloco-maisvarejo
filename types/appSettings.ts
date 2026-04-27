@@ -14,4 +14,9 @@ export interface AppSettings {
    * Quando false: a empresa do Backlog é definida automaticamente pelo workspace ativo.
    */
   backlogPermiteAlterarEmpresa: boolean;
+  /**
+   * Quando true: permite alterar manualmente a data no modal de Backlog.
+   * Quando false: a data fica bloqueada no Backlog, usando o valor padrão do sistema.
+   */
+  backlogPermiteAlterarData: boolean;
 }

@@ -41,6 +41,7 @@ export const AdminPanel: React.FC = () => {
   const [success, setSuccess] = useState('');
   const [estrategicoFiltrarKanbanPorWho, setEstrategicoFiltrarKanbanPorWho] = useState(false);
   const [backlogPermiteAlterarEmpresa, setBacklogPermiteAlterarEmpresa] = useState(false);
+  const [backlogPermiteAlterarData, setBacklogPermiteAlterarData] = useState(false);
   const [loadingAppSettings, setLoadingAppSettings] = useState(true);
   const [removeModalUser, setRemoveModalUser] = useState<UserProfile | null>(null);
   const [removeAuditLoading, setRemoveAuditLoading] = useState(false);
@@ -95,11 +96,13 @@ export const AdminPanel: React.FC = () => {
         if (!cancelled) {
           setEstrategicoFiltrarKanbanPorWho(s.estrategicoFiltrarKanbanPorWho);
           setBacklogPermiteAlterarEmpresa(Boolean(s.backlogPermiteAlterarEmpresa));
+          setBacklogPermiteAlterarData(Boolean(s.backlogPermiteAlterarData));
         }
       } catch {
         if (!cancelled) {
           setEstrategicoFiltrarKanbanPorWho(false);
           setBacklogPermiteAlterarEmpresa(false);
+          setBacklogPermiteAlterarData(false);
         }
       } finally {
         if (!cancelled) setLoadingAppSettings(false);
@@ -691,6 +694,40 @@ export const AdminPanel: React.FC = () => {
                     <span className="block text-[11px] text-slate-500 mt-1 leading-relaxed">
                       Quando desativado, a empresa do card de backlog é preenchida automaticamente com o workspace
                       selecionado no momento do lançamento. Quando ativado, o campo Empresa / Workspace volta a ser editável.
+                    </span>
+                  </span>
+                </label>
+                <div className="my-4 border-t border-slate-800" />
+                <label className="flex items-start gap-3 cursor-pointer group">
+                  <input
+                    type="checkbox"
+                    className="mt-1 rounded border-slate-600 bg-slate-950 text-amber-600 focus:ring-amber-500/40"
+                    checked={backlogPermiteAlterarData}
+                    disabled={loadingAppSettings}
+                    onChange={async (e) => {
+                      const next = e.target.checked;
+                      setBacklogPermiteAlterarData(next);
+                      setError('');
+                      try {
+                        await saveAppSettings({ backlogPermiteAlterarData: next });
+                        setSuccess(
+                          next
+                            ? 'Backlog configurado para permitir alterar a data no modal.'
+                            : 'Backlog configurado para manter a data bloqueada no modal.',
+                        );
+                      } catch {
+                        setBacklogPermiteAlterarData(!next);
+                        setError('Não foi possível salvar a configuração. Verifique o Firestore e as regras de segurança.');
+                      }
+                    }}
+                  />
+                  <span>
+                    <span className="text-sm font-medium text-slate-200 group-hover:text-white transition-colors">
+                      Permitir alterar data no Backlog
+                    </span>
+                    <span className="block text-[11px] text-slate-500 mt-1 leading-relaxed">
+                      Quando desativado, o campo de data no modal de backlog fica bloqueado. Quando ativado,
+                      a data volta a ser editável na criação e edição do card.
                     </span>
                   </span>
                 </label>

@@ -8,6 +8,7 @@ export const APP_SETTINGS_DOC_ID = 'config';
 const DEFAULTS: AppSettings = {
   estrategicoFiltrarKanbanPorWho: false,
   backlogPermiteAlterarEmpresa: false,
+  backlogPermiteAlterarData: false,
 };
 
 export function getDefaultAppSettings(): AppSettings {

@@ -1693,6 +1693,7 @@ function AppContent() {
           hideWhereEmpresa={modalContext === 'backlog'}
           hideStatusUrgency={modalContext === 'backlog'}
           canEditBacklogEmpresa={appSettings.backlogPermiteAlterarEmpresa}
+          canEditBacklogDate={appSettings.backlogPermiteAlterarData}
           itemModalContext={modalContext}
           currentUserId={firebaseUser?.uid ?? undefined}
           resolveUserDisplay={displayWhoKanban}
