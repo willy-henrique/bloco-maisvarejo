@@ -31,6 +31,8 @@ interface ActionItemModalProps {
   readOnly?: boolean;
   /** No contexto Backlog, controla se a empresa/workspace pode ser alterada manualmente. */
   canEditBacklogEmpresa?: boolean;
+  /** Controle geral de edição de empresa/workspace por perfil do usuário. */
+  canEditEmpresa?: boolean;
   /** No contexto Backlog, controla se a data pode ser alterada manualmente. */
   canEditBacklogDate?: boolean;
   /**
@@ -87,6 +89,7 @@ export const ActionItemModal: React.FC<ActionItemModalProps> = ({
   responsaveis = [],
   readOnly = false,
   canEditBacklogEmpresa = false,
+  canEditEmpresa = true,
   canEditBacklogDate = false,
   itemModalContext = 'default',
   currentUserId,
@@ -108,7 +111,7 @@ export const ActionItemModal: React.FC<ActionItemModalProps> = ({
   /** Backlog: só lançamento; quem lança é fixo e exibido só em leitura. Estratégico (Kanban): pode atribuir responsável conforme permissão. */
   const isBacklogTabContext = itemModalContext === 'backlog';
   const useChipEmpresaField = isBacklogTabContext || isEstrategicoKanban;
-  const isEmpresaReadOnly = readOnly || (isBacklogTabContext && !canEditBacklogEmpresa);
+  const isEmpresaReadOnly = readOnly || !canEditEmpresa || (isBacklogTabContext && !canEditBacklogEmpresa);
   const isDateReadOnly = readOnly || (isBacklogTabContext && !canEditBacklogDate);
   const showSlimWhoEditor = isEstrategicoKanban && !readOnly && canEditWho;
   const whoDefault = shouldLockWho ? loggedUserName!.trim() : '';
@@ -178,7 +181,7 @@ export const ActionItemModal: React.FC<ActionItemModalProps> = ({
         onUpdate(item.id, {
           ...form,
           who: item.who,
-          empresa: canEditBacklogEmpresa ? form.empresa : item.empresa,
+          empresa: canEditBacklogEmpresa && canEditEmpresa ? form.empresa : item.empresa,
           when: canEditBacklogDate ? form.when : item.when,
         });
       } else {

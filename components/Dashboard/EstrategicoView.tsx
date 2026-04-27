@@ -1557,8 +1557,18 @@ export const EstrategicoView: React.FC<EstrategicoViewProps> = (props) => {
       }
       return prioridades.filter((p) => prioIds.has(p.id));
     }
-    return [];
-  }, [prioridades, seesAllPrioridades, myResponsavelIds, tarefas, planos, responsaveis]);
+    const uid = normStr(loggedUserUid ?? '');
+    if (!uid) return [];
+    // Fallback: evita "sumir tudo" quando o mapeamento de responsável ainda não carregou.
+    return prioridades.filter((p) => {
+      if (normStr(p.created_by) === uid) return true;
+      return planos.some((pl) => {
+        if (pl.prioridade_id !== p.id) return false;
+        if (normStr(pl.created_by) === uid) return true;
+        return tarefas.some((t) => t.plano_id === pl.id && normStr(t.created_by) === uid);
+      });
+    });
+  }, [prioridades, seesAllPrioridades, myResponsavelIds, tarefas, planos, responsaveis, loggedUserUid]);
 
   const ativas = useMemo(() => {
     let list = filteredPrioridades.filter((p) => p.status_prioridade !== 'Concluido');

@@ -546,11 +546,11 @@ function AppContent() {
   /** Prioridade entra na lista mesmo com empresa “errada” se o usuário é dono, WHO de algum plano ou tem tarefa atribuída. */
   const prioridadeVisivelPorDemandaAtribuida = useCallback(
     (p: Prioridade) => {
+      if (isCreatedByMe(p.created_by, p.dono_id)) return true;
       if (myResponsavelIdsForBoard.size === 0) return false;
       if (canViewByOwnershipOrObserver([p.dono_id], p.observadores, myResponsavelIdsForBoard, responsaveisParaAtribuicao)) {
         return true;
       }
-      if (isCreatedByMe(p.created_by, p.dono_id)) return true;
       if (
         donoPrioridadeCorrespondeAoUsuario(
           p.dono_id,
@@ -601,7 +601,6 @@ function AppContent() {
     const todas = [...ritmo.board.prioridades, ...sinteticasFromItems];
     const porEmpresa = todas.filter((p) => matchWorkspaceRitmo(p.empresa));
     if (profile?.role === 'administrador') return porEmpresa;
-    if (myResponsavelIdsForBoard.size === 0) return [];
     return porEmpresa.filter((p) => prioridadeVisivelPorDemandaAtribuida(p));
   }, [
     ritmo.board.prioridades,
@@ -625,7 +624,9 @@ function AppContent() {
         (pl) => matchWorkspaceRitmo(pl.empresa) || idsPrioridadesEscopoRitmo.has(pl.prioridade_id),
       );
       if (profile?.role === 'administrador') return base;
-      if (myResponsavelIdsForBoard.size === 0) return [];
+      if (myResponsavelIdsForBoard.size === 0) {
+        return base.filter((pl) => isCreatedByMe(pl.created_by, pl.who_id));
+      }
       return base.filter(
         (pl) =>
           isCreatedByMe(pl.created_by, pl.who_id) ||
@@ -659,7 +660,9 @@ function AppContent() {
         (t) => matchWorkspaceRitmo(t.empresa) || idsPlanosEscopoVisivel.has(t.plano_id),
       );
       if (profile?.role === 'administrador') return base;
-      if (myResponsavelIdsForBoard.size === 0) return [];
+      if (myResponsavelIdsForBoard.size === 0) {
+        return base.filter((t) => isCreatedByMe(t.created_by, t.responsavel_id));
+      }
       return base.filter(
         (t) =>
           isCreatedByMe(t.created_by, t.responsavel_id) ||
@@ -683,12 +686,14 @@ function AppContent() {
       backlog: {
         create: hasModuleAction('backlog', 'create'),
         edit: hasModuleAction('backlog', 'edit'),
+        workspaceEdit: hasModuleAction('backlog', 'workspace_edit'),
         delete: hasModuleAction('backlog', 'delete'),
         workflow: hasModuleAction('backlog', 'workflow'),
       },
       dashboard: {
         create: hasModuleAction('dashboard', 'create'),
         edit: hasModuleAction('dashboard', 'edit'),
+        workspaceEdit: hasModuleAction('dashboard', 'workspace_edit'),
         delete: hasModuleAction('dashboard', 'delete'),
         workflow: hasModuleAction('dashboard', 'workflow'),
         linkTatico: hasModuleAction('dashboard', 'link_tatico'),
@@ -1670,6 +1675,9 @@ function AppContent() {
               selectedItem === null &&
               profile?.role === 'administrador' &&
               workspaceAtivo === 'all';
+            const podeEditarEmpresaBacklog =
+              (appSettings.backlogPermiteAlterarEmpresa && perm.backlog.workspaceEdit) ||
+              adminCriandoBacklogEmTodasEmpresas;
             const workspaceCriacao =
               workspaceAtivo !== 'all'
                 ? String(workspaceAtivo).trim()
@@ -1686,7 +1694,7 @@ function AppContent() {
             }
             const empresa =
               modalContext === 'backlog'
-                ? appSettings.backlogPermiteAlterarEmpresa
+                ? podeEditarEmpresaBacklog
                   ? (empresaDigitada || workspaceCriacao)
                   : (workspaceCriacao || empresaDigitada)
                 : (empresaDigitada || workspaceCriacao);
@@ -1718,8 +1726,13 @@ function AppContent() {
           responsaveis={responsaveisParaAtribuicao}
           hideWhereEmpresa={modalContext === 'backlog'}
           hideStatusUrgency={modalContext === 'backlog'}
+          canEditEmpresa={
+            modalContext === 'backlog'
+              ? perm.backlog.workspaceEdit
+              : perm.dashboard.workspaceEdit
+          }
           canEditBacklogEmpresa={
-            appSettings.backlogPermiteAlterarEmpresa ||
+            (appSettings.backlogPermiteAlterarEmpresa && perm.backlog.workspaceEdit) ||
             (
               modalContext === 'backlog' &&
               selectedItem === null &&
