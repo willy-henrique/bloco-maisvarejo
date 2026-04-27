@@ -1096,23 +1096,9 @@ const PrioridadeCard: React.FC<{
   const whoPool = whoUsers && whoUsers.length > 0 ? whoUsers : responsaveis;
   const myViewerIds = viewerMyResponsavelIds ?? EMPTY_ID_SET;
 
-  // Filtra os planos visíveis ao viewer.
-  // Admin vê tudo. Não-admin vê apenas planos onde é WHO, observador, ou tem tarefa atribuída/observada.
-  const planosVisiveis = useMemo(() => {
-    if (viewerIsAdmin || myViewerIds.size === 0) return planos;
-    return planos.filter((pl) => {
-      if (donoPrioridadeCorrespondeAoUsuario(pl.who_id, myViewerIds, responsaveis)) return true;
-      if (canViewByOwnershipOrObserver([], pl.observadores, myViewerIds, responsaveis)) return true;
-      // Criador do plano sempre enxerga o próprio plano.
-      if (pl.created_by && myViewerIds.has(normStr(pl.created_by))) return true;
-      const tarefasDoPlano = todasTarefas.filter((t) => t.plano_id === pl.id);
-      return tarefasDoPlano.some(
-        (t) =>
-          tarefaAtribuidaAoUsuario(t, myViewerIds, responsaveis) ||
-          canViewByOwnershipOrObserver([t.responsavel_id], t.observadores, myViewerIds, responsaveis),
-      );
-    });
-  }, [planos, viewerIsAdmin, myViewerIds, responsaveis, todasTarefas]);
+  // O escopo de visibilidade de planos/tarefas já vem filtrado no App.
+  // Evita duplo filtro local para não "sumir" planos de ataque intermitentemente no Tático.
+  const planosVisiveis = planos;
 
   const [showAddPlano, setShowAddPlano] = useState(false);
   const [novoPlano, setNovoPlano] = useState({

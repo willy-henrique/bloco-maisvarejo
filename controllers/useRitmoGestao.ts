@@ -345,21 +345,30 @@ export function useRitmoGestao(encryptionKey: CryptoKey | null) {
           const remotePrios = Array.isArray(raw.prioridades) ? raw.prioridades : [];
           const remotePlanos = Array.isArray(raw.planos) ? raw.planos : [];
           const remoteTarefas = Array.isArray(raw.tarefas) ? raw.tarefas : [];
-          const mergedPrios = mergePrioridadesPreservandoDonoMaisRecente(remotePrios, prev.prioridades);
-          const mergedPlanos = alinharPlanosWhoAoDonoMesclado(remotePlanos, mergedPrios, remotePrios).map((rpl) => {
+          const mergedPriosBase = mergePrioridadesPreservandoDonoMaisRecente(remotePrios, prev.prioridades);
+          const mergedPrioIds = new Set(mergedPriosBase.map((p) => p.id));
+          const extraPrios = prev.prioridades.filter((p) => !mergedPrioIds.has(p.id));
+          const mergedPrios = [...mergedPriosBase, ...extraPrios];
+          const mergedPlanosBase = alinharPlanosWhoAoDonoMesclado(remotePlanos, mergedPrios, remotePrios).map((rpl) => {
             const lpl = prev.planos.find((p) => p.id === rpl.id);
             if (!lpl) return rpl;
             const localObs = Array.isArray(lpl.observadores) ? lpl.observadores : [];
             const remoteObs = Array.isArray(rpl.observadores) ? rpl.observadores : [];
             return { ...rpl, observadores: localObs.length >= remoteObs.length ? localObs : remoteObs };
           });
-          const mergedTarefas = remoteTarefas.map((rt) => {
+          const mergedPlanoIds = new Set(mergedPlanosBase.map((pl) => pl.id));
+          const extraPlanos = prev.planos.filter((pl) => !mergedPlanoIds.has(pl.id));
+          const mergedPlanos = [...mergedPlanosBase, ...extraPlanos];
+          const mergedTarefasBase = remoteTarefas.map((rt) => {
             const lt = prev.tarefas.find((t) => t.id === rt.id);
             if (!lt) return rt;
             const localObs = Array.isArray(lt.observadores) ? lt.observadores : [];
             const remoteObs = Array.isArray(rt.observadores) ? rt.observadores : [];
             return { ...rt, observadores: localObs.length >= remoteObs.length ? localObs : remoteObs };
           });
+          const mergedTarefaIds = new Set(mergedTarefasBase.map((t) => t.id));
+          const extraTarefas = prev.tarefas.filter((t) => !mergedTarefaIds.has(t.id));
+          const mergedTarefas = [...mergedTarefasBase, ...extraTarefas];
           return normalizeBoard({
             ...raw,
             empresas: Array.isArray(raw.empresas) ? raw.empresas : prev.empresas,
