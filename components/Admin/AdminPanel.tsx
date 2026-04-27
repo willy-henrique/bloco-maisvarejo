@@ -40,6 +40,7 @@ export const AdminPanel: React.FC = () => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [estrategicoFiltrarKanbanPorWho, setEstrategicoFiltrarKanbanPorWho] = useState(false);
+  const [backlogPermiteAlterarEmpresa, setBacklogPermiteAlterarEmpresa] = useState(false);
   const [loadingAppSettings, setLoadingAppSettings] = useState(true);
   const [removeModalUser, setRemoveModalUser] = useState<UserProfile | null>(null);
   const [removeAuditLoading, setRemoveAuditLoading] = useState(false);
@@ -91,9 +92,15 @@ export const AdminPanel: React.FC = () => {
     (async () => {
       try {
         const s = await getAppSettings();
-        if (!cancelled) setEstrategicoFiltrarKanbanPorWho(s.estrategicoFiltrarKanbanPorWho);
+        if (!cancelled) {
+          setEstrategicoFiltrarKanbanPorWho(s.estrategicoFiltrarKanbanPorWho);
+          setBacklogPermiteAlterarEmpresa(Boolean(s.backlogPermiteAlterarEmpresa));
+        }
       } catch {
-        if (!cancelled) setEstrategicoFiltrarKanbanPorWho(false);
+        if (!cancelled) {
+          setEstrategicoFiltrarKanbanPorWho(false);
+          setBacklogPermiteAlterarEmpresa(false);
+        }
       } finally {
         if (!cancelled) setLoadingAppSettings(false);
       }
@@ -650,6 +657,40 @@ export const AdminPanel: React.FC = () => {
                       Quando ativado, usuários que <strong className="text-slate-400">não</strong> são administradores só veem
                       cartões cuja iniciativa está atribuída a eles no campo WHO. Administradores continuam vendo todo o
                       quadro do workspace. Desligado = comportamento anterior (todos veem as iniciativas da empresa selecionada).
+                    </span>
+                  </span>
+                </label>
+                <div className="my-4 border-t border-slate-800" />
+                <label className="flex items-start gap-3 cursor-pointer group">
+                  <input
+                    type="checkbox"
+                    className="mt-1 rounded border-slate-600 bg-slate-950 text-amber-600 focus:ring-amber-500/40"
+                    checked={backlogPermiteAlterarEmpresa}
+                    disabled={loadingAppSettings}
+                    onChange={async (e) => {
+                      const next = e.target.checked;
+                      setBacklogPermiteAlterarEmpresa(next);
+                      setError('');
+                      try {
+                        await saveAppSettings({ backlogPermiteAlterarEmpresa: next });
+                        setSuccess(
+                          next
+                            ? 'Backlog configurado para permitir alterar empresa/workspace no lançamento e edição.'
+                            : 'Backlog configurado para fixar empresa/workspace automaticamente pelo filtro ativo.',
+                        );
+                      } catch {
+                        setBacklogPermiteAlterarEmpresa(!next);
+                        setError('Não foi possível salvar a configuração. Verifique o Firestore e as regras de segurança.');
+                      }
+                    }}
+                  />
+                  <span>
+                    <span className="text-sm font-medium text-slate-200 group-hover:text-white transition-colors">
+                      Permitir alterar empresa no Backlog
+                    </span>
+                    <span className="block text-[11px] text-slate-500 mt-1 leading-relaxed">
+                      Quando desativado, a empresa do card de backlog é preenchida automaticamente com o workspace
+                      selecionado no momento do lançamento. Quando ativado, o campo Empresa / Workspace volta a ser editável.
                     </span>
                   </span>
                 </label>

@@ -29,6 +29,8 @@ interface ActionItemModalProps {
   responsaveis?: Responsavel[];
   /** Somente leitura (permissão de edição negada) */
   readOnly?: boolean;
+  /** No contexto Backlog, controla se a empresa/workspace pode ser alterada manualmente. */
+  canEditBacklogEmpresa?: boolean;
   /**
    * Estratégico (Kanban): mesmo formulário “slim” do Backlog (Título, Descrição, Quem?, Quando?),
    * com título de modal “Item Estratégico”.
@@ -82,6 +84,7 @@ export const ActionItemModal: React.FC<ActionItemModalProps> = ({
   canEditWho = false,
   responsaveis = [],
   readOnly = false,
+  canEditBacklogEmpresa = false,
   itemModalContext = 'default',
   currentUserId,
   resolveUserDisplay,
@@ -101,6 +104,7 @@ export const ActionItemModal: React.FC<ActionItemModalProps> = ({
   const isWhoReadOnly = !canEditWho;
   /** Backlog: só lançamento; quem lança é fixo e exibido só em leitura. Estratégico (Kanban): pode atribuir responsável conforme permissão. */
   const isBacklogTabContext = itemModalContext === 'backlog';
+  const isEmpresaReadOnly = readOnly || (isBacklogTabContext && !canEditBacklogEmpresa);
   const showSlimWhoEditor = isEstrategicoKanban && !readOnly && canEditWho;
   const whoDefault = shouldLockWho ? loggedUserName!.trim() : '';
   const [form, setForm] = useState(emptyForm(whoDefault));
@@ -154,7 +158,11 @@ export const ActionItemModal: React.FC<ActionItemModalProps> = ({
     if (readOnly) return;
     if (isEdit && item) {
       if (isBacklogTabContext) {
-        onUpdate(item.id, { ...form, who: item.who });
+        onUpdate(item.id, {
+          ...form,
+          who: item.who,
+          empresa: canEditBacklogEmpresa ? form.empresa : item.empresa,
+        });
       } else {
         onUpdate(item.id, { ...form });
       }
@@ -318,8 +326,8 @@ export const ActionItemModal: React.FC<ActionItemModalProps> = ({
                   placeholder="Cliente / unidade / grupo"
                   className="w-full bg-slate-800/50 border border-slate-700 rounded-lg px-3 py-2.5 text-sm text-slate-200 placeholder:text-slate-500 outline-none focus:border-slate-600 disabled:opacity-60"
                   autoComplete="off"
-                  readOnly={readOnly}
-                  disabled={readOnly}
+                  readOnly={isEmpresaReadOnly}
+                  disabled={isEmpresaReadOnly}
                 />
                 {form.empresa &&
                   (empresaSuggestions ?? [])
@@ -337,7 +345,7 @@ export const ActionItemModal: React.FC<ActionItemModalProps> = ({
                           <button
                             key={nome}
                             type="button"
-                            disabled={readOnly}
+                            disabled={isEmpresaReadOnly}
                             onClick={() => update('empresa', nome)}
                             className="w-full text-left px-3 py-1.5 text-[12px] text-slate-100 hover:bg-slate-800"
                           >

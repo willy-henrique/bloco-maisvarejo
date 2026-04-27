@@ -1665,9 +1665,15 @@ function AppContent() {
           item={selectedItem}
           initialStatus={selectedItem === null ? defaultStatusForNew ?? undefined : undefined}
           onSave={(item) => {
+            const workspaceCriacao =
+              workspaceAtivo !== 'all' ? String(workspaceAtivo).trim() : (empresasAtivas[0] ?? '').trim();
+            const empresaDigitada = item.empresa?.trim() ?? '';
             const empresa =
-              item.empresa?.trim() ||
-              (workspaceAtivo !== 'all' ? workspaceAtivo : empresasAtivas[0] ?? '');
+              modalContext === 'backlog'
+                ? appSettings.backlogPermiteAlterarEmpresa
+                  ? (empresaDigitada || workspaceCriacao)
+                  : (workspaceCriacao || empresaDigitada)
+                : (empresaDigitada || workspaceCriacao);
             addItem({
               ...item,
               empresa,
@@ -1686,6 +1692,7 @@ function AppContent() {
           responsaveis={responsaveisParaAtribuicao}
           hideWhereEmpresa={modalContext === 'backlog'}
           hideStatusUrgency={modalContext === 'backlog'}
+          canEditBacklogEmpresa={appSettings.backlogPermiteAlterarEmpresa}
           itemModalContext={modalContext}
           currentUserId={firebaseUser?.uid ?? undefined}
           resolveUserDisplay={displayWhoKanban}

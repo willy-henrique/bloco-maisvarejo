@@ -9,4 +9,9 @@ export interface AppSettings {
    * Administrador continua vendo todas as iniciativas do workspace.
    */
   estrategicoFiltrarKanbanPorWho: boolean;
+  /**
+   * Quando true: permite alterar manualmente a empresa/workspace no modal de Backlog.
+   * Quando false: a empresa do Backlog é definida automaticamente pelo workspace ativo.
+   */
+  backlogPermiteAlterarEmpresa: boolean;
 }
