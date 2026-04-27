@@ -177,12 +177,6 @@ const TarefaRow: React.FC<{
   responsaveis: Responsavel[];
   onUpdate: (u: Partial<Tarefa>) => void;
   onRequestBlock: () => void;
-  /**
-   * Pede ao parent (PlanoCard) que abra o modal de confirmação.
-   * NUNCA renderizamos o Modal aqui dentro: o JSX da TarefaRow é filho de
-   * <tbody>, e React/HTML não permite <div> nesse contexto. Mesmo com portal,
-   * a checagem dispara warning de hidratação. Lift state up.
-   */
   onRequestDelete: () => void;
   canWriteTarefa?: boolean;
   canAssignTarefa?: boolean;
@@ -489,11 +483,6 @@ const PlanoCard: React.FC<{
   const [showAddTarefa, setShowAddTarefa] = useState(false);
   const [showPlanoObservers, setShowPlanoObservers] = useState(false);
   const [confirmDeletePlano, setConfirmDeletePlano] = useState(false);
-  // Estado de confirmação de exclusão de tarefa fica AQUI (no PlanoCard) e não
-  // dentro de TarefaRow. Motivo: TarefaRow renderiza dentro de <tbody>; um
-  // <Modal> ali (mesmo via portal) dispara warning de validateDOMNesting do
-  // React, e em alguns casos o clique do botão fica capturado pelo <tr>,
-  // impedindo a exclusão. Lift state up resolve ambos os problemas.
   const [tarefaParaExcluir, setTarefaParaExcluir] = useState<Tarefa | null>(null);
   const [tarefaParaBloquear, setTarefaParaBloquear] = useState<Tarefa | null>(null);
   const [motivoBloqueio, setMotivoBloqueio] = useState('');
@@ -980,12 +969,7 @@ const PlanoCard: React.FC<{
         </Modal>
       )}
       {tarefaParaExcluir && (
-        <Modal
-          isOpen
-          onClose={() => setTarefaParaExcluir(null)}
-          title="Excluir tarefa"
-          maxWidth="sm"
-        >
+        <Modal isOpen onClose={() => setTarefaParaExcluir(null)} title="Excluir tarefa" maxWidth="sm">
           <div className="space-y-4">
             <div className="flex items-start gap-3 rounded-lg border border-red-500/30 bg-red-500/10 p-3">
               <AlertTriangle size={16} className="mt-0.5 text-red-300 shrink-0" />
@@ -1006,11 +990,9 @@ const PlanoCard: React.FC<{
               <button
                 type="button"
                 onClick={() => {
-                  // Capturamos o id antes de fechar pra não perder a referência
-                  // caso o estado seja zerado antes da chamada (paranoia).
-                  const idParaExcluir = tarefaParaExcluir.id;
+                  const tarefaId = tarefaParaExcluir.id;
                   setTarefaParaExcluir(null);
-                  onDeleteTarefa(idParaExcluir);
+                  onDeleteTarefa(tarefaId);
                 }}
                 className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-xs font-semibold text-white transition-colors"
               >
