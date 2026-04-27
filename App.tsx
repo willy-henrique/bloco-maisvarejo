@@ -1676,7 +1676,7 @@ function AppContent() {
           }}
           onUpdate={updateItem}
           defaultEmpresa={workspaceAtivo === 'all' ? (empresasAtivas[0] ?? '') : workspaceAtivo}
-          empresaSuggestions={itemModalContext === 'backlog' ? empresasDisponiveis : empresasAtivas}
+          empresaSuggestions={modalContext === 'backlog' ? empresasDisponiveis : empresasAtivas}
           loggedUserName={profile?.nome}
           lockWhoToLoggedUser={true}
           canEditWho={
