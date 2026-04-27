@@ -52,7 +52,6 @@ import { Toast, type ToastType } from './components/Shared/Toast';
 import { ChatView } from './components/Chat/ChatView';
 import { Modal } from './components/Shared/Modal';
 import { EstrategicoGridIcon } from './components/icons/EstrategicoGridIcon';
-import { VisibilityFilterBar, type VisibilityFilter } from './components/Shared/VisibilityFilterBar';
 
 function normKey(s: string | null | undefined): string {
   return (s ?? '').trim().toLowerCase();
@@ -106,7 +105,6 @@ function AppContent() {
   const [dashboardOpenConcluidas, setDashboardOpenConcluidas] = useState(false);
   const [tableOpenConcluidas, setTableOpenConcluidas] = useState(false);
   const [backlogOpenConcluidas, setBacklogOpenConcluidas] = useState(false);
-  const [backlogVisFilters, setBacklogVisFilters] = useState<VisibilityFilter[]>([]);
   const [quadroVerConcluidas, setQuadroVerConcluidas] = useState(false);
   const [focusPrioridadeId, setFocusPrioridadeId] = useState<string | null>(null);
   const focusedPrioridadeId = useRef<string | null>(null);
@@ -118,6 +116,7 @@ function AppContent() {
   const [empresasLocais, setEmpresasLocais] = useState<string[]>([]);
   const [appSettings, setAppSettings] = useState<AppSettings>(() => getDefaultAppSettings());
   const [empresasBloqueadas, setEmpresasBloqueadas] = useState<string[]>([]);
+  const canEditTaskDueDate = profile?.role === 'administrador' || appSettings.tarefaPermiteAlterarData;
 
   const canSeeEmpresa = useCallback(
     (empresa?: string) => {
@@ -468,20 +467,6 @@ function AppContent() {
     });
   }, [items, matchWorkspaceStrict, isCreatedByMe]);
 
-  const backlogViewItemsFiltrados = useMemo(() => {
-    if (backlogVisFilters.length === 0) return backlogViewItems;
-    return backlogViewItems.filter((item) => {
-      if (backlogVisFilters.includes('created') && isCreatedByMe(item.created_by, item.who)) return true;
-      if (backlogVisFilters.includes('assigned') && donoPrioridadeCorrespondeAoUsuario(
-        item.who,
-        myResponsavelIdsForBoard,
-        responsaveisParaAtribuicao,
-      )) return true;
-      // ActionItem não possui campo observadores; filtro "acompanho" não produz matches.
-      return false;
-    });
-  }, [backlogVisFilters, backlogViewItems, isCreatedByMe, myResponsavelIdsForBoard, responsaveisParaAtribuicao]);
-
   useEffect(() => {
     if (!isAuthenticated || !isFirebaseConfigured) {
       setAppSettings(getDefaultAppSettings());
@@ -556,8 +541,8 @@ function AppContent() {
   );
 
   const backlogViewItemsComPesquisa = useMemo(
-    () => filterActionItemsByHeaderSearch(backlogViewItemsFiltrados),
-    [backlogViewItemsFiltrados, filterActionItemsByHeaderSearch],
+    () => filterActionItemsByHeaderSearch(backlogViewItems),
+    [backlogViewItems, filterActionItemsByHeaderSearch],
   );
 
   /** Prioridade entra na lista mesmo com empresa “errada” se o usuário é dono, WHO de algum plano ou tem tarefa atribuída. */
@@ -1440,6 +1425,7 @@ function AppContent() {
                     tarefaWrite: perm.table.tarefaWrite,
                     tarefaAssign: perm.table.tarefaAssign || perm.table.tarefaWrite,
                     tarefaDelete: perm.table.tarefaDelete,
+                    tarefaEditPrazo: canEditTaskDueDate,
                     observerEdit: perm.table.observerEdit,
                   }}
                 />
@@ -1481,13 +1467,10 @@ function AppContent() {
                     tarefaWrite: perm.operacional.tarefaWrite,
                     tarefaAssign: perm.operacional.tarefaAssign || perm.operacional.tarefaWrite,
                     tarefaDelete: perm.operacional.tarefaDelete,
-                    tarefaEditPrazo: appSettings.tarefaPermiteAlterarData,
+                    tarefaEditPrazo: canEditTaskDueDate,
                     observerEdit: perm.operacional.observerEdit,
                   }}
                 />
-              )}
-              {activeView === 'backlog' && (
-                <VisibilityFilterBar active={backlogVisFilters} onChange={setBacklogVisFilters} />
               )}
               {activeView === 'backlog' && (
                 <BacklogView

@@ -1593,6 +1593,7 @@ export const EstrategicoView: React.FC<EstrategicoViewProps> = (props) => {
     tarefaWrite: estrategicoCaps?.tarefaWrite !== false,
     tarefaAssign: estrategicoCaps?.tarefaAssign !== false,
     tarefaDelete: estrategicoCaps?.tarefaDelete !== false,
+    tarefaEditPrazo: estrategicoCaps?.tarefaEditPrazo === true,
     observerEdit: estrategicoCaps?.observerEdit !== false,
   };
   const whoPool = whoUsers && whoUsers.length > 0 ? whoUsers : responsaveis;
@@ -1893,6 +1894,7 @@ export const EstrategicoView: React.FC<EstrategicoViewProps> = (props) => {
                   canTarefaWrite={caps.tarefaWrite}
                   canTarefaAssign={caps.tarefaAssign}
                   canTarefaDelete={caps.tarefaDelete}
+                  canEditPrazo={caps.tarefaEditPrazo}
                   viewerIsAdmin={viewerSeesAllTarefasNoPlano}
                   viewerMyResponsavelIds={myResponsavelIds}
                   allUsers={observerPool.map((r) => ({ id: r.id, label: r.nome }))}

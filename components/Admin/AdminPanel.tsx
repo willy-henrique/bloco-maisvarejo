@@ -749,8 +749,8 @@ export const AdminPanel: React.FC = () => {
                         await saveAppSettings({ tarefaPermiteAlterarData: next });
                         setSuccess(
                           next
-                            ? 'Tático configurado para permitir alterar o prazo das tarefas.'
-                            : 'Tático configurado para manter o prazo das tarefas bloqueado.',
+                            ? 'Prazo das tarefas liberado para usuários não administradores.'
+                            : 'Prazo das tarefas bloqueado para usuários não administradores.',
                         );
                       } catch {
                         setTarefaPermiteAlterarData(!next);
@@ -760,11 +760,12 @@ export const AdminPanel: React.FC = () => {
                   />
                   <span>
                     <span className="text-sm font-medium text-slate-200 group-hover:text-white transition-colors">
-                      Permitir alterar prazo das Tarefas (Tático)
+                      Permitir alterar prazo das Tarefas (Tático / Operacional)
                     </span>
                     <span className="block text-[11px] text-slate-500 mt-1 leading-relaxed">
-                      Quando desativado, o campo de prazo (data de vencimento) das tarefas no Tático fica somente leitura.
-                      Quando ativado, o prazo pode ser editado diretamente na linha da tarefa.
+                      Administradores gerais sempre podem alterar o prazo. Para os demais usuários, quando desativado,
+                      o campo de prazo (data de vencimento) fica somente leitura; quando ativado, o prazo pode ser
+                      editado diretamente na linha da tarefa.
                     </span>
                   </span>
                 </label>
