@@ -1060,7 +1060,7 @@ export const OperacionalView: React.FC<OperacionalProps> = ({
         Array.isArray(pl.observadores) &&
         pl.observadores.some((o) => myResponsavelIds.has(normStr(o.user_id)));
 
-      if (visibilityFilters.length === 0) return true;
+      if (visibilityFilters.length === 0) return false;
       const matchesCreated = visibilityFilters.includes('created') && isCreator;
       const matchesAssigned = visibilityFilters.includes('assigned') && isAssigned;
       const matchesObserving = visibilityFilters.includes('observing') && isObserving;
@@ -1094,7 +1094,7 @@ export const OperacionalView: React.FC<OperacionalProps> = ({
         Array.isArray(t.observadores) &&
         t.observadores.some((o) => myResponsavelIds.has(normStr(o.user_id)));
 
-      if (visibilityFilters.length === 0) return true;
+      if (visibilityFilters.length === 0) return false;
       const matchesCreated = visibilityFilters.includes('created') && isCreator;
       const matchesAssigned = visibilityFilters.includes('assigned') && isAssigned;
       const matchesObserving = visibilityFilters.includes('observing') && isObserving;

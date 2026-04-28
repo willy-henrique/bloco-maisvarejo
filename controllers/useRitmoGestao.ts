@@ -652,26 +652,18 @@ export function useRitmoGestao(encryptionKey: CryptoKey | null) {
     const unsub = subscribeRitmoBoard(encryptionKey, (next) => {
       const raw = normalizeBoard(next as RitmoGestaoBoard);
       acknowledgeRemotePendingDeletions(pendingDeletionsRef.current, raw);
+      // Renova timestamps de deleções ainda pendentes (o remote ainda as contém, ou seja,
+      // a confirmação do Firestore não chegou). Evita que o guard expire prematuramente
+      // enquanto o Firestore continua retornando o item deletado (rede lenta, multi-sessão).
+      const nowMs = Date.now();
+      (Object.keys(pendingDeletionsRef.current) as PendingDeletionBucket[]).forEach((bucket) => {
+        pendingDeletionsRef.current[bucket].forEach((_, id) => {
+          pendingDeletionsRef.current[bucket].set(id, nowMs);
+        });
+      });
       const pendingDeletes = snapshotPendingDeletions(pendingDeletionsRef.current);
       const remoteVisible = filterBoardPendingDeletions(raw, pendingDeletes);
-      setBoard((prev) => {
-        const merged = mergeRemoteSnapshotIntoPrev(remoteVisible, prev, pendingDeletes);
-
-        // Se nosso merge tem MAIS conteúdo que o snapshot remoto (porque havia
-        // extras locais), reescreve assincronamente para propagar os locais.
-        // Janela de 8s evita loop com nossos próprios ecos. initialLoadedRef
-        // evita reescrita durante boot, antes do load resolver.
-        const recentLocalWrite = Date.now() - lastLocalWriteAtRef.current < 8000;
-        if (
-          initialLoadedRef.current &&
-          !recentLocalWrite &&
-          encryptionKey &&
-          boardHasMoreContentThan(merged, remoteVisible)
-        ) {
-          enqueuePersist(encryptionKey, merged);
-        }
-        return merged;
-      });
+      setBoard((prev) => mergeRemoteSnapshotIntoPrev(remoteVisible, prev, pendingDeletes));
     });
     unsubRef.current = unsub ?? null;
 
