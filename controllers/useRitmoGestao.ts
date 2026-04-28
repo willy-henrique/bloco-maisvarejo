@@ -4,7 +4,7 @@
  *
  * Sincronização:
  *  - `setBoard` com functional updater é a ÚNICA fonte de "prev" — evita ler ref stale.
- *  - Subscribe handler faz merge dentro do updater (preserva extras locais ainda não ecoados).
+ *  - Subscribe handler faz merge dentro do updater, mas confia no Firestore para existência de itens.
  *  - Persist é enfileirado (last-write-wins controlado pela aplicação) e idempotente.
  *  - NUNCA escrevemos board vazio sobre dados existentes no Firestore (proteção anti-wipeout).
  */
@@ -310,8 +310,8 @@ function mergeBoardRemotoComLocal(
 
 /**
  * Mescla um snapshot remoto recebido no `onSnapshot` com o estado React atual (`prev`).
- * Preserva itens locais que ainda não chegaram no remote (extras), garantindo que
- * planos/tarefas recém-criados não sumam ao receber um eco antigo.
+ * O Firestore é fonte de verdade para existência de itens; o merge local aqui
+ * só preserva campos auxiliares mais recentes, como dono/observadores.
  */
 function mergeRemoteSnapshotIntoPrev(
   remote: RitmoGestaoBoard,
@@ -325,36 +325,28 @@ function mergeRemoteSnapshotIntoPrev(
   const remoteTarefas = rNorm.tarefas;
   const remoteBacklog = rNorm.backlog;
 
-  const mergedPriosBase = mergePrioridadesPreservandoDonoMaisRecente(remotePrios, prevNorm.prioridades);
-  const mergedPrioIds = new Set(mergedPriosBase.map((p) => p.id));
-  const extraPrios = prevNorm.prioridades.filter((p) => !mergedPrioIds.has(p.id));
-  const mergedPrios = [...mergedPriosBase, ...extraPrios];
+  // Merge de prioridades: usa base remota (autoritativa) + merge de dono mais recente.
+  // Não inclui "extras" do prev — o Firestore é fonte de verdade para existência de itens.
+  // Incluir extras causava loop: itens deletados voltavam do prev a cada snapshot.
+  const mergedPrios = mergePrioridadesPreservandoDonoMaisRecente(remotePrios, prevNorm.prioridades);
 
-  const mergedPlanosBase = alinharPlanosWhoAoDonoMesclado(remotePlanos, mergedPrios, remotePrios).map((rpl) => {
+  const mergedPlanos = alinharPlanosWhoAoDonoMesclado(remotePlanos, mergedPrios, remotePrios).map((rpl) => {
     const lpl = prevNorm.planos.find((p) => p.id === rpl.id);
     if (!lpl) return rpl;
     const localObs = Array.isArray(lpl.observadores) ? lpl.observadores : [];
     const remoteObs = Array.isArray(rpl.observadores) ? rpl.observadores : [];
     return { ...rpl, observadores: localObs.length >= remoteObs.length ? localObs : remoteObs };
   });
-  const mergedPlanoIds = new Set(mergedPlanosBase.map((pl) => pl.id));
-  const extraPlanos = prevNorm.planos.filter((pl) => !mergedPlanoIds.has(pl.id));
-  const mergedPlanos = [...mergedPlanosBase, ...extraPlanos];
 
-  const mergedTarefasBase = remoteTarefas.map((rt) => {
+  const mergedTarefas = remoteTarefas.map((rt) => {
     const lt = prevNorm.tarefas.find((t) => t.id === rt.id);
     if (!lt) return rt;
     const localObs = Array.isArray(lt.observadores) ? lt.observadores : [];
     const remoteObs = Array.isArray(rt.observadores) ? rt.observadores : [];
     return { ...rt, observadores: localObs.length >= remoteObs.length ? localObs : remoteObs };
   });
-  const mergedTarefaIds = new Set(mergedTarefasBase.map((t) => t.id));
-  const extraTarefas = prevNorm.tarefas.filter((t) => !mergedTarefaIds.has(t.id));
-  const mergedTarefas = [...mergedTarefasBase, ...extraTarefas];
 
-  const mergedBacklogIds = new Set(remoteBacklog.map((b) => b.id));
-  const extraBacklog = prevNorm.backlog.filter((b) => !mergedBacklogIds.has(b.id));
-  const mergedBacklog = [...remoteBacklog, ...extraBacklog];
+  const mergedBacklog = remoteBacklog;
 
   return normalizeBoard({
     ...rNorm,
@@ -649,6 +641,7 @@ export function useRitmoGestao(encryptionKey: CryptoKey | null) {
     })();
 
     // Subscribe — recebe ecos remotos e mescla com estado React atual (via prev do updater).
+    // O snapshot remoto é autoritativo para existência de itens.
     const unsub = subscribeRitmoBoard(encryptionKey, (next) => {
       const raw = normalizeBoard(next as RitmoGestaoBoard);
       acknowledgeRemotePendingDeletions(pendingDeletionsRef.current, raw);

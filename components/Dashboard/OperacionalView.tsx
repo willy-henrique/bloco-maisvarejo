@@ -929,7 +929,7 @@ export const OperacionalView: React.FC<OperacionalProps> = ({
   operacionalCaps,
 }) => {
   const [abaAtiva, setAbaAtiva] = useState<'planos' | 'tarefas'>('tarefas');
-  const [visibilityFilters, setVisibilityFilters] = useState<VisibilityFilter[]>([]);
+  const [visibilityFilters, setVisibilityFilters] = useState<VisibilityFilter[]>(['assigned']);
   const [tarefasConcluidasOpen, setTarefasConcluidasOpen] = useState(false);
   const [planosConcluidosOpen, setPlanosConcluidosOpen] = useState(false);
   const [openTaskObservers, setOpenTaskObservers] = useState<Record<string, boolean>>({});
