@@ -63,6 +63,31 @@ function userLocalPart(email?: string | null): string {
   return raw.split('@')[0]?.trim() ?? '';
 }
 
+function normalizeWorkspaceName(value?: string | null): string {
+  return (value ?? '').trim().toLowerCase();
+}
+
+function profileAllowedWorkspaces(profile?: UserProfile | null): string[] {
+  const raw = Array.isArray(profile?.empresas) ? profile.empresas : [];
+  return raw
+    .map((empresa) => empresa.trim())
+    .filter((empresa) => {
+      const normalized = normalizeWorkspaceName(empresa);
+      return normalized !== '' && normalized !== '*' && normalized !== 'todas';
+    });
+}
+
+function profileHasAllWorkspaceAccess(profile?: UserProfile | null): boolean {
+  if (!profile) return true;
+  const raw = Array.isArray(profile.empresas) ? profile.empresas : [];
+  const hasAllFlag = raw.some((empresa) => {
+    const normalized = normalizeWorkspaceName(empresa);
+    return normalized === '*' || normalized === 'todas';
+  });
+  if (hasAllFlag) return true;
+  return profile.role === 'administrador' && raw.length === 0;
+}
+
 /**
  * Empresa gravada na prioridade/planos/tarefas deve ser visível ao dono.
  * Se ele só tem acesso a outras empresas que a do classificador, usa a primeira empresa permitida dele.
@@ -117,24 +142,22 @@ function AppContent() {
   const [appSettings, setAppSettings] = useState<AppSettings>(() => getDefaultAppSettings());
   const [empresasBloqueadas, setEmpresasBloqueadas] = useState<string[]>([]);
   const canEditTaskDueDate = profile?.role === 'administrador' || appSettings.tarefaPermiteAlterarData;
+  const hasAllWorkspaceAccess = useMemo(() => profileHasAllWorkspaceAccess(profile), [profile]);
+  const allowedWorkspaceNames = useMemo(() => profileAllowedWorkspaces(profile), [profile]);
+  const allowedWorkspaceKeys = useMemo(
+    () => new Set(allowedWorkspaceNames.map((empresa) => normalizeWorkspaceName(empresa))),
+    [allowedWorkspaceNames],
+  );
 
   const canSeeEmpresa = useCallback(
     (empresa?: string) => {
       if (!profile) return true;
-      if (profile.role === 'administrador') return true;
-      const empresasUser = Array.isArray(profile.empresas) ? profile.empresas : [];
-      const hasAllFlag = empresasUser.some(
-        (e) => e === '*' || e.toLowerCase() === 'todas'
-      );
-      if (hasAllFlag) return true;
+      if (hasAllWorkspaceAccess) return true;
       const nome = (empresa ?? '').trim();
       if (!nome) return false;
-      const permitidas = new Set(
-        empresasUser.map((e) => e.trim().toLowerCase()).filter(Boolean),
-      );
-      return permitidas.has(nome.toLowerCase());
+      return allowedWorkspaceKeys.has(normalizeWorkspaceName(nome));
     },
-    [profile]
+    [profile, hasAllWorkspaceAccess, allowedWorkspaceKeys]
   );
 
   const matchWorkspace = useCallback(
@@ -150,7 +173,7 @@ function AppContent() {
       const sameCompany = (a: string, b: string) =>
         a.toLowerCase() === b.toLowerCase();
 
-      if (!profile || profile.role === 'administrador') {
+      if (!profile || hasAllWorkspaceAccess) {
         if (workspaceAtivo === 'all') return true;
         if (semEmpresa) return true;
         return sameCompany(em, ws);
@@ -164,7 +187,7 @@ function AppContent() {
       if (semEmpresa) return true;
       return sameCompany(em, ws);
     },
-    [workspaceAtivo, canSeeEmpresa, profile]
+    [workspaceAtivo, canSeeEmpresa, profile, hasAllWorkspaceAccess]
   );
 
   // Mantém uma lista local de empresas, sempre sincronizada com o controller
@@ -224,13 +247,19 @@ function AppContent() {
   );
 
   const responsaveisEscopoAtribuicao = useMemo(() => {
-    if (profile?.role === 'administrador') return responsaveisParaAtribuicao;
+    if (profile?.role === 'administrador' && hasAllWorkspaceAccess) {
+      return responsaveisParaAtribuicao;
+    }
     const canAssignCross =
+      (profile?.role === 'administrador' && allowedWorkspaceKeys.size > 1) ||
       hasModuleAction('table', 'cross_workspace_assign') ||
       hasModuleAction('operacional', 'cross_workspace_assign');
     if (canAssignCross) return responsaveisParaAtribuicao;
 
-    const minhasEmpresas = new Set((profile?.empresas ?? []).map((e) => e.trim().toLowerCase()).filter(Boolean));
+    const minhasEmpresas =
+      allowedWorkspaceKeys.size > 0
+        ? allowedWorkspaceKeys
+        : new Set((profile?.empresas ?? []).map((e) => e.trim().toLowerCase()).filter(Boolean));
     const alvoWorkspace = workspaceAtivo === 'all' ? null : String(workspaceAtivo).trim().toLowerCase();
     const byUid = new Map(perfisCadastroUsuarios.map((u) => [normKey(u.uid), u]));
     const filtered = responsaveisParaAtribuicao.filter((r) => {
@@ -245,6 +274,8 @@ function AppContent() {
   }, [
     profile?.role,
     profile?.empresas,
+    hasAllWorkspaceAccess,
+    allowedWorkspaceKeys,
     workspaceAtivo,
     hasModuleAction,
     perfisCadastroUsuarios,
@@ -277,42 +308,35 @@ function AppContent() {
 
   const empresasAtivas = useMemo(() => {
     let filtered = empresasDisponiveis.filter((nome) => !empresasBloqueadas.includes(nome));
-    if (profile && profile.role !== 'administrador') {
-      const empresasUser = Array.isArray(profile.empresas) ? profile.empresas : [];
-      const hasAllFlag = empresasUser.some(
-        (e) => e === '*' || e.toLowerCase() === 'todas'
-      );
-      if (!hasAllFlag) {
-        const permitidas = new Set(empresasUser.map((e) => e.trim()).filter(Boolean));
-        filtered = filtered.filter((nome) => permitidas.has(nome));
-      }
+    if (profile && !hasAllWorkspaceAccess) {
+      filtered = filtered.filter((nome) => allowedWorkspaceKeys.has(normalizeWorkspaceName(nome)));
     }
     return filtered;
-  }, [empresasDisponiveis, empresasBloqueadas, profile]);
+  }, [empresasDisponiveis, empresasBloqueadas, profile, hasAllWorkspaceAccess, allowedWorkspaceKeys]);
 
   const podeVerTodasEmpresasNoSeletor = useMemo(() => {
     if (!profile) return true;
-    if (profile.role === 'administrador') return true;
-    const empresasUser = Array.isArray(profile.empresas) ? profile.empresas : [];
-    const hasAllFlag = empresasUser.some(
-      (e) => e === '*' || e.toLowerCase() === 'todas'
-    );
-    if (hasAllFlag) return true;
+    if (hasAllWorkspaceAccess) return true;
     return empresasAtivas.length > 1;
-  }, [profile, empresasAtivas]);
+  }, [profile, hasAllWorkspaceAccess, empresasAtivas]);
 
   // Garante que usuário restrito não fique em \"Todas as empresas\"
   useEffect(() => {
-    if (!profile || profile.role === 'administrador') return;
-    const empresasUser = Array.isArray(profile.empresas) ? profile.empresas : [];
-    const hasAllFlag = empresasUser.some(
-      (e) => e === '*' || e.toLowerCase() === 'todas'
-    );
-    if (hasAllFlag || empresasAtivas.length > 1) return;
-    if (workspaceAtivo === 'all' && empresasAtivas.length > 0) {
+    if (!profile) return;
+    if (hasAllWorkspaceAccess) return;
+    if (workspaceAtivo === 'all') {
+      if (empresasAtivas.length === 1) {
+        setWorkspaceAtivo(empresasAtivas[0]);
+      }
+      return;
+    }
+    const currentAllowed =
+      empresasAtivas.some((nome) => normalizeWorkspaceName(nome) === normalizeWorkspaceName(workspaceAtivo));
+    if (currentAllowed) return;
+    if (empresasAtivas.length > 0) {
       setWorkspaceAtivo(empresasAtivas[0]);
     }
-  }, [profile, workspaceAtivo, empresasAtivas]);
+  }, [profile, hasAllWorkspaceAccess, workspaceAtivo, empresasAtivas]);
 
   const empresasInativas = useMemo(
     () => empresasDisponiveis.filter((nome) => empresasBloqueadas.includes(nome)),
@@ -442,30 +466,35 @@ function AppContent() {
   );
 
   const canReadCrossWorkspaceGlobal = useMemo(() => {
-    if (profile?.role === 'administrador') return true;
+    if (profile?.role === 'administrador') {
+      return hasAllWorkspaceAccess || allowedWorkspaceKeys.size > 1;
+    }
     return (
       hasModuleAction('table', 'cross_workspace_view') ||
       hasModuleAction('operacional', 'cross_workspace_view')
     );
-  }, [profile?.role, hasModuleAction]);
+  }, [profile?.role, hasAllWorkspaceAccess, allowedWorkspaceKeys, hasModuleAction]);
 
   const matchWorkspaceRitmo = useCallback(
     (empresa?: string | null): boolean => {
       if (workspaceAtivo !== 'all') return matchWorkspaceStrict(empresa);
+      const nome = (empresa ?? '').trim();
+      if (nome && !canSeeEmpresa(nome)) return false;
       if (canReadCrossWorkspaceGlobal) return true;
       return matchWorkspaceStrict(empresa);
     },
-    [workspaceAtivo, canReadCrossWorkspaceGlobal, matchWorkspaceStrict],
+    [workspaceAtivo, canReadCrossWorkspaceGlobal, matchWorkspaceStrict, canSeeEmpresa],
   );
 
   const backlogViewItems = useMemo(() => {
     return items.filter((i) => {
+      if (i.empresa?.trim() && !canSeeEmpresa(i.empresa)) return false;
       // Regra de backlog: usuário enxerga apenas itens do workspace em foco
       // OU itens criados por ele mesmo (mesmo que em outro workspace).
       if (matchWorkspaceStrict(i.empresa)) return true;
       return isCreatedByMe(i.created_by, i.who);
     });
-  }, [items, matchWorkspaceStrict, isCreatedByMe]);
+  }, [items, canSeeEmpresa, matchWorkspaceStrict, isCreatedByMe]);
 
   useEffect(() => {
     if (!isAuthenticated || !isFirebaseConfigured) {
@@ -623,7 +652,9 @@ function AppContent() {
   const ritmoPlanosEscopoVisivel = useMemo(
     () => {
       const base = ritmo.board.planos.filter(
-        (pl) => matchWorkspaceRitmo(pl.empresa) || idsPrioridadesEscopoRitmo.has(pl.prioridade_id),
+        (pl) =>
+          (!pl.empresa?.trim() || canSeeEmpresa(pl.empresa)) &&
+          (matchWorkspaceRitmo(pl.empresa) || idsPrioridadesEscopoRitmo.has(pl.prioridade_id)),
       );
       if (profile?.role === 'administrador') return base;
       if (myResponsavelIdsForBoard.size === 0) {
@@ -642,6 +673,7 @@ function AppContent() {
     },
     [
       ritmo.board.planos,
+      canSeeEmpresa,
       matchWorkspaceRitmo,
       idsPrioridadesEscopoRitmo,
       profile?.role,
@@ -659,7 +691,9 @@ function AppContent() {
   const ritmoTarefasEscopoVisivel = useMemo(
     () => {
       const base = ritmo.board.tarefas.filter(
-        (t) => matchWorkspaceRitmo(t.empresa) || idsPlanosEscopoVisivel.has(t.plano_id),
+        (t) =>
+          (!t.empresa?.trim() || canSeeEmpresa(t.empresa)) &&
+          (matchWorkspaceRitmo(t.empresa) || idsPlanosEscopoVisivel.has(t.plano_id)),
       );
       if (profile?.role === 'administrador') return base;
       if (myResponsavelIdsForBoard.size === 0) {
@@ -674,6 +708,7 @@ function AppContent() {
     },
     [
       ritmo.board.tarefas,
+      canSeeEmpresa,
       matchWorkspaceRitmo,
       idsPlanosEscopoVisivel,
       profile?.role,

@@ -12,6 +12,21 @@ import {
 
 const ENCRYPTION_KEY_KEY = '@Estrategico:EncryptionKey';
 
+function normalizeEmpresa(value?: string | null): string {
+  return (value ?? '').trim().toLowerCase();
+}
+
+function profileHasAllEmpresaAccess(profile: UserProfile | null): boolean {
+  if (!profile) return false;
+  const empresas = Array.isArray(profile.empresas) ? profile.empresas : [];
+  const hasAllFlag = empresas.some((empresa) => {
+    const normalized = normalizeEmpresa(empresa);
+    return normalized === '*' || normalized === 'todas';
+  });
+  if (hasAllFlag) return true;
+  return profile.role === 'administrador' && empresas.length === 0;
+}
+
 interface UserContextValue {
   firebaseUser: User | null;
   profile: UserProfile | null;
@@ -153,8 +168,10 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
   const hasEmpresa = useCallback(
     (empresa: string): boolean => {
       if (!profile) return false;
-      if (profile.role === 'administrador') return true;
-      return profile.empresas.includes(empresa);
+      if (profileHasAllEmpresaAccess(profile)) return true;
+      return profile.empresas.some(
+        (allowed) => normalizeEmpresa(allowed) === normalizeEmpresa(empresa),
+      );
     },
     [profile]
   );
