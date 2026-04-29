@@ -6,6 +6,7 @@ import { UserProvider } from './contexts/UserContext';
 import App from './App';
 import { AdminRoute } from './routes/AdminRoute';
 import { DeveloperRoute } from './routes/DeveloperRoute';
+import { ProRoute } from './routes/ProRoute';
 import { UsageTracker } from './components/Dev/UsageTracker';
 import { HashRouteBridge } from './components/Dev/HashRouteBridge';
 
@@ -24,6 +25,7 @@ root.render(
         <Routes>
           <Route path="/admin/*" element={<AdminRoute />} />
           <Route path="/willydev/*" element={<DeveloperRoute />} />
+          <Route path="/pro/*" element={<ProRoute />} />
           <Route path="/*" element={<App />} />
         </Routes>
       </UserProvider>
