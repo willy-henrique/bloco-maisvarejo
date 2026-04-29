@@ -1085,9 +1085,8 @@ export const OperacionalView: React.FC<OperacionalProps> = ({
 
   const visibleTarefas = useMemo(() => {
     const planosVisiveisIds = new Set(visiblePlanos.map((pl) => pl.id));
-    const tarefasBase = tarefas.filter((t) => planosVisiveisIds.has(t.plano_id));
     const currentUid = normStr(loggedUserUid ?? '');
-    const filtradas = tarefasBase.filter((t) => {
+    const filtradas = tarefas.filter((t) => {
       const isCreator = currentUid !== '' && normStr(t.created_by) === currentUid;
       const isAssigned = tarefaAtribuidaAoUsuario(t, myResponsavelIds, responsaveis);
       const isObserving =
@@ -1095,10 +1094,16 @@ export const OperacionalView: React.FC<OperacionalProps> = ({
         t.observadores.some((o) => myResponsavelIds.has(normStr(o.user_id)));
 
       if (visibilityFilters.length === 0) return false;
-      const matchesCreated = visibilityFilters.includes('created') && isCreator;
       const matchesAssigned = visibilityFilters.includes('assigned') && isAssigned;
+      // Tarefas atribuídas ao usuário aparecem independente do workspace de origem
+      if (matchesAssigned) return true;
+
+      // Para criadas/observando, exige que o plano esteja no escopo visível
+      const isInVisiblePlan = planosVisiveisIds.has(t.plano_id);
+      if (!isInVisiblePlan) return false;
+      const matchesCreated = visibilityFilters.includes('created') && isCreator;
       const matchesObserving = visibilityFilters.includes('observing') && isObserving;
-      return matchesCreated || matchesAssigned || matchesObserving;
+      return matchesCreated || matchesObserving;
     });
     return filtradas.sort((a, b) => a.data_vencimento - b.data_vencimento);
   }, [

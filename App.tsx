@@ -693,7 +693,11 @@ function AppContent() {
       const base = ritmo.board.tarefas.filter(
         (t) =>
           (!t.empresa?.trim() || canSeeEmpresa(t.empresa)) &&
-          (matchWorkspaceRitmo(t.empresa) || idsPlanosEscopoVisivel.has(t.plano_id)),
+          (
+            matchWorkspaceRitmo(t.empresa) ||
+            idsPlanosEscopoVisivel.has(t.plano_id) ||
+            tarefaAtribuidaAoUsuario(t, myResponsavelIdsForBoard, responsaveisParaAtribuicao)
+          ),
       );
       if (profile?.role === 'administrador') return base;
       if (myResponsavelIdsForBoard.size === 0) {
