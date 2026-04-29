@@ -7,7 +7,7 @@
  * Telas com avulso ativo: Gerencial e Operacional.
  * Telas em observação (dados reais): Estratégico, Backlog, Desempenho, Roadmap, IA.
  */
-import React, { useMemo, useState, useCallback, useRef } from 'react';
+import React, { useMemo, useState, useCallback, useRef, useEffect } from 'react';
 import {
   Menu, FileText, Plus, X, Target, ListTodo,
   PieChart, Briefcase, Bot, Search, Activity, AlertCircle,
@@ -15,6 +15,8 @@ import {
 import { useUser } from '../contexts/UserContext';
 import { useRitmoGestao } from '../controllers/useRitmoGestao';
 import { useStrategicBoard } from '../controllers/useStrategicBoard';
+import { listAllUsers } from '../services/firebaseAuth';
+import type { UserProfile } from '../types/user';
 import { Sidebar } from '../components/Layout/Sidebar';
 import { OperacionalView } from '../components/Dashboard/OperacionalView';
 import { EstrategicoView } from '../components/Dashboard/EstrategicoView';
@@ -176,6 +178,15 @@ function ProContent() {
   const [activeView, setActiveView] = useState<ViewId>('operacional');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showNovoPlano, setShowNovoPlano] = useState(false);
+  const [perfisCadastro, setPerfisCadastro] = useState<UserProfile[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    listAllUsers().then((all) => {
+      if (!cancelled) setPerfisCadastro(all);
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState<ActionItem | null>(null);
   const [defaultStatus, setDefaultStatus] = useState<ItemStatus>(ItemStatus.BACKLOG);
@@ -190,16 +201,16 @@ function ProContent() {
 
   // ── Responsáveis com usuário garantido no conjunto ────────────────────────
   const responsaveis = useMemo(() => {
-    const base = mergeResponsaveisComPerfis(ritmo.board.responsaveis, []);
+    const base = mergeResponsaveisComPerfis(ritmo.board.responsaveis, perfisCadastro);
     if (!uid) return base;
     const existe = base.some((r) => r.id === uid || r.nome === (profile?.nome ?? ''));
     if (existe) return base;
     return [...base, { id: uid, nome: profile?.nome ?? uid }];
-  }, [ritmo.board.responsaveis, uid, profile?.nome]);
+  }, [ritmo.board.responsaveis, perfisCadastro, uid, profile?.nome]);
 
   const displayWho = useCallback(
-    (who: string) => nomeExibicaoWhoParaItem(who, responsaveis),
-    [responsaveis],
+    (who: string) => nomeExibicaoWhoParaItem(who, responsaveis, perfisCadastro),
+    [responsaveis, perfisCadastro],
   );
 
   // ── Dados Gerencial: real + avulso ───────────────────────────────────────
