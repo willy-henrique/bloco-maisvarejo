@@ -52,14 +52,27 @@ export function responsavelIdsForLoggedUser(
   const hints = collectIdentityHints(loggedUserUid, loggedUserName, identityExtras);
   const ids = new Set<string>();
   for (const h of hints) ids.add(h);
+
+  // Para cada responsável, verifica se o id OU o nome coincide com qualquer dica de identidade.
+  // Isso cobre dois cenários:
+  // 1. Nome no perfil = nome no board → resolve o id legado (ex: "r1")
+  // 2. UID no perfil = id do responsável → resolve o nome legado e ids aliases
+  // O cruzamento bidirecional garante que usuários com nomes parcialmente diferentes
+  // (ex: "Willy Silva" no perfil vs "Willy" no board) sejam corretamente identificados
+  // quando o uid é a chave comum.
   for (const r of responsaveis) {
+    const ri = normStr(r.id);
     const rn = normStr(r.nome);
-    if (!rn) continue;
+    let matched = false;
     for (const h of hints) {
-      if (rn === h) {
-        ids.add(normStr(r.id));
+      if (rn === h || ri === h) {
+        matched = true;
         break;
       }
+    }
+    if (matched) {
+      if (ri) ids.add(ri);
+      if (rn) ids.add(rn);
     }
   }
   return ids;

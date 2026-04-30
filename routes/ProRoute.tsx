@@ -1,4 +1,4 @@
-/**
+﻿/**
  * /pro — Protótipo completo: todas as telas do sistema com suporte a itens avulsos.
  *
  * Conceito avulso: tarefas sem plano e planos sem prioridade (sentinel '__avulso__').
@@ -175,7 +175,7 @@ function ProContent() {
   const { items, loading: loadingItems, addItem, updateItem, deleteItem, updateStatus } =
     useStrategicBoard(encryptionKey ?? null);
 
-  const [activeView, setActiveView] = useState<ViewId>('operacional');
+  const [activeView, setActiveView] = useState<ViewId>('backlog');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showNovoPlano, setShowNovoPlano] = useState(false);
   const [perfisCadastro, setPerfisCadastro] = useState<UserProfile[]>([]);

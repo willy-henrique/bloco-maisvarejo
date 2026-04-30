@@ -651,11 +651,20 @@ function AppContent() {
 
   const ritmoPlanosEscopoVisivel = useMemo(
     () => {
-      const base = ritmo.board.planos.filter(
-        (pl) =>
+      const base = ritmo.board.planos.filter((pl) => {
+        // Planos que contêm tarefas atribuídas ao usuário sempre são visíveis,
+        // independente do workspace — para não bloquear a visão da tarefa atribuída.
+        const hasTarefaAtribuida = ritmo.board.tarefas.some(
+          (t) =>
+            t.plano_id === pl.id &&
+            tarefaAtribuidaAoUsuario(t, myResponsavelIdsForBoard, responsaveisParaAtribuicao),
+        );
+        if (hasTarefaAtribuida) return true;
+        return (
           (!pl.empresa?.trim() || canSeeEmpresa(pl.empresa)) &&
-          (matchWorkspaceRitmo(pl.empresa) || idsPrioridadesEscopoRitmo.has(pl.prioridade_id)),
-      );
+          (matchWorkspaceRitmo(pl.empresa) || idsPrioridadesEscopoRitmo.has(pl.prioridade_id))
+        );
+      });
       if (profile?.role === 'administrador') return base;
       if (myResponsavelIdsForBoard.size === 0) {
         return base.filter((pl) => isCreatedByMe(pl.created_by, pl.who_id));
@@ -673,6 +682,7 @@ function AppContent() {
     },
     [
       ritmo.board.planos,
+      ritmo.board.tarefas,
       canSeeEmpresa,
       matchWorkspaceRitmo,
       idsPrioridadesEscopoRitmo,
@@ -690,15 +700,17 @@ function AppContent() {
 
   const ritmoTarefasEscopoVisivel = useMemo(
     () => {
-      const base = ritmo.board.tarefas.filter(
-        (t) =>
+      const base = ritmo.board.tarefas.filter((t) => {
+        // Tarefas atribuídas ao usuário são sempre visíveis, independente do workspace.
+        // Isso resolve o bug de cross-workspace: canSeeEmpresa não pode bloquear tarefas
+        // que foram explicitamente delegadas ao usuário logado.
+        if (tarefaAtribuidaAoUsuario(t, myResponsavelIdsForBoard, responsaveisParaAtribuicao)) return true;
+        // Para as demais, aplicar filtro de empresa + workspace normalmente.
+        return (
           (!t.empresa?.trim() || canSeeEmpresa(t.empresa)) &&
-          (
-            matchWorkspaceRitmo(t.empresa) ||
-            idsPlanosEscopoVisivel.has(t.plano_id) ||
-            tarefaAtribuidaAoUsuario(t, myResponsavelIdsForBoard, responsaveisParaAtribuicao)
-          ),
-      );
+          (matchWorkspaceRitmo(t.empresa) || idsPlanosEscopoVisivel.has(t.plano_id))
+        );
+      });
       if (profile?.role === 'administrador') return base;
       if (myResponsavelIdsForBoard.size === 0) {
         return base.filter((t) => isCreatedByMe(t.created_by, t.responsavel_id));
@@ -1414,7 +1426,7 @@ function AppContent() {
                   prioridades={taticoPrioridades}
                   planos={ritmoPlanosEscopoVisivel}
                   tarefas={ritmoTarefasEscopoVisivel}
-                  responsaveis={responsaveisEscopoAtribuicao}
+                  responsaveis={responsaveisParaAtribuicao}
                   whoUsers={responsaveisParaAtribuicao}
                   observerUsers={responsaveisParaAtribuicao}
                   perfisCadastro={perfisCadastroUsuarios}
@@ -1474,7 +1486,7 @@ function AppContent() {
                   prioridades={taticoPrioridades}
                   planos={ritmoPlanosEscopoVisivel}
                   tarefas={ritmoTarefasEscopoVisivel}
-                  responsaveis={responsaveisEscopoAtribuicao}
+                  responsaveis={responsaveisParaAtribuicao}
                   whoUsers={responsaveisParaAtribuicao}
                   observerUsers={responsaveisParaAtribuicao}
                   computeStatusPlano={ritmo.computeStatusPlano}

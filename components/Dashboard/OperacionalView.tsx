@@ -1055,7 +1055,14 @@ export const OperacionalView: React.FC<OperacionalProps> = ({
     const currentUid = normStr(loggedUserUid ?? '');
     list = list.filter((pl) => {
       const isCreator = currentUid !== '' && normStr(pl.created_by) === currentUid;
-      const isAssigned = donoPrioridadeCorrespondeAoUsuario(pl.who_id, myResponsavelIds, responsaveis);
+      // Gap fix: planos que contêm tarefas atribuídas ao usuário são visíveis,
+      // mesmo que o usuário não seja o who_id do plano (cenário cross-workspace).
+      const hasTarefaAtribuida = tarefas.some(
+        (t) => t.plano_id === pl.id && tarefaAtribuidaAoUsuario(t, myResponsavelIds, responsaveis),
+      );
+      const isAssigned =
+        donoPrioridadeCorrespondeAoUsuario(pl.who_id, myResponsavelIds, responsaveis) ||
+        hasTarefaAtribuida;
       const isObserving =
         Array.isArray(pl.observadores) &&
         pl.observadores.some((o) => myResponsavelIds.has(normStr(o.user_id)));
@@ -1067,7 +1074,7 @@ export const OperacionalView: React.FC<OperacionalProps> = ({
       return matchesCreated || matchesAssigned || matchesObserving;
     });
     return list;
-  }, [planos, visiblePrioridades, visibilityFilters, myResponsavelIds, responsaveis, loggedUserUid]);
+  }, [planos, tarefas, visiblePrioridades, visibilityFilters, myResponsavelIds, responsaveis, loggedUserUid]);
   const visiblePlanosAtivos = useMemo(
     () => visiblePlanos.filter((pl) => ((computeStatusPlano(pl.id) || pl.status_plano) as StatusPlano) !== 'Concluido'),
     [visiblePlanos, computeStatusPlano],
