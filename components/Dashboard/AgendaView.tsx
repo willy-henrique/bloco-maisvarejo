@@ -64,6 +64,17 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
   const [showForm, setShowForm] = useState(false);
   const [tab, setTab] = useState<Tab>('pendente');
 
+  const STATUS_CYCLE: AgendaStatus[] = ['pendente', 'em_andamento', 'concluido'];
+
+  const handleCycleStatus = (id: string) => {
+    const item = items.find((i) => i.id === id);
+    if (!item) return;
+    const idx = STATUS_CYCLE.indexOf(item.status);
+    const next = STATUS_CYCLE[(idx + 1) % STATUS_CYCLE.length] as Tab;
+    onCycleStatus(id);
+    setTab(next);
+  };
+
   const byStatus = useMemo(() => {
     const sorted = [...items].sort((a, b) => a.data_hora - b.data_hora);
     return {
@@ -196,7 +207,7 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
                 </div>
                 <div className="space-y-2">
                   {dayItems.map((item) => (
-                    <AgendaCard key={item.id} item={item} onCycleStatus={onCycleStatus} onDelete={onDelete} />
+                    <AgendaCard key={item.id} item={item} onCycleStatus={handleCycleStatus} onDelete={onDelete} />
                   ))}
                 </div>
               </div>
@@ -212,7 +223,7 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
             <p className="text-center text-sm text-slate-500 py-8">Nenhum evento concluído.</p>
           )}
           {activeItems.map((item) => (
-            <AgendaCard key={item.id} item={item} onCycleStatus={onCycleStatus} onDelete={onDelete} />
+            <AgendaCard key={item.id} item={item} onCycleStatus={handleCycleStatus} onDelete={onDelete} />
           ))}
         </div>
       )}
