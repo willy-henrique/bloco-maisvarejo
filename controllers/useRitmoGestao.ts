@@ -328,23 +328,25 @@ function mergeRemoteSnapshotIntoPrev(
   // Merge de prioridades: usa base remota (autoritativa) + merge de dono mais recente.
   // Não inclui "extras" do prev — o Firestore é fonte de verdade para existência de itens.
   // Incluir extras causava loop: itens deletados voltavam do prev a cada snapshot.
-  const mergedPrios = mergePrioridadesPreservandoDonoMaisRecente(remotePrios, prevNorm.prioridades);
+  const mergedPriosRaw = mergePrioridadesPreservandoDonoMaisRecente(remotePrios, prevNorm.prioridades);
+  // Observers do snapshot remoto são sempre autoritativos: garante remoção imediata de
+  // direitos de visualização sem exigir reload (Testes 3 e 4).
+  const remoteObsByPrioId = new Map(remotePrios.map((rp) => [rp.id, rp.observadores ?? []]));
+  const mergedPrios = mergedPriosRaw.map((mp) => ({
+    ...mp,
+    observadores: remoteObsByPrioId.get(mp.id) ?? mp.observadores ?? [],
+  }));
 
-  const mergedPlanos = alinharPlanosWhoAoDonoMesclado(remotePlanos, mergedPrios, remotePrios).map((rpl) => {
-    const lpl = prevNorm.planos.find((p) => p.id === rpl.id);
-    if (!lpl) return rpl;
-    const localObs = Array.isArray(lpl.observadores) ? lpl.observadores : [];
-    const remoteObs = Array.isArray(rpl.observadores) ? rpl.observadores : [];
-    return { ...rpl, observadores: localObs.length >= remoteObs.length ? localObs : remoteObs };
-  });
+  // Para planos e tarefas: observers do remote são sempre a fonte de verdade no snapshot ao vivo.
+  const mergedPlanos = alinharPlanosWhoAoDonoMesclado(remotePlanos, mergedPrios, remotePrios).map((rpl) => ({
+    ...rpl,
+    observadores: Array.isArray(rpl.observadores) ? rpl.observadores : [],
+  }));
 
-  const mergedTarefas = remoteTarefas.map((rt) => {
-    const lt = prevNorm.tarefas.find((t) => t.id === rt.id);
-    if (!lt) return rt;
-    const localObs = Array.isArray(lt.observadores) ? lt.observadores : [];
-    const remoteObs = Array.isArray(rt.observadores) ? rt.observadores : [];
-    return { ...rt, observadores: localObs.length >= remoteObs.length ? localObs : remoteObs };
-  });
+  const mergedTarefas = remoteTarefas.map((rt) => ({
+    ...rt,
+    observadores: Array.isArray(rt.observadores) ? rt.observadores : [],
+  }));
 
   const mergedBacklog = remoteBacklog;
 
@@ -1010,25 +1012,41 @@ export function useRitmoGestao(encryptionKey: CryptoKey | null) {
             }),
           };
         }
-        return {
-          ...prev,
-          tarefas: prev.tarefas.map((t) => {
-            if (t.id !== entityId) return t;
-            const current = Array.isArray(t.observadores) ? [...t.observadores] : [];
-            const idx = current.findIndex((o) => o.user_id.trim().toLowerCase() === uid.toLowerCase());
-            let fallback = current;
-            if (idx >= 0) fallback[idx] = { ...fallback[idx], role: fallback[idx].role === 'creator' ? 'creator' : role };
-            else fallback = [...fallback, { user_id: uid, role }];
-            void apiAddObserver(current, uid, role).then((remote) => {
-              if (!remote) return;
-              saveBoard((pp) => ({
-                ...pp,
-                tarefas: pp.tarefas.map((x) => (x.id === entityId ? { ...x, observadores: remote } : x)),
-              }));
-            });
-            return { ...t, observadores: fallback };
-          }),
-        };
+        // Cascade: ao adicionar observer em tarefa, também adiciona no plano pai (se ainda não estiver).
+        const tarefaObj = prev.tarefas.find((t) => t.id === entityId);
+        const tarefaPlanoId = tarefaObj?.plano_id;
+        const nextTarefas = prev.tarefas.map((t) => {
+          if (t.id !== entityId) return t;
+          const current = Array.isArray(t.observadores) ? [...t.observadores] : [];
+          const idx = current.findIndex((o) => o.user_id.trim().toLowerCase() === uid.toLowerCase());
+          let fallback = current;
+          if (idx >= 0) fallback[idx] = { ...fallback[idx], role: fallback[idx].role === 'creator' ? 'creator' : role };
+          else fallback = [...fallback, { user_id: uid, role }];
+          void apiAddObserver(current, uid, role).then((remote) => {
+            if (!remote) return;
+            saveBoard((pp) => ({
+              ...pp,
+              tarefas: pp.tarefas.map((x) => (x.id === entityId ? { ...x, observadores: remote } : x)),
+            }));
+          });
+          return { ...t, observadores: fallback };
+        });
+        const nextPlanosFromTarefa = prev.planos.map((pl) => {
+          if (!tarefaPlanoId || pl.id !== tarefaPlanoId) return pl;
+          const current = Array.isArray(pl.observadores) ? pl.observadores : [];
+          const alreadyObs = current.some((o) => o.user_id.trim().toLowerCase() === uid.toLowerCase());
+          if (alreadyObs) return pl;
+          const newList = [...current, { user_id: uid, role }];
+          void apiAddObserver(current, uid, role).then((remote) => {
+            if (!remote) return;
+            saveBoard((pp) => ({
+              ...pp,
+              planos: pp.planos.map((x) => (x.id === pl.id ? { ...x, observadores: remote } : x)),
+            }));
+          });
+          return { ...pl, observadores: newList };
+        });
+        return { ...prev, tarefas: nextTarefas, planos: nextPlanosFromTarefa };
       });
     },
     [saveBoard]
@@ -1063,8 +1081,27 @@ export function useRitmoGestao(encryptionKey: CryptoKey | null) {
           };
         }
         if (entity === 'plano') {
+          // Cascade: ao remover observer do plano, também remove de todas as tarefas filhas.
+          const nextTarefasFromPlano = prev.tarefas.map((t) => {
+            if (t.plano_id !== entityId) return t;
+            const current = Array.isArray(t.observadores) ? t.observadores : [];
+            const isNonCreatorObs = current.some(
+              (o) => o.user_id.trim().toLowerCase() === uid && o.role !== 'creator',
+            );
+            if (!isNonCreatorObs) return t;
+            const fallback = keepNonCreator(current);
+            void apiRemoveObserver(current, userId).then((remote) => {
+              if (!remote) return;
+              saveBoard((pp) => ({
+                ...pp,
+                tarefas: pp.tarefas.map((x) => (x.id === t.id ? { ...x, observadores: remote } : x)),
+              }));
+            });
+            return { ...t, observadores: fallback };
+          });
           return {
             ...prev,
+            tarefas: nextTarefasFromPlano,
             planos: prev.planos.map((p) => {
               if (p.id !== entityId) return p;
               const current = Array.isArray(p.observadores) ? p.observadores : [];

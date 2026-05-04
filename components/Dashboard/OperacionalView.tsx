@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import type { PlanoDeAcao, Prioridade, Responsavel, Tarefa, StatusPlano, StatusTarefa } from '../../types';
 import type { UserRole as UserRoleType } from '../../types/user';
-import { CheckCircle, Play, Circle, AlertTriangle, Plus, ChevronDown, ChevronRight, Trash2, User, Calendar, Target, FileText, Eye } from 'lucide-react';
+import { CheckCircle, Play, Circle, AlertTriangle, Plus, ChevronDown, ChevronRight, Trash2, User, Calendar, Target, FileText, Eye, ExternalLink } from 'lucide-react';
 import { ResponsavelAutocomplete } from './ResponsavelAutocomplete';
 import {
   responsavelIdsForLoggedUser,
@@ -42,6 +42,11 @@ function parseDateBR(v: string): number | null {
   if (month < 1 || month > 12) return null;
   if (day < 1 || day > 31) return null;
   return new Date(year, month - 1, day, 12, 0, 0).getTime();
+}
+
+function shortId(id: string): string {
+  const clean = id.startsWith('legacy-') ? id.slice(7) : id;
+  return '#' + clean.replace(/-/g, '').slice(0, 6).toUpperCase();
 }
 
 function normStr(v: string | null | undefined): string {
@@ -190,6 +195,7 @@ const TarefaRow: React.FC<{
             />
           </button>
           <div className="min-w-0">
+            <span className="text-[9px] font-mono text-slate-700" title="ID da tarefa">{shortId(tarefa.id)}</span>
             {canWriteTarefa && editingTitulo ? (
               <input
                 autoFocus
@@ -551,7 +557,23 @@ const OperacionalPlanoCard: React.FC<{
                 <Target size={9} /> PRIORIDADE
               </p>
               <p className="text-sm font-semibold text-slate-100 truncate">{prioridade.titulo}</p>
-              <h4 className="text-lg font-bold text-slate-100 truncate">{plano.titulo}</h4>
+              <div className="flex items-center gap-2">
+                <span className="text-[9px] font-mono text-slate-600" title="ID do card">{shortId(plano.id)}</span>
+                <h4 className="text-lg font-bold text-slate-100 truncate">{plano.titulo}</h4>
+                {plano.link?.trim() && (
+                  <a
+                    href={plano.link.trim()}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    className="text-blue-400 hover:text-blue-300 shrink-0"
+                    title="Abrir documento vinculado"
+                    aria-label="Abrir link do plano"
+                  >
+                    <ExternalLink size={13} />
+                  </a>
+                )}
+              </div>
               <div className="flex items-center gap-3 mt-1.5 text-[12px] text-slate-400 flex-wrap">
                 {displayWhoPlano && (
                   <span className="inline-flex items-center gap-1">

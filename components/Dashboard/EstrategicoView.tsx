@@ -25,6 +25,7 @@ import {
   Play,
   Archive,
   Eye,
+  ExternalLink,
 } from 'lucide-react';
 import { EstrategicoGridIcon } from '../icons/EstrategicoGridIcon';
 import { ResponsavelAutocomplete } from './ResponsavelAutocomplete';
@@ -94,6 +95,11 @@ function parseDateBR(v: string): number | null {
   if (month < 1 || month > 12) return null;
   if (day < 1 || day > 31) return null;
   return new Date(year, month - 1, day, 12, 0, 0).getTime();
+}
+
+function shortId(id: string): string {
+  const clean = id.startsWith('legacy-') ? id.slice(7) : id;
+  return '#' + clean.replace(/-/g, '').slice(0, 6).toUpperCase();
 }
 
 function normStr(v: string | null | undefined): string {
@@ -257,6 +263,7 @@ const TarefaRow: React.FC<{
             />
           </button>
           <div className="min-w-0">
+            <span className="text-[9px] font-mono text-slate-700 select-all" title="ID da tarefa">{shortId(tarefa.id)}</span>
             {canWriteTarefa && editingTitulo ? (
               <input
                 autoFocus
@@ -610,6 +617,7 @@ const PlanoCard: React.FC<{
     { key: 'where', label: 'WHERE', sub: 'Onde', type: 'input' },
     { key: 'how_much', label: 'HOW MUCH', sub: 'Quanto', type: 'input' },
     { key: 'how', label: 'HOW — EXECUÇÃO', sub: 'Como será feito', type: 'textarea' },
+    { key: 'link', label: 'LINK', sub: 'Google Drive / Documento', type: 'input' },
   ];
 
   return (
@@ -626,6 +634,7 @@ const PlanoCard: React.FC<{
           >
             <div className="flex items-center justify-between gap-3 flex-wrap">
               <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-[10px] font-mono text-slate-600 select-all" title="ID do card">{shortId(plano.id)}</span>
                 <span className="text-sm font-semibold text-slate-100">
                   {plano.titulo}
                 </span>
@@ -665,6 +674,19 @@ const PlanoCard: React.FC<{
             </div>
           </button>
         </div>
+        {plano.link?.trim() && (
+          <a
+            href={plano.link.trim()}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            className="p-1.5 rounded text-blue-400 hover:text-blue-300 hover:bg-blue-500/10 transition-colors shrink-0"
+            title="Abrir documento vinculado"
+            aria-label="Abrir link do plano"
+          >
+            <ExternalLink size={13} />
+          </a>
+        )}
         <button
           type="button"
           onClick={() => setShowPlanoObservers((v) => !v)}
@@ -1080,7 +1102,7 @@ const DetalhePrioridade: React.FC<{
       <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-5">
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div className="flex-1 min-w-0">
-            <p className="text-[10px] font-semibold text-emerald-500 uppercase tracking-widest flex items-center gap-1"><Target size={9} /> PRIORIDADE ATIVA</p>
+            <p className="text-[10px] font-semibold text-emerald-500 uppercase tracking-widest flex items-center gap-2"><Target size={9} /> PRIORIDADE ATIVA <span className="font-mono text-slate-600 normal-case tracking-normal">{shortId(prioridade.id)}</span></p>
             <h2 className="text-xl font-bold text-slate-100">{prioridade.titulo}</h2>
             <div className="flex items-center gap-3 mt-2 text-[12px] text-slate-400 flex-wrap">
               {dono && <span className="flex items-center gap-1.5"><span className="w-5 h-5 rounded-full bg-slate-700 text-slate-300 text-[9px] font-bold flex items-center justify-center">{initials(dono.nome)}</span> {dono.nome}</span>}
@@ -1345,8 +1367,8 @@ const PrioridadeCard: React.FC<{
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-4 flex-wrap">
             <div className="flex-1 min-w-0">
-              <p className="text-[10px] font-semibold text-emerald-500 uppercase tracking-widest flex items-center gap-1">
-                <Target size={9} /> PRIORIDADE ATIVA
+              <p className="text-[10px] font-semibold text-emerald-500 uppercase tracking-widest flex items-center gap-2">
+                <Target size={9} /> PRIORIDADE ATIVA <span className="font-mono text-slate-600 normal-case tracking-normal">{shortId(prioridade.id)}</span>
               </p>
               <button
                 type="button"

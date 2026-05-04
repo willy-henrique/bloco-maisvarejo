@@ -632,7 +632,9 @@ function AppContent() {
     const todas = [...ritmo.board.prioridades, ...sinteticasFromItems];
     const porEmpresa = todas.filter((p) => matchWorkspaceRitmo(p.empresa));
     if (profile?.role === 'administrador') return porEmpresa;
-    return porEmpresa.filter((p) => prioridadeVisivelPorDemandaAtribuida(p));
+    // Cross-workspace: inclui prioridades de outros workspaces quando o usuário é WHO de
+    // algum plano filho ou tem tarefa atribuída — independente do workspace da prioridade.
+    return todas.filter((p) => prioridadeVisivelPorDemandaAtribuida(p));
   }, [
     ritmo.board.prioridades,
     sinteticasFromItems,
@@ -652,6 +654,11 @@ function AppContent() {
   const ritmoPlanosEscopoVisivel = useMemo(
     () => {
       const base = ritmo.board.planos.filter((pl) => {
+        // Cross-workspace: plano atribuído ao usuário como WHO — sempre visível.
+        if (
+          myResponsavelIdsForBoard.size > 0 &&
+          donoPrioridadeCorrespondeAoUsuario(pl.who_id, myResponsavelIdsForBoard, responsaveisParaAtribuicao)
+        ) return true;
         // Planos que contêm tarefas atribuídas ao usuário sempre são visíveis,
         // independente do workspace — para não bloquear a visão da tarefa atribuída.
         const hasTarefaAtribuida = ritmo.board.tarefas.some(
@@ -1817,7 +1824,7 @@ function AppContent() {
             <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
             Conectado
           </div>
-          <span>MAVO 2.0.5</span>
+          <span>MAVO 2.0.6</span>
         </footer>
       </main>
     </div>

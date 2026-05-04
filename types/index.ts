@@ -119,6 +119,8 @@ export interface PlanoDeAcao {
   when_fim: number;
   how: string;
   how_much?: string;
+  /** Link externo opcional (ex.: Google Drive / Docs) associado a este plano. */
+  link?: string;
   status_plano: StatusPlano;
   /** Empresa / workspace associada a este plano (opcional) */
   empresa?: string;
