@@ -10,7 +10,7 @@
 import React, { useMemo, useState, useCallback, useRef, useEffect } from 'react';
 import {
   Menu, FileText, Plus, X, Target, ListTodo,
-  PieChart, Briefcase, Bot, Search, Activity, AlertCircle,
+  PieChart, Briefcase, Bot, Search, Activity, AlertCircle, CalendarDays,
 } from 'lucide-react';
 import { useUser } from '../contexts/UserContext';
 import { useRitmoGestao } from '../controllers/useRitmoGestao';
@@ -26,6 +26,8 @@ import { RoadmapView } from '../components/Dashboard/RoadmapView';
 import { KanbanBoard } from '../components/Dashboard/KanbanBoard';
 import { ActionItemModal } from '../components/Dashboard/ActionItemModal';
 import { ChatView } from '../components/Chat/ChatView';
+import { AgendaView } from '../components/Dashboard/AgendaView';
+import { useAgenda } from '../controllers/useAgenda';
 import { EstrategicoGridIcon } from '../components/icons/EstrategicoGridIcon';
 import { mergeResponsaveisComPerfis } from '../utils/mergeResponsaveisComPerfis';
 import { nomeExibicaoWhoParaItem } from '../components/Dashboard/responsavelSearchUtils';
@@ -171,6 +173,7 @@ function NovoPlanoModal({
 
 function ProContent() {
   const { profile, encryptionKey, logout, firebaseUser } = useUser();
+  const agenda = useAgenda(firebaseUser?.uid ?? null);
   const ritmo = useRitmoGestao(encryptionKey ?? null);
   const { items, loading: loadingItems, addItem, updateItem, deleteItem, updateStatus } =
     useStrategicBoard(encryptionKey ?? null);
@@ -287,6 +290,7 @@ function ProContent() {
     roadmap: 'Roadmap 2026',
     ia: '5W2H CHAT',
     workspace: 'Workspace',
+    agenda: 'Agenda',
   };
 
   const viewIcon: Record<ViewId, React.ReactNode> = {
@@ -298,6 +302,7 @@ function ProContent() {
     roadmap: <Briefcase size={18} className="text-cyan-500 shrink-0" />,
     ia: <Bot size={18} className="text-blue-400 shrink-0" />,
     workspace: <Target size={18} className="text-blue-400 shrink-0" />,
+    agenda: <CalendarDays size={18} className="text-blue-400 shrink-0" />,
   };
 
   if (ritmo.loading || loadingItems) {
@@ -545,6 +550,17 @@ function ProContent() {
               onOpenItem={openItemModal}
               canOpenItem={true}
               displayWho={displayWho}
+            />
+          )}
+
+          {/* ── AGENDA ─────────────────────────────────────────────────────── */}
+          {activeView === 'agenda' && (
+            <AgendaView
+              items={agenda.items}
+              loading={agenda.loading}
+              onAdd={agenda.addItem}
+              onToggle={agenda.toggleConcluido}
+              onDelete={agenda.deleteItem}
             />
           )}
 

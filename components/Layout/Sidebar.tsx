@@ -1,10 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { LogOut, ShieldCheck, PieChart, Briefcase, X, ListTodo, Bot, Target, FileText, ChevronDown, ExternalLink } from 'lucide-react';
+import { LogOut, ShieldCheck, PieChart, Briefcase, X, ListTodo, Bot, Target, FileText, ChevronDown, ExternalLink, CalendarDays } from 'lucide-react';
 import { EstrategicoGridIcon } from '../icons/EstrategicoGridIcon';
 import type { ExternalWorkspaceLink, UserRole } from '../../types/user';
 import { listActiveExternalLinksByWorkspace } from '../../utils/externalWorkspaceLinks';
 
-export type ViewId = 'workspace' | 'dashboard' | 'table' | 'backlog' | 'performance' | 'roadmap' | 'ia' | 'operacional';
+export type ViewId = 'workspace' | 'dashboard' | 'table' | 'backlog' | 'performance' | 'roadmap' | 'ia' | 'operacional' | 'agenda';
 
 interface SidebarProps {
   activeView: ViewId;
@@ -247,6 +247,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
               }`}
             >
               <ShieldCheck size={18} /> Workspace
+            </button>
+          </div>
+
+          <div className="mt-4 pt-4 border-t border-slate-800 flex flex-col gap-0.5">
+            <button
+              type="button"
+              onClick={() => handleNavClick('agenda')}
+              className={`flex items-center gap-2.5 px-3 py-2.5 min-h-[44px] rounded-lg text-sm font-medium transition-all text-left w-full touch-manipulation ${
+                activeView === 'agenda'
+                  ? 'bg-blue-600 text-white'
+                  : 'text-slate-400 hover:bg-slate-800/60 hover:text-slate-100'
+              }`}
+            >
+              <CalendarDays size={18} /> Agenda
             </button>
           </div>
 

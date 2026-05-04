@@ -82,11 +82,25 @@ export interface Backlog {
   workspace_origem?: string;
 }
 
+export type AgendaStatus = 'pendente' | 'em_andamento' | 'concluido';
+
+/** Item de agenda pessoal do usuário. */
+export interface AgendaItem {
+  id: string;
+  titulo: string;
+  descricao?: string;
+  data_hora: number;
+  status: AgendaStatus;
+  created_at: number;
+}
+
 /** Priorizar (nível estratégico). Máx 3 priorizadas por quadro. */
 export interface Prioridade {
   id: string;
   titulo: string;
   descricao: string;
+  /** Link externo opcional (ex.: Google Docs / Drive) associado a esta prioridade. */
+  link?: string;
   dono_id: string;
   data_inicio: number;
   data_alvo: number;

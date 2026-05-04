@@ -6,7 +6,7 @@
 
 import React, { useMemo, useState, useEffect } from 'react';
 import type { Prioridade, PlanoDeAcao, Tarefa, Responsavel, StatusPrioridade } from '../../types';
-import { ChevronDown, ChevronRight, AlertCircle, ListTodo, X, Trash2 } from 'lucide-react';
+import { ChevronDown, ChevronRight, AlertCircle, ListTodo, X, Trash2, ExternalLink } from 'lucide-react';
 import { EstrategicoGridIcon } from '../icons/EstrategicoGridIcon';
 
 const HEADERS = ['PRIORIZAR', 'DONO', 'EM EXECUÇÃO', 'BLOQUEADOS', 'CONCLUIDAS', ''] as const;
@@ -297,6 +297,7 @@ export const DetalhePrioridadeModal: React.FC<DetalhePrioridadeModalProps> = ({
 
   const [titulo, setTitulo] = useState(prioridade.titulo);
   const [descricao, setDescricao] = useState(prioridade.descricao ?? '');
+  const [link, setLink] = useState(prioridade.link ?? '');
   const [dono, setDono] = useState(prioridade.dono_id);
   const [dataAlvo, setDataAlvo] = useState(
     new Date(prioridade.data_alvo).toISOString().slice(0, 10)
@@ -307,6 +308,7 @@ export const DetalhePrioridadeModal: React.FC<DetalhePrioridadeModalProps> = ({
   useEffect(() => {
     setTitulo(prioridade.titulo);
     setDescricao(prioridade.descricao ?? '');
+    setLink(prioridade.link ?? '');
     setDono(prioridade.dono_id);
     setDataAlvo(new Date(prioridade.data_alvo).toISOString().slice(0, 10));
     setStatus(prioridade.status_prioridade);
@@ -318,6 +320,7 @@ export const DetalhePrioridadeModal: React.FC<DetalhePrioridadeModalProps> = ({
       await onUpdatePrioridade(prioridade.id, {
         titulo: titulo.trim(),
         descricao: descricao.trim(),
+        link: link.trim() || undefined,
         dono_id: isBacklogOrigin ? prioridade.dono_id : dono.trim(),
         data_alvo: new Date(dataAlvo).getTime(),
         status_prioridade: status,
@@ -359,6 +362,30 @@ export const DetalhePrioridadeModal: React.FC<DetalhePrioridadeModalProps> = ({
                 className="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100 outline-none focus:border-blue-500 resize-none"
                 rows={2}
               />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-400 mb-1">Link</label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="url"
+                  value={link}
+                  onChange={(e) => setLink(e.target.value)}
+                  placeholder="https://..."
+                  className="flex-1 bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100 outline-none focus:border-blue-500"
+                />
+                {link.trim() && (
+                  <a
+                    href={link.trim()}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    className="p-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-300 hover:text-white transition-colors"
+                    title="Abrir link"
+                  >
+                    <ExternalLink size={14} />
+                  </a>
+                )}
+              </div>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-[12px] text-slate-500">
               <div>

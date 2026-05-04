@@ -195,7 +195,7 @@ const TarefaRow: React.FC<{
             />
           </button>
           <div className="min-w-0">
-            <span className="text-[9px] font-mono text-slate-700" title="ID da tarefa">{shortId(tarefa.id)}</span>
+            <span className="text-[9px] font-mono bg-slate-700/70 text-slate-300 px-1.5 py-0.5 rounded" title="ID da tarefa">{shortId(tarefa.id)}</span>
             {canWriteTarefa && editingTitulo ? (
               <input
                 autoFocus
@@ -558,7 +558,7 @@ const OperacionalPlanoCard: React.FC<{
               </p>
               <p className="text-sm font-semibold text-slate-100 truncate">{prioridade.titulo}</p>
               <div className="flex items-center gap-2">
-                <span className="text-[9px] font-mono text-slate-600" title="ID do card">{shortId(plano.id)}</span>
+                <span className="text-[9px] font-mono bg-slate-700/70 text-slate-300 px-1.5 py-0.5 rounded" title="ID do card">{shortId(plano.id)}</span>
                 <h4 className="text-lg font-bold text-slate-100 truncate">{plano.titulo}</h4>
                 {plano.link?.trim() && (
                   <a

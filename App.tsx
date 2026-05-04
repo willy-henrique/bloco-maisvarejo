@@ -11,6 +11,8 @@ import { ActionItemModal } from './components/Dashboard/ActionItemModal';
 import { PerformanceView } from './components/Dashboard/PerformanceView';
 import { RoadmapView } from './components/Dashboard/RoadmapView';
 import { OperacionalView } from './components/Dashboard/OperacionalView';
+import { AgendaView } from './components/Dashboard/AgendaView';
+import { useAgenda } from './controllers/useAgenda';
 import type { ViewId } from './components/Layout/Sidebar';
 import { useStrategicBoard } from './controllers/useStrategicBoard';
 import { useRitmoGestao } from './controllers/useRitmoGestao';
@@ -113,6 +115,7 @@ function empresaParaDemandaDoDono(
 
 function AppContent() {
   const { isAuthenticated, encryptionKey, logout, profile, hasModuleAction, firebaseUser } = useUser();
+  const agenda = useAgenda(firebaseUser?.uid ?? null);
   const [activeView, setActiveView] = useState<ViewId>('backlog');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [strategicNote, setStrategicNote] = useState('');
@@ -356,6 +359,7 @@ function AppContent() {
         id: `legacy-${item.id}`,
         titulo: item.what,
         descricao: item.why,
+        link: item.link,
         dono_id: item.who,
         data_inicio: Date.now(),
         data_alvo: item.when ? new Date(item.when + 'T12:00:00').getTime() : Date.now(),
@@ -1272,7 +1276,15 @@ function AppContent() {
             </div>
           )}
 
-          {activeView === 'ia' ? (
+          {activeView === 'agenda' ? (
+            <AgendaView
+              items={agenda.items}
+              loading={agenda.loading}
+              onAdd={agenda.addItem}
+              onToggle={agenda.toggleConcluido}
+              onDelete={agenda.deleteItem}
+            />
+          ) : activeView === 'ia' ? (
             <div className="pb-8 h-full min-h-0 flex flex-col">
               <ChatView canSend={perm.ia.send} />
             </div>
@@ -1824,7 +1836,7 @@ function AppContent() {
             <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
             Conectado
           </div>
-          <span>MAVO 2.0.6</span>
+          <span>MAVO 2.1.0</span>
         </footer>
       </main>
     </div>
