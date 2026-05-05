@@ -84,6 +84,12 @@ export interface Backlog {
 
 export type AgendaStatus = 'pendente' | 'em_andamento' | 'concluido';
 
+export interface AgendaMember {
+  uid: string;
+  nome: string;
+  email: string;
+}
+
 /** Item de agenda pessoal do usuário. */
 export interface AgendaItem {
   id: string;
@@ -92,6 +98,7 @@ export interface AgendaItem {
   data_hora: number;
   status: AgendaStatus;
   created_at: number;
+  participantes?: AgendaMember[];
 }
 
 /** Priorizar (nível estratégico). Máx 3 priorizadas por quadro. */

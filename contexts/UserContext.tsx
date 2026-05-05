@@ -36,6 +36,7 @@ interface UserContextValue {
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => void;
   hasView: (view: ViewId) => boolean;
+  hasModuleAction: (view: ViewId, actionId: string) => boolean;
   hasEmpresa: (empresa: string) => boolean;
   role: UserRole | null;
 }

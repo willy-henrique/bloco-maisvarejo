@@ -1,13 +1,45 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import type { AgendaItem, AgendaStatus } from '../types';
-import { saveAgenda, subscribeAgenda } from '../services/agendaService';
+import {
+  saveAgenda,
+  subscribeAgenda,
+  subscribeSharedAgendaEvents,
+  subscribeIncomingAgendaEventInvites,
+  subscribeOutgoingAgendaEventInvites,
+  respondAgendaEventInvite,
+  syncAgendaEventInvites,
+  listAgendaUsers,
+  type AgendaEventInvite,
+  type AgendaInviteStatus,
+  type AgendaSharedUser,
+  type SharedAgendaEntry,
+} from '../services/agendaService';
 
 const STATUS_CYCLE: AgendaStatus[] = ['pendente', 'em_andamento', 'concluido'];
 
-export function useAgenda(uid: string | null) {
+type CurrentAgendaUser = {
+  nome?: string | null;
+  email?: string | null;
+};
+
+function buildCurrentUser(uid: string, currentUser?: CurrentAgendaUser | null): AgendaSharedUser {
+  const email = currentUser?.email?.trim() ?? '';
+  const nome = currentUser?.nome?.trim() || email || uid;
+  return { uid, nome, email };
+}
+
+export function useAgenda(uid: string | null, currentUser?: CurrentAgendaUser | null) {
   const [items, setItems] = useState<AgendaItem[]>([]);
   const [loading, setLoading] = useState(true);
-  // ref to always have latest items in callbacks without stale closures
+  const [availableUsers, setAvailableUsers] = useState<AgendaSharedUser[]>([]);
+  const [incomingEventInvites, setIncomingEventInvites] = useState<AgendaEventInvite[]>([]);
+  const [incomingEventInvitesReady, setIncomingEventInvitesReady] = useState(false);
+  const incomingEventInvitesRef = useRef<AgendaEventInvite[]>([]);
+  const [outgoingEventInvites, setOutgoingEventInvites] = useState<AgendaEventInvite[]>([]);
+  const [sharedAgendas, setSharedAgendas] = useState<SharedAgendaEntry[]>([]);
+  const [sharingLoading, setSharingLoading] = useState(false);
+  const [sharingError, setSharingError] = useState<string | null>(null);
+
   const itemsRef = useRef<AgendaItem[]>([]);
   itemsRef.current = items;
 
@@ -33,17 +65,74 @@ export function useAgenda(uid: string | null) {
     return () => unsub?.();
   }, [uid]);
 
+  useEffect(() => {
+    if (!uid) {
+      setAvailableUsers([]);
+      return;
+    }
+    listAgendaUsers(uid).then(setAvailableUsers).catch(() => setAvailableUsers([]));
+  }, [uid]);
+
+  useEffect(() => {
+    if (!uid) {
+      setIncomingEventInvites([]);
+      setIncomingEventInvitesReady(false);
+      return;
+    }
+    setIncomingEventInvitesReady(false);
+    const unsub = subscribeIncomingAgendaEventInvites(uid, (invites) => {
+      // Só atualiza estado se realmente mudou para evitar loops de render
+      const prev = incomingEventInvitesRef.current;
+      if (prev.length === invites.length && prev.every((a, i) => a.ownerUid === invites[i].ownerUid && a.eventId === invites[i].eventId && a.status === invites[i].status)) {
+        if (!incomingEventInvitesReady) setIncomingEventInvitesReady(true);
+        return;
+      }
+      incomingEventInvitesRef.current = invites;
+      setIncomingEventInvites(invites);
+      setIncomingEventInvitesReady(true);
+    }, (error) => {
+      console.error('Falha ao sincronizar convites recebidos.', error);
+      setIncomingEventInvitesReady(true); // Marca como pronto mesmo com erro para não travar
+    });
+    return () => unsub?.();
+  }, [uid]);
+
+  useEffect(() => {
+    if (!uid) {
+      setOutgoingEventInvites([]);
+      return;
+    }
+    const unsub = subscribeOutgoingAgendaEventInvites(uid, setOutgoingEventInvites);
+    return () => unsub?.();
+  }, [uid]);
+
+  useEffect(() => {
+    if (!uid) {
+      setSharedAgendas([]);
+      return;
+    }
+    const unsub = subscribeSharedAgendaEvents(uid, setSharedAgendas);
+    return () => unsub?.();
+  }, [uid]);
+
   const persist = useCallback(
     (next: AgendaItem[]) => {
       if (!uid) return;
       const prev = itemsRef.current;
+      const owner = buildCurrentUser(uid, currentUser);
       setItems(next);
-      void saveAgenda(uid, next).catch((error) => {
-        console.error('Falha ao salvar agenda.', error);
-        setItems(prev);
-      });
+      void saveAgenda(uid, next)
+        .then(() =>
+          syncAgendaEventInvites(owner, next, prev).catch((error) => {
+            console.error('Falha ao sincronizar convites da reunião.', error);
+          }),
+        )
+        .catch((error) => {
+          console.error('Falha ao salvar agenda.', error);
+          setItems(prev);
+        });
     },
-    [uid],
+    [uid, currentUser],
   );
 
   const addItem = useCallback(
@@ -64,8 +153,7 @@ export function useAgenda(uid: string | null) {
       const next = itemsRef.current.map((i) => {
         if (i.id !== id) return i;
         const idx = STATUS_CYCLE.indexOf(i.status);
-        const nextStatus = STATUS_CYCLE[(idx + 1) % STATUS_CYCLE.length];
-        return { ...i, status: nextStatus };
+        return { ...i, status: STATUS_CYCLE[(idx + 1) % STATUS_CYCLE.length] };
       });
       persist(next);
     },
@@ -73,9 +161,7 @@ export function useAgenda(uid: string | null) {
   );
 
   const deleteItem = useCallback(
-    (id: string) => {
-      persist(itemsRef.current.filter((i) => i.id !== id));
-    },
+    (id: string) => persist(itemsRef.current.filter((i) => i.id !== id)),
     [persist],
   );
 
@@ -87,5 +173,44 @@ export function useAgenda(uid: string | null) {
     [persist],
   );
 
-  return { items, loading, addItem, cycleStatus, deleteItem, updateItem };
+  const respondEventInvite = useCallback(
+    async (
+      ownerUid: string,
+      eventId: string,
+      status: Exclude<AgendaInviteStatus, 'pending'>,
+      rejectionReason?: string,
+    ): Promise<string | null> => {
+      if (!uid) return 'Usuário não autenticado.';
+      setSharingLoading(true);
+      setSharingError(null);
+      try {
+        await respondAgendaEventInvite(ownerUid, eventId, uid, status, rejectionReason);
+        return null;
+      } catch (e) {
+        const message = e instanceof Error ? e.message : 'Erro ao responder convite. Tente novamente.';
+        setSharingError(message);
+        return message;
+      } finally {
+        setSharingLoading(false);
+      }
+    },
+    [uid],
+  );
+
+  return {
+    items,
+    loading,
+    availableUsers,
+    addItem,
+    cycleStatus,
+    deleteItem,
+    updateItem,
+    incomingEventInvites,
+    incomingEventInvitesReady,
+    outgoingEventInvites,
+    sharedAgendas,
+    sharingLoading,
+    sharingError,
+    respondEventInvite,
+  };
 }

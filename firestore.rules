@@ -49,8 +49,128 @@ service cloud.firestore {
       allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
     }
 
+    // collectionGroup read for viewers querying their own incoming eventInvites
+    match /{path=**}/eventInvites/{inviteId} {
+      allow read: if isAuthenticated() && resource.data.viewerUid == request.auth.uid;
+    }
+
+    // collectionGroup read for viewers querying their own incoming agendaInvites
+    match /{path=**}/agendaInvites/{viewerId} {
+      allow read: if isAuthenticated() && resource.data.viewerUid == request.auth.uid;
+    }
+
     match /userAgenda/{userId} {
-      allow read, write: if isAuthenticated() && request.auth.uid == userId;
+      function hasAcceptedAgendaInvite() {
+        return exists(/databases/$(database)/documents/userAgenda/$(userId)/agendaInvites/$(request.auth.uid)) &&
+          get(/databases/$(database)/documents/userAgenda/$(userId)/agendaInvites/$(request.auth.uid)).data.status == 'accepted';
+      }
+
+      allow read: if isAuthenticated() &&
+        (request.auth.uid == userId || hasAcceptedAgendaInvite());
+      allow create, update, delete: if isAuthenticated() && request.auth.uid == userId;
+
+      match /agendaInvites/{viewerId} {
+        function inviteShapeIsValid() {
+          return request.resource.data.ownerUid == userId &&
+            request.resource.data.viewerUid == viewerId &&
+            request.resource.data.status in ['pending', 'accepted', 'declined'];
+        }
+
+        function viewerResponseIsValid() {
+          return resource.data.ownerUid == userId &&
+            resource.data.viewerUid == viewerId &&
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'status',
+              'rejectionReason',
+              'respondedAt',
+              'updatedAt'
+            ]) &&
+            request.resource.data.status in ['accepted', 'declined'] &&
+            (
+              request.resource.data.status == 'accepted' ||
+              (
+                request.resource.data.rejectionReason is string &&
+                request.resource.data.rejectionReason.size() > 0 &&
+                request.resource.data.rejectionReason.size() <= 1000
+              )
+            );
+        }
+
+        allow read: if isAuthenticated() &&
+          (
+            request.auth.uid == userId ||
+            resource.data.viewerUid == request.auth.uid
+          );
+        allow create: if isAuthenticated() &&
+          request.auth.uid == userId &&
+          inviteShapeIsValid() &&
+          request.resource.data.status == 'pending';
+        allow update: if isAuthenticated() &&
+          (
+            (
+              request.auth.uid == userId &&
+              inviteShapeIsValid() &&
+              request.resource.data.status == 'pending'
+            ) ||
+            (
+              request.auth.uid == viewerId &&
+              viewerResponseIsValid()
+            )
+          );
+        allow delete: if isAuthenticated() &&
+          (request.auth.uid == userId || request.auth.uid == viewerId);
+      }
+
+      match /eventInvites/{inviteId} {
+        function eventInviteShapeIsValid() {
+          return request.resource.data.ownerUid == userId &&
+            request.resource.data.viewerUid is string &&
+            request.resource.data.eventId is string &&
+            request.resource.data.status in ['pending', 'accepted', 'declined'];
+        }
+
+        function eventViewerResponseIsValid() {
+          return resource.data.ownerUid == userId &&
+            resource.data.viewerUid == request.auth.uid &&
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'status',
+              'rejectionReason',
+              'respondedAt',
+              'updatedAt'
+            ]) &&
+            request.resource.data.status in ['accepted', 'declined'] &&
+            (
+              request.resource.data.status == 'accepted' ||
+              (
+                request.resource.data.rejectionReason is string &&
+                request.resource.data.rejectionReason.size() > 0 &&
+                request.resource.data.rejectionReason.size() <= 1000
+              )
+            );
+        }
+
+        allow read: if isAuthenticated() &&
+          (
+            request.auth.uid == userId ||
+            resource.data.viewerUid == request.auth.uid
+          );
+        allow create: if isAuthenticated() &&
+          request.auth.uid == userId &&
+          eventInviteShapeIsValid() &&
+          request.resource.data.status == 'pending';
+        allow update: if isAuthenticated() &&
+          (
+            (
+              request.auth.uid == userId &&
+              eventInviteShapeIsValid() &&
+              request.resource.data.viewerUid == resource.data.viewerUid &&
+              request.resource.data.eventId == resource.data.eventId &&
+              request.resource.data.status == resource.data.status
+            ) ||
+            eventViewerResponseIsValid()
+          );
+        allow delete: if isAuthenticated() && request.auth.uid == userId;
+      }
     }
 
     match /{document=**} {

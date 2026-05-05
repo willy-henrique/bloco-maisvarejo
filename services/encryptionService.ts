@@ -118,7 +118,7 @@ export async function importKeyFromBase64(base64: string): Promise<CryptoKey> {
 /**
  * Criptografa dados com AES-256-GCM (IV + ciphertext + tag em base64).
  */
-export async function encryptWithKey(data: string | object, key: CryptoKey): Promise<string> {
+export async function encryptWithKey(data: unknown, key: CryptoKey): Promise<string> {
   const json = typeof data === 'string' ? data : JSON.stringify(data);
   const iv = crypto.getRandomValues(new Uint8Array(IV_LENGTH));
   const encoded = new TextEncoder().encode(json);

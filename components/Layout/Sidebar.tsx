@@ -1,5 +1,20 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { LogOut, ShieldCheck, PieChart, Briefcase, X, ListTodo, Bot, Target, FileText, ChevronDown, ExternalLink, CalendarDays } from 'lucide-react';
+import {
+  LogOut,
+  ShieldCheck,
+  PieChart,
+  Briefcase,
+  X,
+  ListTodo,
+  Bot,
+  Target,
+  FileText,
+  ChevronDown,
+  ExternalLink,
+  CalendarDays,
+  Bell,
+  BellOff,
+} from 'lucide-react';
 import { EstrategicoGridIcon } from '../icons/EstrategicoGridIcon';
 import type { ExternalWorkspaceLink, UserRole } from '../../types/user';
 import { listActiveExternalLinksByWorkspace } from '../../utils/externalWorkspaceLinks';
@@ -20,6 +35,10 @@ interface SidebarProps {
   userRole?: UserRole | null;
   allowedViews?: ViewId[];
   userName?: string;
+  notificationsSupported?: boolean;
+  notificationPermission?: NotificationPermission;
+  notificationsEnabled?: boolean;
+  onToggleNotifications?: () => void | Promise<void>;
   onWorkspaceShortcutClick?: () => void;
   externalWorkspaceLinks?: ExternalWorkspaceLink[];
   onOpenWorkspaceExternalLink?: (url: string) => void;
@@ -39,6 +58,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
   userRole,
   allowedViews,
   userName,
+  notificationsSupported = false,
+  notificationPermission = 'default',
+  notificationsEnabled = true,
+  onToggleNotifications,
   onWorkspaceShortcutClick,
   externalWorkspaceLinks,
   onOpenWorkspaceExternalLink,
@@ -97,6 +120,41 @@ export const Sidebar: React.FC<SidebarProps> = ({
     window.open(url, '_blank', 'noopener,noreferrer');
     setWorkspaceLinksOpen(false);
   };
+
+  const notificationStatus = (() => {
+    if (!notificationsSupported) {
+      return {
+        label: 'Indisp.',
+        title: 'Notificações do Windows indisponíveis neste navegador',
+        Icon: BellOff,
+        cls: 'text-slate-600',
+      };
+    }
+    if (notificationPermission === 'granted') {
+      return {
+        label: notificationsEnabled ? 'Ativa' : 'Desat.',
+        title: notificationsEnabled
+          ? 'Clique para desativar notificações do Mavo'
+          : 'Clique para ativar notificações do Mavo',
+        Icon: notificationsEnabled ? Bell : BellOff,
+        cls: notificationsEnabled ? 'text-emerald-400/80' : 'text-slate-500',
+      };
+    }
+    if (notificationPermission === 'denied') {
+      return {
+        label: 'Bloq.',
+        title: 'Notificações bloqueadas no navegador. Libere nas permissões do site.',
+        Icon: BellOff,
+        cls: 'text-red-400/80',
+      };
+    }
+    return {
+      label: 'Desat.',
+      title: 'Clique para ativar notificações do Windows',
+      Icon: BellOff,
+      cls: 'text-amber-400/80',
+    };
+  })();
 
   return (
     <>
@@ -288,6 +346,22 @@ export const Sidebar: React.FC<SidebarProps> = ({
               {userName}
             </div>
           )}
+          <button
+            type="button"
+            onClick={() => {
+              if (notificationsSupported) void onToggleNotifications?.();
+            }}
+            title={notificationStatus.title}
+            className={`w-full flex items-center justify-between gap-2 px-3 py-1.5 rounded-md text-[10px] font-medium transition-colors ${notificationStatus.cls} ${
+              notificationsSupported ? 'hover:bg-slate-800/55 hover:text-slate-200' : 'cursor-default'
+            }`}
+          >
+            <span className="flex items-center gap-2 min-w-0">
+              <notificationStatus.Icon size={13} className="shrink-0" />
+              <span className="truncate">Notificações</span>
+            </span>
+            <span className="text-[10px]">{notificationStatus.label}</span>
+          </button>
           <button 
             onClick={onLogout}
             className="flex items-center gap-2.5 px-3 py-2.5 min-h-[44px] rounded-lg text-red-400/90 hover:bg-red-500/10 hover:text-red-400 w-full transition-all text-sm font-medium touch-manipulation"

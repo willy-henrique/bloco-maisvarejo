@@ -38,6 +38,7 @@ import {
   Bot,
   ShieldCheck,
   FileText,
+  Bell,
 } from 'lucide-react';
 import { ActionItem, ItemStatus, UrgencyLevel } from './types';
 import type { Prioridade } from './types';
@@ -54,6 +55,8 @@ import { Toast, type ToastType } from './components/Shared/Toast';
 import { ChatView } from './components/Chat/ChatView';
 import { Modal } from './components/Shared/Modal';
 import { EstrategicoGridIcon } from './components/icons/EstrategicoGridIcon';
+
+const MAVO_NOTIFICATIONS_ENABLED_KEY = '@Mavo:SystemNotificationsEnabled';
 
 function normKey(s: string | null | undefined): string {
   return (s ?? '').trim().toLowerCase();
@@ -115,7 +118,7 @@ function empresaParaDemandaDoDono(
 
 function AppContent() {
   const { isAuthenticated, encryptionKey, logout, profile, hasModuleAction, firebaseUser } = useUser();
-  const agenda = useAgenda(firebaseUser?.uid ?? null);
+  const agenda = useAgenda(firebaseUser?.uid ?? null, profile);
   const [activeView, setActiveView] = useState<ViewId>('backlog');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [strategicNote, setStrategicNote] = useState('');
@@ -125,6 +128,15 @@ function AppContent() {
   const [defaultStatusForNew, setDefaultStatusForNew] = useState<ItemStatus | null>(null);
   const [modalContext, setModalContext] = useState<'default' | 'backlog' | 'estrategico'>('default');
   const [toast, setToast] = useState<{ message: string; type: ToastType } | null>(null);
+  const [systemNotificationPermission, setSystemNotificationPermission] = useState<NotificationPermission>(() => {
+    if (typeof window === 'undefined' || !('Notification' in window)) return 'denied';
+    return Notification.permission;
+  });
+  const [systemNotificationsEnabled, setSystemNotificationsEnabled] = useState(() => {
+    if (typeof window === 'undefined') return true;
+    return localStorage.getItem(MAVO_NOTIFICATIONS_ENABLED_KEY) !== 'false';
+  });
+  const [showSystemNotificationPrompt, setShowSystemNotificationPrompt] = useState(false);
   /** Filtro do campo "Pesquisar..." no header (Estratégico, Backlog, Desempenho, Roadmap). */
   const [headerSearchQuery, setHeaderSearchQuery] = useState('');
   const [selectedPrioridade, setSelectedPrioridade] = useState<Prioridade | null>(null);
@@ -136,6 +148,8 @@ function AppContent() {
   const [quadroVerConcluidas, setQuadroVerConcluidas] = useState(false);
   const [focusPrioridadeId, setFocusPrioridadeId] = useState<string | null>(null);
   const focusedPrioridadeId = useRef<string | null>(null);
+  const agendaInviteNotificationsReady = useRef(false);
+  const seenAgendaInviteKeys = useRef<Set<string>>(new Set());
   const [tableOnlyPrioridadeId, setTableOnlyPrioridadeId] = useState<string | null>(null);
   const { items, loading, addItem, updateItem, deleteItem, updateStatus } = useStrategicBoard(encryptionKey ?? null);
   const ritmo = useRitmoGestao(encryptionKey ?? null);
@@ -162,6 +176,137 @@ function AppContent() {
     },
     [profile, hasAllWorkspaceAccess, allowedWorkspaceKeys]
   );
+
+  const requestSystemNotifications = useCallback(async () => {
+    setShowSystemNotificationPrompt(false);
+
+    if (typeof window === 'undefined' || !('Notification' in window)) {
+      setToast({ message: 'Este navegador não suporta notificações do Windows.', type: 'error' });
+      return;
+    }
+
+    if (Notification.permission === 'granted') {
+      setSystemNotificationPermission('granted');
+      setSystemNotificationsEnabled(true);
+      localStorage.setItem(MAVO_NOTIFICATIONS_ENABLED_KEY, 'true');
+      setToast({ message: 'Notificações do Mavo ativadas.', type: 'success' });
+      return;
+    }
+
+    if (Notification.permission === 'denied') {
+      setSystemNotificationPermission('denied');
+      setToast({
+        message: 'Notificações bloqueadas. Libere nas permissões do navegador para este site.',
+        type: 'error',
+      });
+      return;
+    }
+
+    const permission = await Notification.requestPermission();
+    setSystemNotificationPermission(permission);
+    if (permission === 'granted') {
+      setSystemNotificationsEnabled(true);
+      localStorage.setItem(MAVO_NOTIFICATIONS_ENABLED_KEY, 'true');
+    }
+    setToast({
+      message:
+        permission === 'granted'
+          ? 'Notificações do Mavo ativadas.'
+          : 'Permissão de notificação não foi ativada.',
+      type: permission === 'granted' ? 'success' : 'error',
+    });
+  }, []);
+
+  const toggleSystemNotifications = useCallback(() => {
+    if (typeof window === 'undefined' || !('Notification' in window)) {
+      setToast({ message: 'Este navegador não suporta notificações do Windows.', type: 'error' });
+      return;
+    }
+
+    if (Notification.permission !== 'granted') {
+      void requestSystemNotifications();
+      return;
+    }
+
+    setSystemNotificationsEnabled((prev) => {
+      const next = !prev;
+      localStorage.setItem(MAVO_NOTIFICATIONS_ENABLED_KEY, String(next));
+      setToast({
+        message: next ? 'Notificações do Mavo ativadas.' : 'Notificações do Mavo desativadas.',
+        type: 'success',
+      });
+      return next;
+    });
+  }, [requestSystemNotifications]);
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setShowSystemNotificationPrompt(false);
+      return;
+    }
+    if (typeof window === 'undefined' || !('Notification' in window)) return;
+    setSystemNotificationPermission(Notification.permission);
+    if (Notification.permission === 'default') {
+      setShowSystemNotificationPrompt(true);
+    }
+  }, [isAuthenticated, firebaseUser?.uid]);
+
+  useEffect(() => {
+    agendaInviteNotificationsReady.current = false;
+    seenAgendaInviteKeys.current = new Set();
+  }, [firebaseUser?.uid]);
+
+  useEffect(() => {
+    if (!agenda.incomingEventInvitesReady) return;
+
+    const pendingInvites = agenda.incomingEventInvites.filter((invite) => invite.status === 'pending');
+    const currentKeys = new Set(
+      pendingInvites.map((invite) => `${invite.ownerUid}:${invite.eventId}`),
+    );
+
+    if (!agendaInviteNotificationsReady.current) {
+      seenAgendaInviteKeys.current = currentKeys;
+      agendaInviteNotificationsReady.current = true;
+      return;
+    }
+
+    const newInvites = pendingInvites.filter(
+      (invite) => !seenAgendaInviteKeys.current.has(`${invite.ownerUid}:${invite.eventId}`),
+    );
+
+    seenAgendaInviteKeys.current = currentKeys;
+
+    if (newInvites.length === 0) return;
+
+    const first = newInvites[0];
+    const message =
+      newInvites.length === 1
+        ? `Novo convite para evento: ${first.event.titulo}`
+        : `${newInvites.length} novos convites para eventos`;
+
+    setToast({ message, type: 'success' });
+
+    if (
+      systemNotificationsEnabled &&
+      typeof window !== 'undefined' &&
+      'Notification' in window &&
+      Notification.permission === 'granted'
+    ) {
+      const notification = new Notification('Convite para evento', {
+        body:
+          newInvites.length === 1
+            ? `${first.ownerNome} convidou você para "${first.event.titulo}".`
+            : message,
+        icon: '/favicon.svg',
+        tag: newInvites.length === 1 ? `agenda-${first.ownerUid}-${first.eventId}` : 'agenda-new-invites',
+      });
+      notification.onclick = () => {
+        window.focus();
+        setActiveView('agenda');
+        notification.close();
+      };
+    }
+  }, [agenda.incomingEventInvites, agenda.incomingEventInvitesReady, systemNotificationsEnabled]);
 
   const matchWorkspace = useCallback(
     (empresa?: string) => {
@@ -264,7 +409,7 @@ function AppContent() {
         ? allowedWorkspaceKeys
         : new Set((profile?.empresas ?? []).map((e) => e.trim().toLowerCase()).filter(Boolean));
     const alvoWorkspace = workspaceAtivo === 'all' ? null : String(workspaceAtivo).trim().toLowerCase();
-    const byUid = new Map(perfisCadastroUsuarios.map((u) => [normKey(u.uid), u]));
+    const byUid = new Map<string, UserProfile>(perfisCadastroUsuarios.map((u) => [normKey(u.uid), u]));
     const filtered = responsaveisParaAtribuicao.filter((r) => {
       const user = byUid.get(normKey(r.id));
       if (!user) return true;
@@ -1059,6 +1204,44 @@ function AppContent() {
         visible={toast !== null}
         onClose={() => setToast(null)}
       />
+      <Modal
+        isOpen={showSystemNotificationPrompt}
+        onClose={() => setShowSystemNotificationPrompt(false)}
+        title="Notificações do Mavo"
+        maxWidth="sm"
+      >
+        <div className="space-y-4">
+          <div className="flex gap-3">
+            <div className="shrink-0 w-10 h-10 rounded-lg bg-blue-600/20 text-blue-300 flex items-center justify-center">
+              <Bell size={20} />
+            </div>
+            <div className="space-y-1">
+              <p className="text-sm font-medium text-slate-100">
+                Deseja receber notificações do sistema Mavo?
+              </p>
+              <p className="text-xs leading-relaxed text-slate-400">
+                O Mavo pode avisar pelo Windows quando chegar um novo convite para evento.
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+            <button
+              type="button"
+              onClick={() => setShowSystemNotificationPrompt(false)}
+              className="px-4 py-2 rounded-lg border border-slate-700 text-sm text-slate-300 hover:bg-slate-800"
+            >
+              Agora não
+            </button>
+            <button
+              type="button"
+              onClick={() => void requestSystemNotifications()}
+              className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-sm font-medium text-white"
+            >
+              Permitir notificações
+            </button>
+          </div>
+        </div>
+      </Modal>
       <Sidebar
         activeView={activeView}
         setView={handleSetView}
@@ -1081,6 +1264,10 @@ function AppContent() {
         userRole={profile?.role}
         allowedViews={profile?.views}
         userName={profile?.nome}
+        notificationsSupported={typeof window !== 'undefined' && 'Notification' in window}
+        notificationPermission={systemNotificationPermission}
+        notificationsEnabled={systemNotificationsEnabled}
+        onToggleNotifications={toggleSystemNotifications}
         onWorkspaceShortcutClick={handleWorkspaceShortcutClick}
         externalWorkspaceLinks={profile?.externalWorkspaceLinks}
         onOpenWorkspaceExternalLink={handleOpenWorkspaceExternalLink}
@@ -1284,6 +1471,17 @@ function AppContent() {
               onCycleStatus={agenda.cycleStatus}
               onDelete={agenda.deleteItem}
               onEdit={agenda.updateItem}
+              availableUsers={agenda.availableUsers}
+              incomingEventInvites={agenda.incomingEventInvites}
+              outgoingEventInvites={agenda.outgoingEventInvites}
+              sharedAgendas={agenda.sharedAgendas}
+              sharingLoading={agenda.sharingLoading}
+              systemNotificationsSupported={typeof window !== 'undefined' && 'Notification' in window}
+              systemNotificationPermission={systemNotificationPermission}
+              systemNotificationsEnabled={systemNotificationsEnabled}
+              onEnableSystemNotifications={requestSystemNotifications}
+              onToggleSystemNotifications={toggleSystemNotifications}
+              onRespondEventInvite={agenda.respondEventInvite}
             />
           ) : activeView === 'ia' ? (
             <div className="pb-8 h-full min-h-0 flex flex-col">

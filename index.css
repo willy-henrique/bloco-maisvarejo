@@ -28,3 +28,24 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: #64748b;
 }
+
+.agenda-datetime-input {
+  color-scheme: dark;
+}
+
+.agenda-datetime-input::-webkit-calendar-picker-indicator {
+  width: 18px;
+  height: 18px;
+  padding: 4px;
+  border: 1px solid rgba(59, 130, 246, 0.45);
+  border-radius: 6px;
+  background-color: rgba(59, 130, 246, 0.18);
+  cursor: pointer;
+  filter: invert(63%) sepia(73%) saturate(1884%) hue-rotate(188deg) brightness(103%) contrast(101%);
+  opacity: 1;
+}
+
+.agenda-datetime-input::-webkit-calendar-picker-indicator:hover {
+  background-color: rgba(59, 130, 246, 0.32);
+  border-color: rgba(96, 165, 250, 0.75);
+}
