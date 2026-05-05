@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Plus, Trash2, CalendarDays, Clock, ChevronRight } from 'lucide-react';
+import { Plus, Trash2, CalendarDays, Clock, ChevronRight, Pencil, X, Check } from 'lucide-react';
 import type { AgendaItem, AgendaStatus } from '../../types';
 
 interface AgendaViewProps {
@@ -8,6 +8,7 @@ interface AgendaViewProps {
   onAdd: (item: Omit<AgendaItem, 'id' | 'status' | 'created_at'>) => void;
   onCycleStatus: (id: string) => void;
   onDelete: (id: string) => void;
+  onEdit: (id: string, changes: Partial<Omit<AgendaItem, 'id' | 'status' | 'created_at'>>) => void;
 }
 
 const STATUS_CFG: Record<AgendaStatus, { label: string; cls: string; dot: string }> = {
@@ -52,7 +53,7 @@ function dayLabel(ts: number): string {
 type Tab = 'pendente' | 'em_andamento' | 'concluido';
 
 export const AgendaView: React.FC<AgendaViewProps> = ({
-  items, loading, onAdd, onCycleStatus, onDelete,
+  items, loading, onAdd, onCycleStatus, onDelete, onEdit,
 }) => {
   const [titulo, setTitulo] = useState('');
   const [descricao, setDescricao] = useState('');
@@ -63,16 +64,10 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
   });
   const [showForm, setShowForm] = useState(false);
   const [tab, setTab] = useState<Tab>('pendente');
-
-  const STATUS_CYCLE: AgendaStatus[] = ['pendente', 'em_andamento', 'concluido'];
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   const handleCycleStatus = (id: string) => {
-    const item = items.find((i) => i.id === id);
-    if (!item) return;
-    const idx = STATUS_CYCLE.indexOf(item.status);
-    const next = STATUS_CYCLE[(idx + 1) % STATUS_CYCLE.length] as Tab;
     onCycleStatus(id);
-    setTab(next);
   };
 
   const byStatus = useMemo(() => {
@@ -128,7 +123,7 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
         </button>
       </div>
 
-      {/* Form */}
+      {/* Form novo evento */}
       {showForm && (
         <form onSubmit={handleSubmit} className="bg-slate-800/60 border border-slate-700 rounded-xl p-4 space-y-3">
           <input
@@ -207,7 +202,16 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
                 </div>
                 <div className="space-y-2">
                   {dayItems.map((item) => (
-                    <AgendaCard key={item.id} item={item} onCycleStatus={handleCycleStatus} onDelete={onDelete} />
+                    <AgendaCard
+                      key={item.id}
+                      item={item}
+                      isEditing={editingId === item.id}
+                      onCycleStatus={handleCycleStatus}
+                      onDelete={onDelete}
+                      onEdit={onEdit}
+                      onStartEdit={() => setEditingId(item.id)}
+                      onCancelEdit={() => setEditingId(null)}
+                    />
                   ))}
                 </div>
               </div>
@@ -223,7 +227,16 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
             <p className="text-center text-sm text-slate-500 py-8">Nenhum evento concluído.</p>
           )}
           {activeItems.map((item) => (
-            <AgendaCard key={item.id} item={item} onCycleStatus={handleCycleStatus} onDelete={onDelete} />
+            <AgendaCard
+              key={item.id}
+              item={item}
+              isEditing={editingId === item.id}
+              onCycleStatus={handleCycleStatus}
+              onDelete={onDelete}
+              onEdit={onEdit}
+              onStartEdit={() => setEditingId(item.id)}
+              onCancelEdit={() => setEditingId(null)}
+            />
           ))}
         </div>
       )}
@@ -233,22 +246,100 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
 
 interface AgendaCardProps {
   item: AgendaItem;
+  isEditing: boolean;
   onCycleStatus: (id: string) => void;
   onDelete: (id: string) => void;
+  onEdit: (id: string, changes: Partial<Omit<AgendaItem, 'id' | 'status' | 'created_at'>>) => void;
+  onStartEdit: () => void;
+  onCancelEdit: () => void;
 }
 
-const AgendaCard: React.FC<AgendaCardProps> = ({ item, onCycleStatus, onDelete }) => {
+const AgendaCard: React.FC<AgendaCardProps> = ({
+  item, isEditing, onCycleStatus, onDelete, onEdit, onStartEdit, onCancelEdit,
+}) => {
   const overdue = item.status !== 'concluido' && isPast(item.data_hora);
   const cfg = STATUS_CFG[item.status] ?? STATUS_CFG.pendente;
 
+  const [editTitulo, setEditTitulo] = useState(item.titulo);
+  const [editDescricao, setEditDescricao] = useState(item.descricao ?? '');
+  const [editDataHora, setEditDataHora] = useState(toLocalISOString(item.data_hora));
+
+  const handleSaveEdit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editTitulo.trim() || !editDataHora) return;
+    onEdit(item.id, {
+      titulo: editTitulo.trim(),
+      descricao: editDescricao.trim() || undefined,
+      data_hora: new Date(editDataHora).getTime(),
+    });
+    onCancelEdit();
+  };
+
+  const handleStartEdit = () => {
+    setEditTitulo(item.titulo);
+    setEditDescricao(item.descricao ?? '');
+    setEditDataHora(toLocalISOString(item.data_hora));
+    onStartEdit();
+  };
+
+  if (isEditing) {
+    return (
+      <form
+        onSubmit={handleSaveEdit}
+        className="bg-slate-800/80 border border-blue-500/40 rounded-xl p-3 space-y-2"
+      >
+        <input
+          type="text"
+          value={editTitulo}
+          onChange={(e) => setEditTitulo(e.target.value)}
+          className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100 outline-none focus:border-blue-500"
+          placeholder="Título *"
+          autoFocus
+          required
+        />
+        <textarea
+          value={editDescricao}
+          onChange={(e) => setEditDescricao(e.target.value)}
+          className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100 outline-none focus:border-blue-500 resize-none"
+          placeholder="Anotação / descrição (opcional)"
+          rows={2}
+        />
+        <input
+          type="datetime-local"
+          value={editDataHora}
+          onChange={(e) => setEditDataHora(e.target.value)}
+          className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100 outline-none focus:border-blue-500"
+          required
+        />
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={onCancelEdit}
+            className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-slate-600 text-slate-300 hover:bg-slate-800 text-xs"
+          >
+            <X size={12} /> Cancelar
+          </button>
+          <button
+            type="submit"
+            className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium"
+          >
+            <Check size={12} /> Salvar
+          </button>
+        </div>
+      </form>
+    );
+  }
+
   return (
-    <div className={`flex items-start gap-3 p-3 rounded-xl border transition-colors ${
-      item.status === 'concluido'
-        ? 'bg-slate-800/30 border-slate-800/60 opacity-60'
-        : overdue
-          ? 'bg-red-900/10 border-red-800/30'
-          : 'bg-slate-800/50 border-slate-700/60 hover:border-slate-600'
-    }`}>
+    <div
+      className={`flex items-start gap-3 p-3 rounded-xl border transition-colors group ${
+        item.status === 'concluido'
+          ? 'bg-slate-800/30 border-slate-800/60 opacity-60'
+          : overdue
+            ? 'bg-red-900/10 border-red-800/30'
+            : 'bg-slate-800/50 border-slate-700/60 hover:border-slate-600'
+      }`}
+    >
       {/* Status badge clicável */}
       <button
         type="button"
@@ -261,8 +352,14 @@ const AgendaCard: React.FC<AgendaCardProps> = ({ item, onCycleStatus, onDelete }
         <ChevronRight size={10} />
       </button>
 
-      <div className="flex-1 min-w-0">
-        <p className={`text-sm font-medium ${item.status === 'concluido' ? 'line-through text-slate-400' : 'text-slate-100'}`}>
+      {/* Corpo clicável para editar */}
+      <button
+        type="button"
+        onClick={handleStartEdit}
+        className="flex-1 min-w-0 text-left"
+        title="Clique para editar"
+      >
+        <p className={`text-sm font-medium ${item.status === 'concluido' ? 'line-through text-slate-400' : 'text-slate-100 group-hover:text-white'}`}>
           {item.titulo}
         </p>
         {item.descricao && (
@@ -277,15 +374,25 @@ const AgendaCard: React.FC<AgendaCardProps> = ({ item, onCycleStatus, onDelete }
             )}
           </span>
         </div>
-      </div>
-
-      <button
-        type="button"
-        onClick={() => onDelete(item.id)}
-        className="p-1 rounded text-slate-600 hover:text-red-400 hover:bg-red-500/10 transition-colors"
-      >
-        <Trash2 size={13} />
       </button>
+
+      <div className="flex items-center gap-1 shrink-0">
+        <button
+          type="button"
+          onClick={handleStartEdit}
+          className="p-1 rounded text-slate-600 hover:text-blue-400 hover:bg-blue-500/10 transition-colors opacity-0 group-hover:opacity-100"
+          title="Editar"
+        >
+          <Pencil size={12} />
+        </button>
+        <button
+          type="button"
+          onClick={() => onDelete(item.id)}
+          className="p-1 rounded text-slate-600 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+        >
+          <Trash2 size={13} />
+        </button>
+      </div>
     </div>
   );
 };

@@ -559,7 +559,7 @@ function ProContent() {
               items={agenda.items}
               loading={agenda.loading}
               onAdd={agenda.addItem}
-              onToggle={agenda.toggleConcluido}
+              onCycleStatus={agenda.cycleStatus}
               onDelete={agenda.deleteItem}
             />
           )}

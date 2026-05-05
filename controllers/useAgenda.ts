@@ -1,18 +1,24 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import type { AgendaItem, AgendaStatus } from '../types';
-import { subscribeAgenda, saveAgenda } from '../services/agendaService';
+import { saveAgenda, subscribeAgenda } from '../services/agendaService';
 
 const STATUS_CYCLE: AgendaStatus[] = ['pendente', 'em_andamento', 'concluido'];
 
 export function useAgenda(uid: string | null) {
   const [items, setItems] = useState<AgendaItem[]>([]);
   const [loading, setLoading] = useState(true);
+  // ref to always have latest items in callbacks without stale closures
+  const itemsRef = useRef<AgendaItem[]>([]);
+  itemsRef.current = items;
 
   useEffect(() => {
-    if (!uid) { setLoading(false); return; }
+    if (!uid) {
+      setItems([]);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     const unsub = subscribeAgenda(uid, (remote) => {
-      // migrate legacy items that used concluido boolean
       const migrated = remote.map((i) => {
         if (!i.status) {
           const legacy = i as AgendaItem & { concluido?: boolean };
@@ -30,9 +36,12 @@ export function useAgenda(uid: string | null) {
   const persist = useCallback(
     (next: AgendaItem[]) => {
       if (!uid) return;
+      const prev = itemsRef.current;
       setItems(next);
-      setLoading(false);
-      void saveAgenda(uid, next);
+      void saveAgenda(uid, next).catch((error) => {
+        console.error('Falha ao salvar agenda.', error);
+        setItems(prev);
+      });
     },
     [uid],
   );
@@ -45,29 +54,38 @@ export function useAgenda(uid: string | null) {
         created_at: Date.now(),
         ...item,
       };
-      persist([...items, novo]);
+      persist([...itemsRef.current, novo]);
     },
-    [items, persist],
+    [persist],
   );
 
   const cycleStatus = useCallback(
     (id: string) => {
-      persist(items.map((i) => {
+      const next = itemsRef.current.map((i) => {
         if (i.id !== id) return i;
         const idx = STATUS_CYCLE.indexOf(i.status);
-        const next = STATUS_CYCLE[(idx + 1) % STATUS_CYCLE.length];
-        return { ...i, status: next };
-      }));
+        const nextStatus = STATUS_CYCLE[(idx + 1) % STATUS_CYCLE.length];
+        return { ...i, status: nextStatus };
+      });
+      persist(next);
     },
-    [items, persist],
+    [persist],
   );
 
   const deleteItem = useCallback(
     (id: string) => {
-      persist(items.filter((i) => i.id !== id));
+      persist(itemsRef.current.filter((i) => i.id !== id));
     },
-    [items, persist],
+    [persist],
   );
 
-  return { items, loading, addItem, cycleStatus, deleteItem };
+  const updateItem = useCallback(
+    (id: string, changes: Partial<Omit<AgendaItem, 'id' | 'status' | 'created_at'>>) => {
+      const next = itemsRef.current.map((i) => (i.id === id ? { ...i, ...changes } : i));
+      persist(next);
+    },
+    [persist],
+  );
+
+  return { items, loading, addItem, cycleStatus, deleteItem, updateItem };
 }

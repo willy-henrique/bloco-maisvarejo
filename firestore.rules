@@ -49,6 +49,10 @@ service cloud.firestore {
       allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
     }
 
+    match /userAgenda/{userId} {
+      allow read, write: if isAuthenticated() && request.auth.uid == userId;
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }

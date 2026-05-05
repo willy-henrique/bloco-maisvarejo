@@ -1281,8 +1281,9 @@ function AppContent() {
               items={agenda.items}
               loading={agenda.loading}
               onAdd={agenda.addItem}
-              onToggle={agenda.toggleConcluido}
+              onCycleStatus={agenda.cycleStatus}
               onDelete={agenda.deleteItem}
+              onEdit={agenda.updateItem}
             />
           ) : activeView === 'ia' ? (
             <div className="pb-8 h-full min-h-0 flex flex-col">
