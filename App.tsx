@@ -21,6 +21,11 @@ import { useRitmoGestao } from './controllers/useRitmoGestao';
 import { StorageService } from './services/storageService';
 import { isFirebaseConfigured, subscribeBoard, saveBoardNotes } from './services/firestoreSync';
 import { listAllUsers } from './services/firebaseAuth';
+import {
+  getConversationPreviewForUser,
+  isConversationVisibleForUser,
+  subscribeMyConversations,
+} from './services/chatService';
 import { isDeveloperEmail } from './config/developer';
 import { subscribeAppSettings, getDefaultAppSettings } from './services/appSettings';
 import type { UserProfile } from './types/user';
@@ -43,7 +48,7 @@ import {
   Bell,
 } from 'lucide-react';
 import { ActionItem, ItemStatus, UrgencyLevel } from './types';
-import type { Prioridade } from './types';
+import type { Observer, Prioridade } from './types';
 import {
   responsavelIdsForLoggedUser,
   donoPrioridadeCorrespondeAoUsuario,
@@ -52,12 +57,33 @@ import {
 import {
   canViewByOwnershipOrObserver,
   tarefaAtribuidaAoUsuario,
+  userIsObserver,
 } from './components/Dashboard/taskAssignmentUtils';
 import { Toast, type ToastType } from './components/Shared/Toast';
 import { Modal } from './components/Shared/Modal';
 import { EstrategicoGridIcon } from './components/icons/EstrategicoGridIcon';
 
 const MAVO_NOTIFICATIONS_ENABLED_KEY = '@Mavo:SystemNotificationsEnabled';
+const NOTIFICATION_BODY_MAX_LENGTH = 140;
+
+function compactNotificationText(value: string, max = NOTIFICATION_BODY_MAX_LENGTH): string {
+  const text = value.replace(/\s+/g, ' ').trim();
+  if (text.length <= max) return text;
+  return `${text.slice(0, max - 3).trimEnd()}...`;
+}
+
+function pageIsVisible(): boolean {
+  return typeof document !== 'undefined' && document.visibilityState === 'visible';
+}
+
+type AssignmentNotificationTarget = {
+  key: string;
+  assignedToMe: boolean;
+  title: string;
+  body: string;
+  view: ViewId;
+  createdBy?: string;
+};
 
 const TeamChatScreen = React.lazy(() =>
   import('./components/Dashboard/TeamChatScreen').then((module) => ({ default: module.TeamChatScreen })),
@@ -159,6 +185,11 @@ function AppContent() {
   const focusedPrioridadeId = useRef<string | null>(null);
   const agendaInviteNotificationsReady = useRef(false);
   const seenAgendaInviteKeys = useRef<Set<string>>(new Set());
+  const activeViewRef = useRef<ViewId>(activeView);
+  const chatNotificationsReady = useRef(false);
+  const seenChatMessageAtByConversation = useRef<Map<string, number>>(new Map());
+  const assignmentNotificationsReady = useRef(false);
+  const assignmentStateByKey = useRef<Map<string, boolean>>(new Map());
   const [tableOnlyPrioridadeId, setTableOnlyPrioridadeId] = useState<string | null>(null);
   const { items, loading, addItem, updateItem, deleteItem, updateStatus } = useStrategicBoard(encryptionKey ?? null);
   const ritmo = useRitmoGestao(encryptionKey ?? null);
@@ -248,6 +279,40 @@ function AppContent() {
     });
   }, [requestSystemNotifications]);
 
+  const dispatchSystemNotification = useCallback(
+    (
+      title: string,
+      options: NotificationOptions,
+      onClick?: () => void,
+    ): boolean => {
+      if (
+        !systemNotificationsEnabled ||
+        typeof window === 'undefined' ||
+        !('Notification' in window) ||
+        Notification.permission !== 'granted'
+      ) {
+        return false;
+      }
+
+      try {
+        const notification = new Notification(title, options);
+        notification.onclick = () => {
+          window.focus();
+          onClick?.();
+          notification.close();
+        };
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    [systemNotificationsEnabled],
+  );
+
+  useEffect(() => {
+    activeViewRef.current = activeView;
+  }, [activeView]);
+
   useEffect(() => {
     if (!isAuthenticated) {
       setShowSystemNotificationPrompt(false);
@@ -263,7 +328,71 @@ function AppContent() {
   useEffect(() => {
     agendaInviteNotificationsReady.current = false;
     seenAgendaInviteKeys.current = new Set();
+    chatNotificationsReady.current = false;
+    seenChatMessageAtByConversation.current = new Map();
+    assignmentNotificationsReady.current = false;
+    assignmentStateByKey.current = new Map();
   }, [firebaseUser?.uid]);
+
+  useEffect(() => {
+    if (!isAuthenticated || !chatUser || !isFirebaseConfigured) {
+      chatNotificationsReady.current = false;
+      seenChatMessageAtByConversation.current = new Map();
+      return;
+    }
+
+    const uid = chatUser.uid;
+    const unsub = subscribeMyConversations(uid, (conversations) => {
+      const previous = seenChatMessageAtByConversation.current;
+      const nextSeen = new Map<string, number>();
+      const incoming = conversations
+        .filter((conv) => isConversationVisibleForUser(conv, uid))
+        .map((conv) => {
+          const preview = getConversationPreviewForUser(conv, uid);
+          const lastAt = preview.at ?? conv.lastMessageAt ?? 0;
+          if (lastAt > 0) nextSeen.set(conv.chatId, lastAt);
+          return { conv, preview, lastAt };
+        })
+        .filter(({ conv, lastAt }) => {
+          if (!chatNotificationsReady.current) return false;
+          if (lastAt <= 0) return false;
+          if ((conv.unread[uid] ?? 0) <= 0) return false;
+          return lastAt > (previous.get(conv.chatId) ?? 0);
+        });
+
+      seenChatMessageAtByConversation.current = nextSeen;
+
+      if (!chatNotificationsReady.current) {
+        chatNotificationsReady.current = true;
+        return;
+      }
+      if (incoming.length === 0) return;
+      if (activeViewRef.current === 'chat' && pageIsVisible()) return;
+
+      const first = incoming[0];
+      const otherUid = first.conv.participants.find((participant) => participant !== uid) ?? '';
+      const otherName = first.conv.participantNames[otherUid] || 'Usuário';
+      const message =
+        incoming.length === 1
+          ? `Nova mensagem de ${otherName}`
+          : `${incoming.length} conversas com novas mensagens`;
+
+      setToast({ message, type: 'success' });
+      dispatchSystemNotification(
+        incoming.length === 1 ? `Mensagem de ${otherName}` : 'Novas mensagens no Mavo',
+        {
+          body:
+            incoming.length === 1
+              ? compactNotificationText(first.preview.text || 'Nova mensagem recebida.')
+              : message,
+          tag: incoming.length === 1 ? `private-chat-${first.conv.chatId}-${first.lastAt}` : 'private-chat-batch',
+        },
+        () => setActiveView('chat'),
+      );
+    });
+
+    return () => unsub?.();
+  }, [isAuthenticated, chatUser, dispatchSystemNotification]);
 
   useEffect(() => {
     if (!agenda.incomingEventInvitesReady) return;
@@ -588,6 +717,20 @@ function AppContent() {
       );
     },
     [myResponsavelIdsForBoard, responsaveisParaAtribuicao, currentUserIdentityKeys],
+  );
+
+  const identityMatchesLoggedUser = useCallback(
+    (value?: string | null) => {
+      const raw = (value ?? '').trim();
+      if (!raw) return false;
+      if (currentUserIdentityKeys.has(normKey(raw))) return true;
+      return donoPrioridadeCorrespondeAoUsuario(
+        raw,
+        myResponsavelIdsForBoard,
+        responsaveisParaAtribuicao,
+      );
+    },
+    [currentUserIdentityKeys, myResponsavelIdsForBoard, responsaveisParaAtribuicao],
   );
 
   const canUserAccessActionItem = useCallback(
@@ -1091,6 +1234,148 @@ function AppContent() {
   const handleAddPrioridade = () => setPrioridadeModalOpen(true);
   const loadingAny = loading || ritmo.loading;
 
+  useEffect(() => {
+    if (!isAuthenticated || !profile || myResponsavelIdsForBoard.size === 0) {
+      assignmentNotificationsReady.current = false;
+      assignmentStateByKey.current = new Map();
+      return;
+    }
+    if (loadingAny) return;
+
+    const assignedOwner = (value: string) =>
+      donoPrioridadeCorrespondeAoUsuario(
+        value,
+        myResponsavelIdsForBoard,
+        responsaveisParaAtribuicao,
+      );
+    const observing = (observadores: Observer[] | undefined) =>
+      userIsObserver(observadores, myResponsavelIdsForBoard);
+    const targets: AssignmentNotificationTarget[] = [];
+    const addTarget = (target: AssignmentNotificationTarget) => targets.push(target);
+
+    items.forEach((item) => {
+      addTarget({
+        key: `legacy-action:${item.id}:owner`,
+        assignedToMe: assignedOwner(item.who),
+        title: 'Nova iniciativa para você',
+        body: `Você foi definido como responsável por "${item.what}".`,
+        view: item.status === ItemStatus.BACKLOG ? 'backlog' : 'dashboard',
+        createdBy: item.created_by,
+      });
+    });
+
+    ritmo.board.prioridades.forEach((prioridade) => {
+      addTarget({
+        key: `prioridade:${prioridade.id}:owner`,
+        assignedToMe: assignedOwner(prioridade.dono_id),
+        title: 'Nova prioridade para você',
+        body: `Você foi definido como responsável por "${prioridade.titulo}".`,
+        view: 'table',
+        createdBy: prioridade.created_by,
+      });
+      addTarget({
+        key: `prioridade:${prioridade.id}:observer`,
+        assignedToMe: observing(prioridade.observadores),
+        title: 'Novo acompanhamento para você',
+        body: `Você foi adicionado como observador da prioridade "${prioridade.titulo}".`,
+        view: 'table',
+        createdBy: prioridade.created_by,
+      });
+    });
+
+    ritmo.board.planos.forEach((plano) => {
+      addTarget({
+        key: `plano:${plano.id}:owner`,
+        assignedToMe: assignedOwner(plano.who_id),
+        title: 'Novo plano para você',
+        body: `Você foi definido como responsável pelo plano "${plano.titulo}".`,
+        view: 'table',
+        createdBy: plano.created_by,
+      });
+      addTarget({
+        key: `plano:${plano.id}:observer`,
+        assignedToMe: observing(plano.observadores),
+        title: 'Novo acompanhamento para você',
+        body: `Você foi adicionado como observador do plano "${plano.titulo}".`,
+        view: 'table',
+        createdBy: plano.created_by,
+      });
+    });
+
+    ritmo.board.tarefas.forEach((tarefa) => {
+      addTarget({
+        key: `tarefa:${tarefa.id}:owner`,
+        assignedToMe: tarefaAtribuidaAoUsuario(
+          tarefa,
+          myResponsavelIdsForBoard,
+          responsaveisParaAtribuicao,
+        ),
+        title: 'Nova tarefa para você',
+        body: `Você foi definido como responsável pela tarefa "${tarefa.titulo}".`,
+        view: 'operacional',
+        createdBy: tarefa.created_by,
+      });
+      addTarget({
+        key: `tarefa:${tarefa.id}:observer`,
+        assignedToMe: observing(tarefa.observadores),
+        title: 'Novo acompanhamento para você',
+        body: `Você foi adicionado como observador da tarefa "${tarefa.titulo}".`,
+        view: 'operacional',
+        createdBy: tarefa.created_by,
+      });
+    });
+
+    const previous = assignmentStateByKey.current;
+    const nextState = new Map(targets.map((target) => [target.key, target.assignedToMe]));
+    const wasReady = assignmentNotificationsReady.current;
+    assignmentStateByKey.current = nextState;
+
+    if (!wasReady) {
+      assignmentNotificationsReady.current = true;
+      return;
+    }
+
+    const newAssignments = targets.filter(
+      (target) =>
+        target.assignedToMe &&
+        previous.get(target.key) !== true &&
+        !identityMatchesLoggedUser(target.createdBy),
+    );
+
+    if (newAssignments.length === 0) return;
+
+    const first = newAssignments[0];
+    const message =
+      newAssignments.length === 1
+        ? first.body
+        : `Você recebeu ${newAssignments.length} novas atribuições/acompanhamentos.`;
+
+    setToast({ message: compactNotificationText(message, 120), type: 'success' });
+    dispatchSystemNotification(
+      newAssignments.length === 1 ? first.title : 'Novas demandas para você',
+      {
+        body: compactNotificationText(message),
+        tag:
+          newAssignments.length === 1
+            ? `assignment-${first.key}`
+            : `assignment-batch-${Date.now()}`,
+      },
+      () => setActiveView(first.view),
+    );
+  }, [
+    isAuthenticated,
+    profile,
+    loadingAny,
+    items,
+    ritmo.board.prioridades,
+    ritmo.board.planos,
+    ritmo.board.tarefas,
+    myResponsavelIdsForBoard,
+    responsaveisParaAtribuicao,
+    identityMatchesLoggedUser,
+    dispatchSystemNotification,
+  ]);
+
   const handleOpenPrioridade = useCallback(
     (p: Prioridade) => {
       if (p.id.startsWith('legacy-')) {
@@ -1228,7 +1513,7 @@ function AppContent() {
                 Deseja receber notificações do sistema Mavo?
               </p>
               <p className="text-xs leading-relaxed text-slate-400">
-                O Mavo pode avisar pelo Windows quando chegar um novo convite para evento.
+                O Mavo pode avisar pelo Windows quando chegarem mensagens, convites e novas atribuições.
               </p>
             </div>
           </div>
@@ -1501,7 +1786,6 @@ function AppContent() {
               <TeamChatScreen
                 currentUser={chatUser}
                 availableUsers={agenda.availableUsers}
-                systemNotificationsEnabled={systemNotificationsEnabled}
               />
           ) : activeView === 'ia' ? (
             <div className="pb-8 h-full min-h-0 flex flex-col">
