@@ -1,5 +1,0 @@
-2026/05/05-23:27:43.309 7fe0 Creating DB C:\willydev\bloco-maisvarejo-1\.tmp\edge-test\Default\EdgeCoupons/coupons_data.db since it was missing.
-2026/05/05-23:27:43.433 7fe0 Reusing MANIFEST C:\willydev\bloco-maisvarejo-1\.tmp\edge-test\Default\EdgeCoupons/coupons_data.db/MANIFEST-000001
-2026/05/05-23:27:52.134 d0c Level-0 table #5: started
-2026/05/05-23:27:52.162 d0c Level-0 table #5: 682148 bytes OK
-2026/05/05-23:27:52.174 d0c Delete type=0 #3

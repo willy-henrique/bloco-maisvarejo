@@ -1,5 +1,0 @@
-2026/05/05-23:27:40.479 92b4 Creating DB C:\willydev\bloco-maisvarejo-1\.tmp\edge-test\Default\Asset Store\assets.db since it was missing.
-2026/05/05-23:27:41.254 92b4 Reusing MANIFEST C:\willydev\bloco-maisvarejo-1\.tmp\edge-test\Default\Asset Store\assets.db/MANIFEST-000001
-2026/05/05-23:27:43.898 92b0 Level-0 table #5: started
-2026/05/05-23:27:43.924 92b0 Level-0 table #5: 332814 bytes OK
-2026/05/05-23:27:43.933 92b0 Delete type=0 #3
