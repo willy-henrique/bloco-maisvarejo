@@ -1,0 +1,1235 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <title>Manual de Treinamento para Usuarios - Mavo Gestao</title>
+  <style>
+    @page { size: A4; margin: 16mm 14mm; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      color: #111827;
+      background: #ffffff;
+      font: 11.2pt/1.55 Arial, Helvetica, sans-serif;
+    }
+    h1, h2, h3, h4 { color: #0f172a; line-height: 1.2; page-break-after: avoid; }
+    h1 { font-size: 29pt; margin: 0 0 14px; letter-spacing: -0.02em; }
+    h2 { font-size: 18pt; margin: 28px 0 10px; padding-top: 4px; border-top: 1px solid #e5e7eb; }
+    h3 { font-size: 13.5pt; margin: 20px 0 8px; }
+    h4 { font-size: 12pt; margin: 14px 0 6px; }
+    p { margin: 0 0 10px; }
+    ul, ol { margin: 0 0 12px 22px; padding: 0; }
+    li { margin: 3px 0; }
+    table { width: 100%; border-collapse: collapse; margin: 10px 0 16px; page-break-inside: avoid; }
+    th, td { border: 1px solid #d1d5db; padding: 6px 8px; vertical-align: top; }
+    th { background: #eef2ff; color: #111827; font-weight: 700; text-align: left; }
+    tr:nth-child(even) td { background: #f9fafb; }
+    code { font-family: Consolas, Monaco, monospace; background: #f3f4f6; padding: 1px 4px; border-radius: 3px; }
+    pre { background: #111827; color: #f9fafb; padding: 12px; border-radius: 6px; white-space: pre-wrap; page-break-inside: avoid; }
+    figure { margin: 14px 0 22px; page-break-inside: avoid; }
+    figure img {
+      display: block;
+      width: 100%;
+      max-height: 190mm;
+      object-fit: contain;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      background: #020617;
+    }
+    figcaption {
+      margin-top: 6px;
+      color: #475569;
+      font-size: 9.5pt;
+      text-align: center;
+    }
+    .cover {
+      min-height: 250mm;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      border-left: 8px solid #2563eb;
+      padding-left: 24px;
+      page-break-after: always;
+    }
+    .cover .eyebrow {
+      color: #2563eb;
+      font-size: 10pt;
+      text-transform: uppercase;
+      font-weight: 700;
+      letter-spacing: .08em;
+      margin-bottom: 16px;
+    }
+    .cover .subtitle {
+      color: #475569;
+      font-size: 14pt;
+      max-width: 620px;
+      margin-bottom: 26px;
+    }
+    .meta {
+      display: grid;
+      grid-template-columns: 150px 1fr;
+      gap: 6px 14px;
+      color: #334155;
+      font-size: 10.5pt;
+      max-width: 620px;
+    }
+    .meta strong { color: #0f172a; }
+    .toc {
+      page-break-after: always;
+      border: 1px solid #e5e7eb;
+      background: #f8fafc;
+      padding: 16px 18px;
+      border-radius: 8px;
+      margin-bottom: 24px;
+    }
+    .toc h2 { border-top: 0; margin-top: 0; }
+    .note {
+      border-left: 4px solid #2563eb;
+      background: #eff6ff;
+      padding: 10px 12px;
+      margin: 14px 0;
+    }
+  </style>
+</head>
+<body>
+  <section class="cover">
+    <div class="eyebrow">Manual de treinamento</div>
+    <h1>Manual de Treinamento para Usuarios - Mavo Gestao</h1>
+    <p class="subtitle">Guia pratico para quem vai usar o sistema no dia a dia: Backlog, Estrategico, Gerencial, Operacional, Agenda, Chat e 5W2H CHAT.</p>
+    <div class="meta">
+      <strong>Projeto</strong><span>Mavo Gestão</span>
+      <strong>Versao</strong><span>2.1.1</span>
+      <strong>Objetivo</strong><span>Treinar usuarios no uso diario do sistema, sem conteudo tecnico de implementacao.</span>
+    </div>
+  </section>
+  <section class="toc">
+    <h2>Como usar este documento</h2>
+    <p>Use este documento como roteiro de treinamento pratico. Ele explica o que fazer em cada tela, quando usar cada recurso e quais cuidados tomar na rotina.</p>
+  </section>
+  <h1 id="manual-de-treinamento-para-usuarios-mavo-gestao">Manual de Treinamento para Usuarios - Mavo Gestao</h1>
+<p>Este manual foi criado para pessoas que vao usar o Mavo Gestao no dia a dia. O objetivo nao e explicar codigo, tecnologia ou estrutura interna. O objetivo e ensinar como entrar no sistema, navegar, registrar demandas, acompanhar prioridades, atualizar tarefas e usar as ferramentas de apoio.</p>
+<h2 id="1-para-que-serve-o-mavo-gestao">1. Para que serve o Mavo Gestao</h2>
+<p>O Mavo Gestao ajuda a organizar o trabalho da empresa em uma sequencia simples:</p>
+<ol>
+<li>Registrar demandas no Backlog.</li>
+<li>Escolher o que sera prioridade.</li>
+<li>Transformar prioridades em planos de acao.</li>
+<li>Dividir planos em tarefas.</li>
+<li>Acompanhar execucao, bloqueios e conclusoes.</li>
+</ol>
+<p>Em outras palavras: o sistema evita que ideias, problemas e combinados fiquem espalhados em conversas, planilhas ou mensagens soltas.</p>
+<h2 id="2-como-pensar-o-sistema">2. Como pensar o sistema</h2>
+<p>Antes de usar, memorize esta logica:</p>
+<table><thead><tr>
+<th>Area</th>
+<th>Para que serve</th>
+</tr></thead><tbody>
+<tr>
+<td>Backlog</td>
+<td>Registrar ideias, problemas e demandas que ainda nao viraram prioridade</td>
+</tr>
+<tr>
+<td>Estrategico</td>
+<td>Acompanhar as iniciativas priorizadas em um quadro Kanban</td>
+</tr>
+<tr>
+<td>Gerencial / Tatico</td>
+<td>Montar planos de acao 5W2H para cada prioridade</td>
+</tr>
+<tr>
+<td>Operacional</td>
+<td>Executar e atualizar tarefas</td>
+</tr>
+<tr>
+<td>Desempenho</td>
+<td>Ver indicadores do andamento</td>
+</tr>
+<tr>
+<td>Roadmap</td>
+<td>Ver iniciativas organizadas por mes</td>
+</tr>
+<tr>
+<td>Agenda</td>
+<td>Criar compromissos e convites</td>
+</tr>
+<tr>
+<td>Chat</td>
+<td>Conversar com outros usuarios</td>
+</tr>
+<tr>
+<td>5W2H CHAT</td>
+<td>Pedir ajuda da IA para planejamento e 5W2H</td>
+</tr>
+</tbody></table>
+<h2 id="3-o-fluxo-correto-de-uso">3. O fluxo correto de uso</h2>
+<p>Sempre que possivel, siga esta ordem:</p>
+<ol>
+<li>A demanda entra no Backlog.</li>
+<li>O gestor avalia se ela deve ser priorizada.</li>
+<li>Se virar prioridade, ela aparece no Estrategico.</li>
+<li>No Gerencial/Tatico, a prioridade recebe um plano de acao.</li>
+<li>O plano e dividido em tarefas.</li>
+<li>No Operacional, os responsaveis atualizam as tarefas.</li>
+<li>O gestor acompanha bloqueios, atrasos e conclusoes.</li>
+</ol>
+<p>Nem tudo que entra no Backlog deve virar prioridade. O Backlog e uma fila de analise. Prioridade e foco real.</p>
+<h2 id="treinamento-visual-pelas-telas-do-sistema">Treinamento visual pelas telas do sistema</h2>
+<p>As imagens abaixo mostram as telas reais do Mavo Gestao. Em cada tela, o print aparece primeiro e a explicacao vem logo abaixo, com orientacoes praticas para o usuario.</p>
+<h3 id="tela-de-login">Tela de login</h3>
+<figure><img src="screenshots/01-login.png" alt="Tela de login do Mavo Gestao"><figcaption>Tela de login do Mavo Gestao</figcaption></figure>
+<p>Nesta tela o usuario entra no sistema usando email e senha. Cada pessoa deve acessar com seu proprio usuario, porque as permissoes, empresas e tarefas aparecem conforme o perfil logado.</p>
+<p>O que fazer:</p>
+<ol>
+<li>Digitar o email cadastrado.</li>
+<li>Digitar a senha.</li>
+<li>Clicar em Entrar.</li>
+<li>Aguardar o carregamento do painel.</li>
+</ol>
+<p>Se a pessoa nao conseguir entrar, deve procurar o administrador para verificar senha, perfil ativo ou cadastro.</p>
+<h3 id="tela-backlog">Tela Backlog</h3>
+<figure><img src="screenshots/02-backlog.png" alt="Tela Backlog - entrada de demandas"><figcaption>Tela Backlog - entrada de demandas</figcaption></figure>
+<p>O Backlog e a entrada de novas demandas. Tudo que ainda e ideia, problema, melhoria ou pedido em analise deve comecar aqui. Antes de criar qualquer item, confira o workspace no menu lateral para garantir que a demanda fique na empresa correta.</p>
+<p>O que observar:</p>
+<ul>
+<li>O menu lateral mostra as areas do sistema.</li>
+<li>O seletor de Workspace indica a empresa/contexto atual.</li>
+<li>A lista central mostra as demandas registradas.</li>
+<li>O botao Novo aparece quando o usuario tem permissao para criar.</li>
+<li>O campo Pesquisar ajuda a localizar demandas por palavra-chave.</li>
+</ul>
+<p>Como usar:</p>
+<ol>
+<li>Selecionar o workspace correto.</li>
+<li>Clicar em Novo.</li>
+<li>Preencher titulo e descricao.</li>
+<li>Adicionar link de apoio, se existir.</li>
+<li>Salvar a demanda.</li>
+<li>Usar Priorizar apenas quando a demanda realmente deve virar foco de gestao.</li>
+</ol>
+<h3 id="tela-estrategico">Tela Estrategico</h3>
+<figure><img src="screenshots/03-estrategico.png" alt="Tela Estrategico - quadro Kanban de prioridades"><figcaption>Tela Estrategico - quadro Kanban de prioridades</figcaption></figure>
+<p>O Estrategico mostra as iniciativas priorizadas em formato Kanban. Ele serve para acompanhar rapidamente o que esta em priorizacao, em execucao, bloqueado ou concluido.</p>
+<p>O que observar:</p>
+<ul>
+<li>Cada card representa uma iniciativa.</li>
+<li>As colunas indicam o momento da iniciativa.</li>
+<li>Cards bloqueados precisam de atencao.</li>
+<li>Cards concluidos ficam separados em uma area propria.</li>
+<li>Alguns usuarios podem mover cards; outros apenas visualizam.</li>
+</ul>
+<p>Como usar:</p>
+<ol>
+<li>Conferir em qual coluna cada iniciativa esta.</li>
+<li>Abrir o card para ver detalhes, se tiver permissao.</li>
+<li>Mover para Em Execucao quando a iniciativa comecar.</li>
+<li>Mover para Bloqueado quando houver impedimento.</li>
+<li>Arquivar como concluido quando terminar.</li>
+<li>Usar o atalho para o Gerencial/Tatico quando precisar detalhar plano e tarefas.</li>
+</ol>
+<h3 id="tela-gerencial-tatico">Tela Gerencial / Tatico</h3>
+<figure><img src="screenshots/04-gerencial.png" alt="Tela Gerencial/Tatico - prioridades, planos e tarefas"><figcaption>Tela Gerencial/Tatico - prioridades, planos e tarefas</figcaption></figure>
+<p>O Gerencial/Tatico e onde a prioridade vira plano de acao. Nesta tela o gestor ou responsavel organiza cada prioridade em planos 5W2H e depois divide esses planos em tarefas.</p>
+<p>O que observar:</p>
+<ul>
+<li>A prioridade aparece como bloco principal.</li>
+<li>Dentro da prioridade ficam os planos de acao.</li>
+<li>Cada plano mostra responsavel, prazo e status.</li>
+<li>Planos bloqueados indicam que alguma tarefa pode estar impedindo o andamento.</li>
+<li>O botao Novo Plano aparece para quem tem permissao.</li>
+<li>Os filtros ajudam a ver itens lancados por mim, atribuidos para mim ou acompanhados.</li>
+</ul>
+<p>Como usar:</p>
+<ol>
+<li>Abrir a prioridade desejada.</li>
+<li>Criar ou revisar o plano de acao.</li>
+<li>Preencher os campos do 5W2H.</li>
+<li>Criar tarefas objetivas dentro do plano.</li>
+<li>Definir responsavel e vencimento para cada tarefa.</li>
+<li>Acompanhar bloqueios e progresso das tarefas.</li>
+</ol>
+<h3 id="tela-operacional">Tela Operacional</h3>
+<figure><img src="screenshots/05-operacional.png" alt="Tela Operacional - execucao e acompanhamento de tarefas"><figcaption>Tela Operacional - execucao e acompanhamento de tarefas</figcaption></figure>
+<p>O Operacional e a tela de rotina de quem executa o trabalho. Ela permite acompanhar tarefas, atualizar status, bloquear com motivo e concluir entregas.</p>
+<p>O que observar:</p>
+<ul>
+<li>A aba Plano de acao mostra tarefas dentro do contexto do plano.</li>
+<li>A aba Tarefas mostra uma visao mais direta da execucao.</li>
+<li>Tarefas atrasadas ou bloqueadas precisam de atencao.</li>
+<li>O status da tarefa deve refletir a realidade do trabalho.</li>
+<li>Tarefas concluidas saem da lista ativa.</li>
+</ul>
+<p>Como usar:</p>
+<ol>
+<li>Abrir Operacional no inicio do dia.</li>
+<li>Ver as tarefas pendentes e em execucao.</li>
+<li>Atualizar para EmExecucao quando comecar.</li>
+<li>Bloquear com motivo quando houver impedimento.</li>
+<li>Marcar como Concluida quando finalizar.</li>
+<li>Avisar o gestor quando um bloqueio impactar prazo ou prioridade.</li>
+</ol>
+<h3 id="tela-desempenho">Tela Desempenho</h3>
+<figure><img src="screenshots/06-desempenho.png" alt="Tela Desempenho - indicadores de acompanhamento"><figcaption>Tela Desempenho - indicadores de acompanhamento</figcaption></figure>
+<p>O Desempenho mostra indicadores do andamento das iniciativas. Ele ajuda gestores a entender se existem muitos bloqueios, se as entregas estao avancando e qual e a distribuicao dos itens por status.</p>
+<p>O que observar:</p>
+<ul>
+<li>Total de acoes.</li>
+<li>Taxa de conclusao.</li>
+<li>Quantidade em execucao.</li>
+<li>Quantidade de bloqueios.</li>
+<li>Distribuicao por status.</li>
+<li>Lista de itens bloqueados.</li>
+</ul>
+<p>Como usar:</p>
+<ol>
+<li>Abrir antes de reunioes de acompanhamento.</li>
+<li>Verificar se os bloqueios estao aumentando.</li>
+<li>Identificar prioridades que precisam de decisao.</li>
+<li>Comparar volume de itens em execucao com itens concluidos.</li>
+<li>Usar os dados para cobrar atualizacao de tarefas e planos.</li>
+</ol>
+<h3 id="tela-roadmap-2026">Tela Roadmap 2026</h3>
+<figure><img src="screenshots/07-roadmap.png" alt="Tela Roadmap 2026 - iniciativas por periodo"><figcaption>Tela Roadmap 2026 - iniciativas por periodo</figcaption></figure>
+<p>O Roadmap mostra iniciativas organizadas por mes. Ele ajuda a visualizar prazos, concentracao de entregas e planejamento futuro.</p>
+<p>O que observar:</p>
+<ul>
+<li>As iniciativas ficam agrupadas por mes.</li>
+<li>Cada item mostra responsavel e data.</li>
+<li>Itens sem data correta podem aparecer fora do mes esperado.</li>
+<li>A tela e mais voltada a planejamento do que execucao diaria.</li>
+</ul>
+<p>Como usar:</p>
+<ol>
+<li>Abrir Roadmap para analisar planejamento.</li>
+<li>Verificar quais meses estao mais carregados.</li>
+<li>Conferir se as datas fazem sentido.</li>
+<li>Ajustar prazos no item original quando necessario e quando houver permissao.</li>
+</ol>
+<h3 id="tela-agenda">Tela Agenda</h3>
+<figure><img src="screenshots/08-agenda.png" alt="Tela Agenda - compromissos e convites"><figcaption>Tela Agenda - compromissos e convites</figcaption></figure>
+<p>A Agenda serve para compromissos, reunioes e convites. Ela ajuda a organizar eventos do usuario e permite convidar participantes.</p>
+<p>O que observar:</p>
+<ul>
+<li>O botao de novo evento.</li>
+<li>A lista de eventos por status.</li>
+<li>Convites pendentes.</li>
+<li>Participantes do evento.</li>
+<li>Status: pendente, em andamento ou concluido.</li>
+</ul>
+<p>Como usar:</p>
+<ol>
+<li>Criar evento com titulo, data e hora.</li>
+<li>Adicionar descricao se necessario.</li>
+<li>Selecionar participantes.</li>
+<li>Responder convites recebidos.</li>
+<li>Informar motivo quando recusar.</li>
+<li>Concluir eventos ja realizados.</li>
+</ol>
+<h3 id="tela-chat">Tela Chat</h3>
+<figure><img src="screenshots/09-chat.png" alt="Tela Chat - conversas entre usuarios"><figcaption>Tela Chat - conversas entre usuarios</figcaption></figure>
+<p>O Chat e usado para conversa direta entre usuarios do sistema. Ele e util para alinhamentos rapidos, duvidas e combinados.</p>
+<p>O que observar:</p>
+<ul>
+<li>Lista de usuarios ou conversas.</li>
+<li>Area principal da conversa.</li>
+<li>Campo para digitar mensagem.</li>
+<li>Indicador de mensagens nao lidas no menu lateral.</li>
+</ul>
+<p>Como usar:</p>
+<ol>
+<li>Abrir Chat.</li>
+<li>Escolher o usuario.</li>
+<li>Digitar a mensagem.</li>
+<li>Enviar.</li>
+<li>Registrar no item correto qualquer decisao importante tomada na conversa.</li>
+</ol>
+<h3 id="tela-5w2h-chat">Tela 5W2H CHAT</h3>
+<figure><img src="screenshots/10-5w2h-chat.png" alt="Tela 5W2H CHAT - assistente de IA"><figcaption>Tela 5W2H CHAT - assistente de IA</figcaption></figure>
+<p>O 5W2H CHAT e uma IA de apoio para planejamento. Ele ajuda a organizar ideias, melhorar textos, criar planos 5W2H e transformar demandas em tarefas.</p>
+<p>O que observar:</p>
+<ul>
+<li>Lista de conversas salvas.</li>
+<li>Area de mensagens.</li>
+<li>Campo de envio.</li>
+<li>Botao Nova conversa.</li>
+</ul>
+<p>Como usar:</p>
+<ol>
+<li>Digitar uma pergunta clara.</li>
+<li>Pedir ajuda para montar plano, tarefa, descricao ou analise.</li>
+<li>Ler a resposta com senso critico.</li>
+<li>Ajustar o texto antes de copiar para o sistema.</li>
+<li>Criar nova conversa quando mudar de assunto.</li>
+</ol>
+<p>Exemplos de perguntas:</p>
+<ul>
+<li>&quot;Monte um plano 5W2H para reduzir divergencia de estoque.&quot;</li>
+<li>&quot;Transforme esta demanda em tarefas operacionais.&quot;</li>
+<li>&quot;Melhore a descricao deste backlog.&quot;</li>
+<li>&quot;Quais riscos devo acompanhar nesta prioridade?&quot;</li>
+</ul>
+<h2 id="4-entrando-no-sistema">4. Entrando no sistema</h2>
+<ol>
+<li>Abra o link do sistema no navegador.</li>
+<li>Informe seu email.</li>
+<li>Informe sua senha.</li>
+<li>Clique em Entrar.</li>
+</ol>
+<p>Se o login falhar:</p>
+<table><thead><tr>
+<th>Mensagem ou situacao</th>
+<th>O que fazer</th>
+</tr></thead><tbody>
+<tr>
+<td>Email ou senha incorretos</td>
+<td>Verifique os dados digitados ou solicite redefinicao de senha</td>
+</tr>
+<tr>
+<td>Conta desativada</td>
+<td>Fale com o administrador</td>
+</tr>
+<tr>
+<td>Perfil nao encontrado</td>
+<td>Fale com o administrador</td>
+</tr>
+<tr>
+<td>Tela carregando por muito tempo</td>
+<td>Atualize a pagina e tente novamente</td>
+</tr>
+</tbody></table>
+<h2 id="5-entendendo-o-menu-lateral">5. Entendendo o menu lateral</h2>
+<p>Depois de entrar, voce vera o menu lateral. Ele e o caminho principal para navegar.</p>
+<p>Principais botoes:</p>
+<ul>
+<li>Backlog: registrar e consultar demandas.</li>
+<li>Estrategico: acompanhar prioridades no Kanban.</li>
+<li>Gerencial: trabalhar prioridades, planos e tarefas.</li>
+<li>Operacional: atualizar tarefas e execucao.</li>
+<li>Desempenho: consultar indicadores.</li>
+<li>Roadmap 2026: ver iniciativas por mes.</li>
+<li>Workspace: trocar empresa/contexto ou abrir link externo.</li>
+<li>Agenda: ver compromissos.</li>
+<li>Chat: conversar com usuarios.</li>
+<li>5W2H CHAT: conversar com a IA.</li>
+<li>Notificacoes: ativar/desativar avisos do navegador.</li>
+<li>Sair: encerrar a sessao.</li>
+</ul>
+<p>Alguns botoes podem nao aparecer para voce. Isso depende das permissoes do seu perfil.</p>
+<h2 id="6-escolhendo-o-workspace-correto">6. Escolhendo o workspace correto</h2>
+<p>Workspace e a empresa, cliente, unidade ou contexto em que voce esta trabalhando.</p>
+<p>Antes de criar qualquer item, confira o workspace no topo do menu lateral.</p>
+<p>Exemplo:</p>
+<ul>
+<li>Se voce vai registrar uma demanda da empresa &quot;Mais Varejo&quot;, selecione &quot;Mais Varejo&quot;.</li>
+<li>Se voce tem acesso a varias empresas, pode aparecer &quot;Todas as empresas&quot;.</li>
+<li>Se voce so tem acesso a uma empresa, o sistema pode selecionar automaticamente.</li>
+</ul>
+<p>Boa pratica: nunca lance um item antes de conferir o workspace.</p>
+<h2 id="7-usando-o-backlog">7. Usando o Backlog</h2>
+<p>O Backlog e onde novas demandas entram.</p>
+<p>Use o Backlog para registrar:</p>
+<ul>
+<li>ideias;</li>
+<li>problemas;</li>
+<li>pedidos de cliente;</li>
+<li>melhorias;</li>
+<li>assuntos que precisam ser analisados;</li>
+<li>oportunidades que ainda nao viraram prioridade.</li>
+</ul>
+<p>Nao use o Backlog para tarefas pequenas do dia a dia. Tarefas devem ficar no Operacional, dentro de um plano.</p>
+<h3 id="7-1-criar-uma-demanda-no-backlog">7.1 Criar uma demanda no Backlog</h3>
+<ol>
+<li>Clique em Backlog.</li>
+<li>Confira se o workspace esta correto.</li>
+<li>Clique em Novo ou Item Backlog.</li>
+<li>Preencha o titulo.</li>
+<li>Preencha a descricao com o contexto da demanda.</li>
+<li>Adicione um link, se existir documento, planilha ou evidencia.</li>
+<li>Confirme em Criar.</li>
+</ol>
+<p>Um bom titulo deve ser claro e direto.</p>
+<p>Exemplo ruim:</p>
+<ul>
+<li>&quot;Sistema&quot;</li>
+</ul>
+<p>Exemplo bom:</p>
+<ul>
+<li>&quot;Corrigir divergencia de estoque na loja 02&quot;</li>
+</ul>
+<p>Uma boa descricao deve responder:</p>
+<ul>
+<li>O que aconteceu?</li>
+<li>Por que isso importa?</li>
+<li>Quem esta impactado?</li>
+<li>Existe prazo ou urgencia?</li>
+<li>Existe documento de apoio?</li>
+</ul>
+<h3 id="7-2-editar-uma-demanda">7.2 Editar uma demanda</h3>
+<ol>
+<li>Clique no item do Backlog.</li>
+<li>Ajuste titulo, descricao, link ou data, se seu perfil permitir.</li>
+<li>Clique em Salvar.</li>
+</ol>
+<p>Alguns campos podem estar bloqueados. Isso e normal quando seu perfil nao tem permissao de edicao.</p>
+<h3 id="7-3-priorizar-uma-demanda">7.3 Priorizar uma demanda</h3>
+<p>Quando uma demanda deve virar foco de gestao:</p>
+<ol>
+<li>Localize o item no Backlog.</li>
+<li>Clique em Priorizar.</li>
+<li>O sistema envia o item para o fluxo de prioridades.</li>
+</ol>
+<p>Depois disso, a demanda deixa de ser apenas uma ideia e passa a ser acompanhada no quadro estrategico ou no nivel gerencial.</p>
+<h2 id="8-usando-o-estrategico">8. Usando o Estrategico</h2>
+<p>O Estrategico mostra as prioridades em formato Kanban.</p>
+<p>As colunas principais sao:</p>
+<table><thead><tr>
+<th>Coluna</th>
+<th>Significado</th>
+</tr></thead><tbody>
+<tr>
+<td>Priorizar</td>
+<td>Item escolhido como prioridade, aguardando organizacao ou inicio</td>
+</tr>
+<tr>
+<td>Em Execucao</td>
+<td>Item em andamento</td>
+</tr>
+<tr>
+<td>Bloqueado</td>
+<td>Item com impedimento</td>
+</tr>
+<tr>
+<td>Concluidos</td>
+<td>Item finalizado</td>
+</tr>
+</tbody></table>
+<h3 id="8-1-ler-um-card-estrategico">8.1 Ler um card estrategico</h3>
+<p>Um card pode mostrar:</p>
+<ul>
+<li>titulo;</li>
+<li>descricao resumida;</li>
+<li>workspace;</li>
+<li>link externo;</li>
+<li>dono da demanda;</li>
+<li>responsavel;</li>
+<li>data;</li>
+<li>observacoes;</li>
+<li>botoes de movimentacao.</li>
+</ul>
+<h3 id="8-2-mover-um-card">8.2 Mover um card</h3>
+<p>Use os botoes do proprio card para:</p>
+<ul>
+<li>voltar etapa;</li>
+<li>avancar etapa;</li>
+<li>arquivar como concluido;</li>
+<li>voltar para Backlog;</li>
+<li>abrir no Gerencial/Tatico, se o botao estiver disponivel.</li>
+</ul>
+<p>Se voce nao ve os botoes de movimentacao, provavelmente seu perfil e somente leitura naquele modulo.</p>
+<h3 id="8-3-quando-marcar-como-bloqueado">8.3 Quando marcar como Bloqueado</h3>
+<p>Marque como Bloqueado quando a iniciativa nao consegue evoluir por algum impedimento real.</p>
+<p>Exemplos:</p>
+<ul>
+<li>falta aprovacao;</li>
+<li>falta retorno de cliente;</li>
+<li>depende de fornecedor;</li>
+<li>existe erro tecnico impedindo andamento;</li>
+<li>falta informacao essencial.</li>
+</ul>
+<p>Bloqueio nao deve ser usado como &quot;pausado sem motivo&quot;. Sempre que possivel, explique o motivo nos campos de detalhe ou na tarefa relacionada.</p>
+<h3 id="8-4-quando-concluir">8.4 Quando concluir</h3>
+<p>Conclua quando a entrega combinada foi finalizada ou quando a prioridade nao precisa mais ficar ativa.</p>
+<p>Itens concluidos continuam consultaveis na area Concluidos.</p>
+<h2 id="9-usando-o-gerencial-tatico">9. Usando o Gerencial / Tatico</h2>
+<p>O Gerencial, tambem chamado de Tatico, e onde a prioridade ganha plano de acao.</p>
+<p>A estrutura e:</p>
+<ol>
+<li>Prioridade.</li>
+<li>Plano de Acao.</li>
+<li>Tarefas.</li>
+</ol>
+<h3 id="9-1-o-que-e-uma-prioridade">9.1 O que e uma prioridade</h3>
+<p>Prioridade e algo importante o suficiente para receber foco, dono e acompanhamento.</p>
+<p>Cada prioridade tem:</p>
+<ul>
+<li>titulo;</li>
+<li>descricao;</li>
+<li>dono;</li>
+<li>data alvo;</li>
+<li>status;</li>
+<li>planos de acao;</li>
+<li>tarefas;</li>
+<li>observadores.</li>
+</ul>
+<p>Regra importante: o sistema trabalha com limite de foco. Pode haver no maximo 3 prioridades ativas.</p>
+<h3 id="9-2-criar-uma-prioridade-manualmente">9.2 Criar uma prioridade manualmente</h3>
+<p>Se voce tem permissao:</p>
+<ol>
+<li>Abra Gerencial.</li>
+<li>Clique em Nova prioridade.</li>
+<li>Informe titulo.</li>
+<li>Informe descricao.</li>
+<li>Escolha o dono.</li>
+<li>Defina data alvo.</li>
+<li>Confirme.</li>
+</ol>
+<p>Se o sistema avisar que o limite foi atingido, conclua uma prioridade antiga antes de criar outra.</p>
+<h3 id="9-3-criar-um-plano-de-acao">9.3 Criar um plano de acao</h3>
+<p>Dentro de uma prioridade:</p>
+<ol>
+<li>Clique em Novo Plano.</li>
+<li>Informe o titulo do plano.</li>
+<li>Defina o responsavel.</li>
+<li>Defina o prazo final.</li>
+<li>Preencha os campos 5W2H.</li>
+</ol>
+<p>Campos 5W2H:</p>
+<table><thead><tr>
+<th>Campo</th>
+<th>Pergunta</th>
+</tr></thead><tbody>
+<tr>
+<td>What</td>
+<td>O que sera feito?</td>
+</tr>
+<tr>
+<td>Why</td>
+<td>Por que sera feito?</td>
+</tr>
+<tr>
+<td>Who</td>
+<td>Quem sera responsavel?</td>
+</tr>
+<tr>
+<td>Where</td>
+<td>Onde sera feito?</td>
+</tr>
+<tr>
+<td>When</td>
+<td>Quando sera feito?</td>
+</tr>
+<tr>
+<td>How</td>
+<td>Como sera feito?</td>
+</tr>
+<tr>
+<td>How much</td>
+<td>Quanto custa ou qual recurso sera usado?</td>
+</tr>
+</tbody></table>
+<p>Quanto mais claro o plano, mais facil sera executar e cobrar.</p>
+<h3 id="9-4-criar-tarefas-dentro-do-plano">9.4 Criar tarefas dentro do plano</h3>
+<ol>
+<li>Abra o plano.</li>
+<li>Clique em Nova Tarefa.</li>
+<li>Informe o nome da tarefa.</li>
+<li>Escolha o responsavel.</li>
+<li>Informe a data de vencimento.</li>
+<li>Confirme.</li>
+</ol>
+<p>Uma tarefa deve ser objetiva.</p>
+<p>Exemplo ruim:</p>
+<ul>
+<li>&quot;Ver sistema&quot;</li>
+</ul>
+<p>Exemplo bom:</p>
+<ul>
+<li>&quot;Validar integracao do caixa da loja 02 ate sexta-feira&quot;</li>
+</ul>
+<h3 id="9-5-atualizar-tarefa">9.5 Atualizar tarefa</h3>
+<p>Na linha da tarefa, voce pode alterar:</p>
+<ul>
+<li>titulo, se permitido;</li>
+<li>responsavel, se permitido;</li>
+<li>vencimento, se permitido;</li>
+<li>status;</li>
+<li>observadores;</li>
+<li>motivo de bloqueio.</li>
+</ul>
+<p>Status de tarefa:</p>
+<table><thead><tr>
+<th>Status</th>
+<th>Quando usar</th>
+</tr></thead><tbody>
+<tr>
+<td>Pendente</td>
+<td>Ainda nao comecei</td>
+</tr>
+<tr>
+<td>EmExecucao</td>
+<td>Estou executando</td>
+</tr>
+<tr>
+<td>Bloqueada</td>
+<td>Nao consigo seguir por um impedimento</td>
+</tr>
+<tr>
+<td>Concluida</td>
+<td>Finalizei a tarefa</td>
+</tr>
+</tbody></table>
+<h3 id="9-6-bloquear-uma-tarefa">9.6 Bloquear uma tarefa</h3>
+<ol>
+<li>Altere o status da tarefa para Bloqueada.</li>
+<li>O sistema abrira uma janela para informar o motivo.</li>
+<li>Escreva o motivo de forma objetiva.</li>
+<li>Salve.</li>
+</ol>
+<p>Exemplo de motivo ruim:</p>
+<ul>
+<li>&quot;Aguardando&quot;</li>
+</ul>
+<p>Exemplo de motivo bom:</p>
+<ul>
+<li>&quot;Aguardando cliente enviar arquivo de estoque para validar divergencia.&quot;</li>
+</ul>
+<p>Importante: uma tarefa bloqueada pode deixar o plano bloqueado. Um plano bloqueado pode deixar a prioridade bloqueada.</p>
+<h3 id="9-7-concluir-uma-tarefa">9.7 Concluir uma tarefa</h3>
+<ol>
+<li>Altere o status para Concluida.</li>
+<li>O sistema registra a conclusao.</li>
+<li>A tarefa pode sair da lista ativa e aparecer em concluidas.</li>
+</ol>
+<p>Se concluiu por engano, reabra conforme sua permissao.</p>
+<h2 id="10-observadores">10. Observadores</h2>
+<p>Observador e alguem que acompanha um item sem ser o responsavel direto.</p>
+<p>Use observadores quando:</p>
+<ul>
+<li>uma pessoa criou a demanda e precisa acompanhar;</li>
+<li>outra area precisa saber do andamento;</li>
+<li>um gestor quer visibilidade sem assumir a tarefa;</li>
+<li>existe colaboracao entre equipes.</li>
+</ul>
+<p>O observador pode ver o item, mas nao necessariamente pode editar. Edicao depende das permissoes do perfil.</p>
+<h3 id="10-1-adicionar-observador">10.1 Adicionar observador</h3>
+<ol>
+<li>Abra a area de observadores do item.</li>
+<li>Busque o usuario.</li>
+<li>Clique em Adicionar.</li>
+</ol>
+<p>Se voce nao consegue adicionar, seu perfil nao tem permissao para editar observadores.</p>
+<h3 id="10-2-remover-observador">10.2 Remover observador</h3>
+<ol>
+<li>Abra observadores.</li>
+<li>Clique no botao de remover ao lado do nome.</li>
+</ol>
+<p>Observador marcado como Criador nao deve ser removido. Ele representa a rastreabilidade original da demanda.</p>
+<h2 id="11-usando-o-operacional">11. Usando o Operacional</h2>
+<p>O Operacional e a tela mais importante para quem executa tarefas.</p>
+<p>Ela ajuda voce a responder:</p>
+<ul>
+<li>Quais tarefas estao comigo?</li>
+<li>O que esta atrasado?</li>
+<li>O que esta bloqueado?</li>
+<li>O que ja posso concluir?</li>
+<li>Qual plano ou prioridade essa tarefa atende?</li>
+</ul>
+<h3 id="11-1-aba-plano-de-acao">11.1 Aba Plano de Acao</h3>
+<p>Mostra os planos e suas tarefas.</p>
+<p>Use quando quiser entender o contexto completo antes de atualizar uma tarefa.</p>
+<h3 id="11-2-aba-tarefas">11.2 Aba Tarefas</h3>
+<p>Mostra tarefas de forma mais direta.</p>
+<p>Use para rotina diaria:</p>
+<ol>
+<li>Abrir Operacional.</li>
+<li>Ir para Tarefas.</li>
+<li>Ver tarefas pendentes e em execucao.</li>
+<li>Atualizar status.</li>
+<li>Bloquear com motivo se houver impedimento.</li>
+<li>Concluir o que foi finalizado.</li>
+</ol>
+<h3 id="11-3-tarefas-atrasadas">11.3 Tarefas atrasadas</h3>
+<p>Tarefas com vencimento menor que a data atual podem aparecer destacadas.</p>
+<p>Ao encontrar tarefa atrasada:</p>
+<ol>
+<li>Atualize o status real.</li>
+<li>Se estiver impedida, bloqueie e informe motivo.</li>
+<li>Se o prazo mudou, ajuste caso tenha permissao.</li>
+<li>Se nao puder alterar prazo, fale com o gestor.</li>
+</ol>
+<h2 id="12-desempenho">12. Desempenho</h2>
+<p>A tela Desempenho mostra uma visao rapida da saude do trabalho.</p>
+<p>Indicadores principais:</p>
+<ul>
+<li>total de acoes;</li>
+<li>taxa de conclusao;</li>
+<li>itens em execucao;</li>
+<li>bloqueios;</li>
+<li>distribuicao por status;</li>
+<li>distribuicao por urgencia;</li>
+<li>lista de itens bloqueados.</li>
+</ul>
+<p>Use essa tela em reunioes de acompanhamento para identificar gargalos.</p>
+<p>Perguntas que essa tela ajuda a responder:</p>
+<ul>
+<li>Temos muitos bloqueios?</li>
+<li>Estamos concluindo o que foi planejado?</li>
+<li>Existe excesso de itens em execucao?</li>
+<li>Quais prioridades precisam de atencao?</li>
+</ul>
+<h2 id="13-roadmap">13. Roadmap</h2>
+<p>O Roadmap mostra iniciativas agrupadas por mes.</p>
+<p>Use para:</p>
+<ul>
+<li>enxergar entregas futuras;</li>
+<li>organizar planejamento mensal;</li>
+<li>identificar meses sobrecarregados;</li>
+<li>revisar prazos.</li>
+</ul>
+<p>Se um item nao aparece no mes esperado, verifique o campo Quando no item.</p>
+<h2 id="14-agenda">14. Agenda</h2>
+<p>A Agenda serve para compromissos e eventos.</p>
+<p>Voce pode:</p>
+<ul>
+<li>criar evento;</li>
+<li>editar evento;</li>
+<li>marcar status;</li>
+<li>convidar participantes;</li>
+<li>aceitar ou recusar convites;</li>
+<li>ver eventos compartilhados.</li>
+</ul>
+<h3 id="14-1-criar-evento">14.1 Criar evento</h3>
+<ol>
+<li>Clique em Agenda.</li>
+<li>Abra o formulario de novo evento.</li>
+<li>Informe titulo.</li>
+<li>Informe descricao, se necessario.</li>
+<li>Escolha data e hora.</li>
+<li>Selecione participantes.</li>
+<li>Salve.</li>
+</ol>
+<h3 id="14-2-aceitar-convite">14.2 Aceitar convite</h3>
+<ol>
+<li>Abra Agenda.</li>
+<li>Veja a area de convites.</li>
+<li>Clique em Aceitar.</li>
+</ol>
+<h3 id="14-3-recusar-convite">14.3 Recusar convite</h3>
+<ol>
+<li>Abra o convite.</li>
+<li>Informe o motivo da recusa.</li>
+<li>Clique em Recusar.</li>
+</ol>
+<p>O motivo e importante para quem enviou entender o impedimento.</p>
+<h3 id="14-4-status-da-agenda">14.4 Status da agenda</h3>
+<table><thead><tr>
+<th>Status</th>
+<th>Quando usar</th>
+</tr></thead><tbody>
+<tr>
+<td>Pendente</td>
+<td>Compromisso ainda nao iniciado</td>
+</tr>
+<tr>
+<td>Em andamento</td>
+<td>Compromisso em execucao</td>
+</tr>
+<tr>
+<td>Concluido</td>
+<td>Compromisso encerrado</td>
+</tr>
+</tbody></table>
+<h2 id="15-chat-entre-usuarios">15. Chat entre usuarios</h2>
+<p>O Chat permite conversa privada com outros usuarios do sistema.</p>
+<p>Use para alinhamentos rapidos, combinados e perguntas.</p>
+<h3 id="15-1-iniciar-conversa">15.1 Iniciar conversa</h3>
+<ol>
+<li>Clique em Chat.</li>
+<li>Busque o usuario.</li>
+<li>Clique no nome.</li>
+<li>Digite a mensagem.</li>
+<li>Envie.</li>
+</ol>
+<h3 id="15-2-mensagens-nao-lidas">15.2 Mensagens nao lidas</h3>
+<p>O menu pode mostrar contador de mensagens nao lidas. Abra o Chat para ler e zerar a conversa.</p>
+<h3 id="15-3-apagar-mensagem">15.3 Apagar mensagem</h3>
+<p>Voce pode apagar mensagens que enviou, se o botao estiver disponivel.</p>
+<p>Boa pratica: decisoes importantes nao devem ficar apenas no chat. Registre a decisao na prioridade, plano, tarefa ou agenda correspondente.</p>
+<h2 id="16-5w2h-chat">16. 5W2H CHAT</h2>
+<p>O 5W2H CHAT e uma IA de apoio.</p>
+<p>Use para pedir ajuda com:</p>
+<ul>
+<li>montar plano 5W2H;</li>
+<li>melhorar descricao de demanda;</li>
+<li>organizar prioridade;</li>
+<li>transformar uma ideia em plano;</li>
+<li>escrever motivo de bloqueio mais claro;</li>
+<li>estruturar passos de execucao.</li>
+</ul>
+<h3 id="16-1-enviar-mensagem">16.1 Enviar mensagem</h3>
+<ol>
+<li>Clique em 5W2H CHAT.</li>
+<li>Digite sua pergunta.</li>
+<li>Clique em Enviar.</li>
+<li>Leia a resposta.</li>
+<li>Ajuste antes de usar no sistema.</li>
+</ol>
+<p>Exemplos de perguntas:</p>
+<ul>
+<li>&quot;Monte um 5W2H para reduzir divergencia de estoque.&quot;</li>
+<li>&quot;Transforme essa demanda em tarefas operacionais.&quot;</li>
+<li>&quot;Me ajude a escrever uma descricao clara para este backlog.&quot;</li>
+<li>&quot;Quais riscos devo acompanhar nesta prioridade?&quot;</li>
+</ul>
+<p>Importante: a IA ajuda, mas a decisao final e sempre do usuario/gestor.</p>
+<h2 id="17-notificacoes">17. Notificacoes</h2>
+<p>O sistema pode pedir permissao para enviar notificacoes do navegador.</p>
+<p>Notificacoes podem avisar sobre:</p>
+<ul>
+<li>novos convites de agenda;</li>
+<li>mensagens privadas recebidas.</li>
+</ul>
+<p>Se voce clicar em Permitir, o navegador libera os avisos. Se clicar em bloquear, sera necessario liberar depois nas configuracoes do navegador.</p>
+<p>Voce tambem pode ativar ou desativar notificacoes no menu lateral.</p>
+<h2 id="18-pesquisa">18. Pesquisa</h2>
+<p>O campo Pesquisar fica no topo da tela.</p>
+<p>Ele ajuda a localizar itens por:</p>
+<ul>
+<li>titulo;</li>
+<li>descricao;</li>
+<li>responsavel;</li>
+<li>criador;</li>
+<li>status;</li>
+<li>urgencia;</li>
+<li>workspace;</li>
+<li>link.</li>
+</ul>
+<p>Dica: pesquise por palavras simples. Exemplo: &quot;estoque&quot;, &quot;loja 02&quot;, &quot;bloqueado&quot;, &quot;Gustavo&quot;.</p>
+<h2 id="19-permissoes-por-que-alguns-botoes-nao-aparecem">19. Permissoes: por que alguns botoes nao aparecem?</h2>
+<p>O sistema controla o que cada usuario pode ver e editar.</p>
+<p>Por isso, voce pode encontrar situacoes como:</p>
+<ul>
+<li>ver uma tela, mas nao conseguir editar;</li>
+<li>nao ver determinado botao;</li>
+<li>nao conseguir criar prioridade;</li>
+<li>nao conseguir alterar responsavel;</li>
+<li>nao conseguir excluir;</li>
+<li>nao conseguir adicionar observador;</li>
+<li>nao ver determinada empresa.</li>
+</ul>
+<p>Isso nao e erro necessariamente. Pode ser permissao do seu perfil.</p>
+<p>Quando precisar de acesso, envie ao administrador:</p>
+<ol>
+<li>Qual tela voce precisa acessar.</li>
+<li>Qual acao precisa fazer.</li>
+<li>Qual empresa/workspace esta envolvido.</li>
+<li>Por que precisa dessa permissao.</li>
+</ol>
+<h2 id="20-guia-rapido-por-tipo-de-usuario">20. Guia rapido por tipo de usuario</h2>
+<h3 id="20-1-usuario-operacional">20.1 Usuario operacional</h3>
+<p>Sua rotina principal:</p>
+<ol>
+<li>Entrar no sistema.</li>
+<li>Selecionar workspace.</li>
+<li>Abrir Operacional.</li>
+<li>Ver suas tarefas.</li>
+<li>Atualizar status.</li>
+<li>Informar bloqueios com motivo.</li>
+<li>Concluir tarefas finalizadas.</li>
+<li>Conferir Agenda e Chat.</li>
+</ol>
+<h3 id="20-2-gestor">20.2 Gestor</h3>
+<p>Sua rotina principal:</p>
+<ol>
+<li>Conferir Backlog novo.</li>
+<li>Avaliar o que deve ser priorizado.</li>
+<li>Acompanhar Estrategico.</li>
+<li>Abrir Gerencial/Tatico.</li>
+<li>Criar ou revisar planos de acao.</li>
+<li>Distribuir tarefas.</li>
+<li>Acompanhar bloqueios.</li>
+<li>Consultar Desempenho e Roadmap.</li>
+</ol>
+<h3 id="20-3-administrador">20.3 Administrador</h3>
+<p>Sua rotina principal:</p>
+<ol>
+<li>Cadastrar usuarios.</li>
+<li>Definir permissoes.</li>
+<li>Associar empresas/workspaces.</li>
+<li>Ativar ou desativar usuarios.</li>
+<li>Ajustar configuracoes gerais.</li>
+<li>Apoiar usuarios com acesso, senha e permissao.</li>
+</ol>
+<h2 id="21-area-do-administrador">21. Area do administrador</h2>
+<p>Esta parte e apenas para quem tem perfil administrador.</p>
+<p>O painel administrativo fica em <code>/admin</code>.</p>
+<p>No painel, o administrador pode:</p>
+<ul>
+<li>criar usuario;</li>
+<li>editar usuario;</li>
+<li>ativar/desativar usuario;</li>
+<li>redefinir senha;</li>
+<li>alterar senha diretamente;</li>
+<li>excluir cadastro quando permitido;</li>
+<li>definir telas liberadas;</li>
+<li>definir acoes por tela;</li>
+<li>definir empresas;</li>
+<li>cadastrar links externos por workspace;</li>
+<li>criar workspaces;</li>
+<li>alterar configuracoes globais.</li>
+</ul>
+<h3 id="21-1-criar-usuario">21.1 Criar usuario</h3>
+<ol>
+<li>Acesse <code>/admin</code>.</li>
+<li>Clique em Novo usuario.</li>
+<li>Preencha nome, email e senha.</li>
+<li>Escolha o perfil: administrador, gerente ou usuario.</li>
+<li>Marque as telas que o usuario pode acessar.</li>
+<li>Marque as acoes que ele pode executar.</li>
+<li>Selecione empresas/workspaces.</li>
+<li>Salve.</li>
+</ol>
+<h3 id="21-2-desativar-usuario">21.2 Desativar usuario</h3>
+<p>Use desativar quando a pessoa nao deve mais acessar, mas o historico precisa permanecer.</p>
+<ol>
+<li>Localize o usuario.</li>
+<li>Clique no botao de ativar/desativar.</li>
+<li>Confirme.</li>
+</ol>
+<h3 id="21-3-excluir-usuario">21.3 Excluir usuario</h3>
+<p>Excluir deve ser excecao.</p>
+<p>Antes de excluir, o sistema verifica se existe historico vinculado ao usuario. Se existir, prefira desativar.</p>
+<h3 id="21-4-configuracoes-globais">21.4 Configuracoes globais</h3>
+<p>O administrador pode controlar:</p>
+<table><thead><tr>
+<th>Configuracao</th>
+<th>Efeito para usuarios</th>
+</tr></thead><tbody>
+<tr>
+<td>Filtro do Estrategico por responsavel</td>
+<td>Define se usuarios veem apenas cards ligados a eles</td>
+</tr>
+<tr>
+<td>Alterar empresa no Backlog</td>
+<td>Permite ou bloqueia mudanca manual de workspace no Backlog</td>
+</tr>
+<tr>
+<td>Alterar data no Backlog</td>
+<td>Permite ou bloqueia edicao da data no Backlog</td>
+</tr>
+<tr>
+<td>Alterar prazo de tarefas</td>
+<td>Permite ou bloqueia edicao de vencimento por usuarios nao administradores</td>
+</tr>
+</tbody></table>
+<h2 id="22-boas-praticas">22. Boas praticas</h2>
+<ul>
+<li>Sempre confira o workspace antes de criar itens.</li>
+<li>Use titulo claro e especifico.</li>
+<li>Explique bem a descricao da demanda.</li>
+<li>Use links externos quando houver documento de apoio.</li>
+<li>Nao transforme tudo em prioridade.</li>
+<li>Respeite o limite de foco.</li>
+<li>Quebre planos grandes em tarefas menores.</li>
+<li>Atualize status com frequencia.</li>
+<li>Bloqueio sem motivo atrapalha a gestao.</li>
+<li>Conclua tarefas assim que terminar.</li>
+<li>Use observadores para dar visibilidade.</li>
+<li>Use o Chat para alinhar, mas registre decisoes no item correto.</li>
+<li>Use a Agenda para compromissos com data e hora.</li>
+<li>Use a IA como apoio, nao como decisor final.</li>
+</ul>
+<h2 id="23-erros-comuns-de-uso">23. Erros comuns de uso</h2>
+<table><thead><tr>
+<th>Erro comum</th>
+<th>Como evitar</th>
+</tr></thead><tbody>
+<tr>
+<td>Criar demanda no workspace errado</td>
+<td>Conferir o seletor antes de criar</td>
+</tr>
+<tr>
+<td>Criar prioridade sem plano</td>
+<td>Sempre abrir o Gerencial e criar plano de acao</td>
+</tr>
+<tr>
+<td>Criar tarefa sem descricao clara</td>
+<td>Escrever tarefa objetiva e executavel</td>
+</tr>
+<tr>
+<td>Bloquear sem explicar</td>
+<td>Informar motivo detalhado</td>
+</tr>
+<tr>
+<td>Deixar tarefa pronta como Em Execucao</td>
+<td>Alterar para Concluida no mesmo dia</td>
+</tr>
+<tr>
+<td>Usar Chat como registro oficial</td>
+<td>Registrar decisoes no item correto</td>
+</tr>
+<tr>
+<td>Acumular prioridades demais</td>
+<td>Concluir ou revisar prioridades antigas</td>
+</tr>
+<tr>
+<td>Ignorar Backlog</td>
+<td>Registrar novas demandas antes de priorizar</td>
+</tr>
+</tbody></table>
+<h2 id="24-roteiro-sugerido-para-treinamento-presencial">24. Roteiro sugerido para treinamento presencial</h2>
+<p>Use este roteiro em uma reuniao de treinamento:</p>
+<ol>
+<li>Mostrar login.</li>
+<li>Explicar o menu lateral.</li>
+<li>Mostrar o seletor de workspace.</li>
+<li>Criar uma demanda no Backlog.</li>
+<li>Priorizar a demanda.</li>
+<li>Abrir o Estrategico.</li>
+<li>Mover o card entre colunas.</li>
+<li>Abrir o Gerencial/Tatico.</li>
+<li>Criar um plano de acao 5W2H.</li>
+<li>Criar duas tarefas.</li>
+<li>Atualizar uma tarefa para EmExecucao.</li>
+<li>Bloquear uma tarefa com motivo.</li>
+<li>Mostrar o impacto no plano/prioridade.</li>
+<li>Concluir a tarefa.</li>
+<li>Abrir Desempenho.</li>
+<li>Abrir Roadmap.</li>
+<li>Criar evento na Agenda.</li>
+<li>Enviar mensagem no Chat.</li>
+<li>Fazer uma pergunta no 5W2H CHAT.</li>
+<li>Mostrar onde pedir permissao ao administrador.</li>
+</ol>
+<h2 id="25-exercicios-para-praticar">25. Exercicios para praticar</h2>
+<h3 id="exercicio-1-backlog">Exercicio 1 - Backlog</h3>
+<p>Crie uma demanda com:</p>
+<ul>
+<li>titulo claro;</li>
+<li>descricao com contexto;</li>
+<li>workspace correto;</li>
+<li>link externo ficticio ou real, se houver.</li>
+</ul>
+<h3 id="exercicio-2-prioridade">Exercicio 2 - Prioridade</h3>
+<p>Priorize a demanda criada e confira se ela aparece no Estrategico.</p>
+<h3 id="exercicio-3-plano-5w2h">Exercicio 3 - Plano 5W2H</h3>
+<p>No Gerencial, crie um plano respondendo:</p>
+<ul>
+<li>O que sera feito?</li>
+<li>Por que?</li>
+<li>Quem sera responsavel?</li>
+<li>Onde?</li>
+<li>Quando?</li>
+<li>Como?</li>
+<li>Quanto custa ou qual recurso sera usado?</li>
+</ul>
+<h3 id="exercicio-4-tarefas">Exercicio 4 - Tarefas</h3>
+<p>Crie pelo menos duas tarefas para o plano.</p>
+<p>Cada tarefa deve ter:</p>
+<ul>
+<li>titulo claro;</li>
+<li>responsavel;</li>
+<li>vencimento.</li>
+</ul>
+<h3 id="exercicio-5-bloqueio">Exercicio 5 - Bloqueio</h3>
+<p>Bloqueie uma tarefa e escreva um motivo claro.</p>
+<p>Depois observe se o plano ou prioridade tambem indicam bloqueio.</p>
+<h3 id="exercicio-6-conclusao">Exercicio 6 - Conclusao</h3>
+<p>Marque uma tarefa como Concluida e confira se ela sai da lista ativa.</p>
+<h3 id="exercicio-7-agenda-e-chat">Exercicio 7 - Agenda e Chat</h3>
+<p>Crie um evento de agenda e envie uma mensagem para outro usuario.</p>
+<h2 id="26-perguntas-frequentes">26. Perguntas frequentes</h2>
+<h3 id="nao-estou-vendo-uma-tela-o-que-faco">Nao estou vendo uma tela. O que faco?</h3>
+<p>Fale com o administrador. Provavelmente sua permissao nao inclui essa tela.</p>
+<h3 id="consigo-ver-mas-nao-consigo-editar-por-que">Consigo ver, mas nao consigo editar. Por que?</h3>
+<p>Seu perfil pode estar com permissao somente leitura.</p>
+<h3 id="posso-criar-tarefa-direto-sem-plano">Posso criar tarefa direto sem plano?</h3>
+<p>O uso recomendado e criar tarefas dentro de um plano. O fluxo padrao e prioridade, plano e tarefa.</p>
+<h3 id="quando-uso-backlog">Quando uso Backlog?</h3>
+<p>Use quando ainda e uma demanda em analise, sem compromisso ativo.</p>
+<h3 id="quando-uso-prioridade">Quando uso Prioridade?</h3>
+<p>Use quando o item virou foco real e precisa de dono, prazo, plano e acompanhamento.</p>
+<h3 id="quando-uso-bloqueado">Quando uso Bloqueado?</h3>
+<p>Use quando existe impedimento que realmente impede a execucao.</p>
+<h3 id="o-que-e-observador">O que e observador?</h3>
+<p>E alguem que acompanha o item sem ser o responsavel direto.</p>
+<h3 id="o-que-e-workspace">O que e workspace?</h3>
+<p>E a empresa, cliente, unidade ou contexto em que os itens estao separados.</p>
+<h3 id="por-que-existe-limite-de-prioridades">Por que existe limite de prioridades?</h3>
+<p>Para manter foco. Muitas prioridades ao mesmo tempo fazem a gestao perder clareza.</p>
+<h2 id="27-checklist-diario">27. Checklist diario</h2>
+<p>Antes de encerrar o dia:</p>
+<ol>
+<li>Atualizei minhas tarefas?</li>
+<li>Marquei como concluido o que finalizei?</li>
+<li>Bloqueei com motivo o que esta impedido?</li>
+<li>Respondi convites da Agenda?</li>
+<li>Li mensagens importantes no Chat?</li>
+<li>Avisei o gestor sobre bloqueios relevantes?</li>
+</ol>
+<h2 id="28-checklist-semanal-do-gestor">28. Checklist semanal do gestor</h2>
+<ol>
+<li>Revisar Backlog.</li>
+<li>Confirmar prioridades ativas.</li>
+<li>Ver se ha mais de uma prioridade sem plano.</li>
+<li>Revisar tarefas vencidas.</li>
+<li>Cobrar bloqueios sem motivo claro.</li>
+<li>Consultar Desempenho.</li>
+<li>Revisar Roadmap.</li>
+<li>Ajustar responsaveis e observadores.</li>
+<li>Encerrar o que ja foi concluido.</li>
+</ol>
+<h2 id="29-glossario-rapido">29. Glossario rapido</h2>
+<table><thead><tr>
+<th>Termo</th>
+<th>Significado simples</th>
+</tr></thead><tbody>
+<tr>
+<td>Backlog</td>
+<td>Lista de demandas ainda nao priorizadas</td>
+</tr>
+<tr>
+<td>Prioridade</td>
+<td>Item que virou foco de gestao</td>
+</tr>
+<tr>
+<td>Plano de acao</td>
+<td>Como a prioridade sera executada</td>
+</tr>
+<tr>
+<td>5W2H</td>
+<td>Metodo para detalhar o plano</td>
+</tr>
+<tr>
+<td>Tarefa</td>
+<td>Acao pratica que alguem precisa executar</td>
+</tr>
+<tr>
+<td>Responsavel</td>
+<td>Pessoa que executa ou responde pelo item</td>
+</tr>
+<tr>
+<td>Dono</td>
+<td>Pessoa responsavel pela prioridade</td>
+</tr>
+<tr>
+<td>Observador</td>
+<td>Pessoa que acompanha sem assumir responsabilidade</td>
+</tr>
+<tr>
+<td>Workspace</td>
+<td>Empresa/contexto selecionado</td>
+</tr>
+<tr>
+<td>Bloqueado</td>
+<td>Algo esta impedindo o andamento</td>
+</tr>
+<tr>
+<td>Concluido</td>
+<td>Item finalizado</td>
+</tr>
+</tbody></table>
+<h2 id="30-resumo-final">30. Resumo final</h2>
+<p>Para usar bem o Mavo Gestao, lembre desta sequencia:</p>
+<ol>
+<li>Registre demandas no Backlog.</li>
+<li>Priorize apenas o que realmente merece foco.</li>
+<li>Crie planos de acao claros.</li>
+<li>Transforme planos em tarefas objetivas.</li>
+<li>Atualize status todos os dias.</li>
+<li>Bloqueie com motivo quando houver impedimento.</li>
+<li>Conclua o que foi finalizado.</li>
+<li>Use indicadores para acompanhar a saude da operacao.</li>
+</ol>
+<p>O sistema funciona melhor quando cada pessoa mantem suas informacoes atualizadas. Se todos atualizam tarefas, bloqueios e conclusoes, a gestao ganha clareza e velocidade.</p>
+</body>
+</html>

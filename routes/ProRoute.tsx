@@ -10,7 +10,7 @@
 import React, { useMemo, useState, useCallback, useRef, useEffect } from 'react';
 import {
   Menu, FileText, Plus, X, Target, ListTodo,
-  PieChart, Briefcase, Bot, Search, Activity, AlertCircle, CalendarDays,
+  PieChart, Briefcase, Bot, Search, Activity, AlertCircle, CalendarDays, MessageSquare,
 } from 'lucide-react';
 import { useUser } from '../contexts/UserContext';
 import { useRitmoGestao } from '../controllers/useRitmoGestao';
@@ -291,6 +291,7 @@ function ProContent() {
     ia: '5W2H CHAT',
     workspace: 'Workspace',
     agenda: 'Agenda',
+    chat: 'Chat',
   };
 
   const viewIcon: Record<ViewId, React.ReactNode> = {
@@ -303,6 +304,7 @@ function ProContent() {
     ia: <Bot size={18} className="text-blue-400 shrink-0" />,
     workspace: <Target size={18} className="text-blue-400 shrink-0" />,
     agenda: <CalendarDays size={18} className="text-blue-400 shrink-0" />,
+    chat: <MessageSquare size={18} className="text-blue-400 shrink-0" />,
   };
 
   if (ritmo.loading || loadingItems) {

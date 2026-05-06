@@ -11,6 +11,25 @@ import {
 } from '../services/encryptionService';
 
 const ENCRYPTION_KEY_KEY = '@Estrategico:EncryptionKey';
+const PROFILE_CACHE_KEY = '@Mavo:ProfileCache';
+
+function saveProfileCache(uid: string, profile: UserProfile): void {
+  try { sessionStorage.setItem(PROFILE_CACHE_KEY + uid, JSON.stringify(profile)); } catch {}
+}
+
+function loadProfileCache(uid: string): UserProfile | null {
+  try {
+    const raw = sessionStorage.getItem(PROFILE_CACHE_KEY + uid);
+    return raw ? (JSON.parse(raw) as UserProfile) : null;
+  } catch { return null; }
+}
+
+function clearProfileCache(): void {
+  try {
+    const keys = Object.keys(sessionStorage).filter(k => k.startsWith(PROFILE_CACHE_KEY));
+    keys.forEach(k => sessionStorage.removeItem(k));
+  } catch {}
+}
 
 function normalizeEmpresa(value?: string | null): string {
   return (value ?? '').trim().toLowerCase();
@@ -72,35 +91,59 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     }
     const unsub = onAuthChange(async (user) => {
       setFirebaseUser(user);
-      if (user) {
-        try {
-          const prof = await getUserProfile(user.uid);
-          setProfile(prof);
 
-          let key: CryptoKey | null = null;
-          const storedKey = sessionStorage.getItem(ENCRYPTION_KEY_KEY);
-          if (storedKey) {
-            try {
-              key = await importKeyFromBase64(storedKey);
-            } catch {
-              sessionStorage.removeItem(ENCRYPTION_KEY_KEY);
-            }
-          }
-          if (!key) {
-            key = await importKeyFromEnvHash();
-            const keyB64 = await exportKeyToBase64(key);
-            sessionStorage.setItem(ENCRYPTION_KEY_KEY, keyB64);
-          }
-          setEncryptionKey(key);
-        } catch {
-          setProfile(null);
-        }
-      } else {
+      if (!user) {
         setProfile(null);
         setEncryptionKey(null);
         sessionStorage.removeItem(ENCRYPTION_KEY_KEY);
+        clearProfileCache();
+        setLoading(false);
+        return;
       }
-      setLoading(false);
+
+      // Fast path: restore from sessionStorage cache — no network needed
+      const cachedProfile = loadProfileCache(user.uid);
+      const storedKeyB64 = sessionStorage.getItem(ENCRYPTION_KEY_KEY);
+      let resolvedFromCache = false;
+
+      if (cachedProfile && storedKeyB64) {
+        try {
+          const cachedKey = await importKeyFromBase64(storedKeyB64);
+          setProfile(cachedProfile);
+          setEncryptionKey(cachedKey);
+          setLoading(false);
+          resolvedFromCache = true;
+        } catch {
+          sessionStorage.removeItem(ENCRYPTION_KEY_KEY);
+        }
+      }
+
+      // Background refresh: verify with Firestore and update if changed
+      try {
+        const prof = await getUserProfile(user.uid);
+        if (prof) {
+          setProfile(prof);
+          saveProfileCache(user.uid, prof);
+        }
+
+        let key: CryptoKey | null = null;
+        const currentKeyB64 = sessionStorage.getItem(ENCRYPTION_KEY_KEY);
+        if (currentKeyB64) {
+          try { key = await importKeyFromBase64(currentKeyB64); } catch {
+            sessionStorage.removeItem(ENCRYPTION_KEY_KEY);
+          }
+        }
+        if (!key) {
+          key = await importKeyFromEnvHash();
+          const keyB64 = await exportKeyToBase64(key);
+          sessionStorage.setItem(ENCRYPTION_KEY_KEY, keyB64);
+        }
+        setEncryptionKey(key);
+      } catch {
+        if (!resolvedFromCache) setProfile(null);
+      } finally {
+        if (!resolvedFromCache) setLoading(false);
+      }
     });
     return () => unsub();
   }, []);
@@ -127,6 +170,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         const key = await importKeyFromEnvHash();
         const keyB64 = await exportKeyToBase64(key);
         sessionStorage.setItem(ENCRYPTION_KEY_KEY, keyB64);
+        saveProfileCache(user.uid, prof);
 
         setFirebaseUser(user);
         setProfile(prof);
@@ -150,6 +194,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     setProfile(null);
     setEncryptionKey(null);
     sessionStorage.removeItem(ENCRYPTION_KEY_KEY);
+    clearProfileCache();
   }, []);
 
   const hasView = useCallback(

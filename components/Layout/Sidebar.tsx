@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { useChatUnread } from '../../controllers/useChat';
 import {
   LogOut,
   ShieldCheck,
@@ -14,12 +15,13 @@ import {
   CalendarDays,
   Bell,
   BellOff,
+  MessageSquare,
 } from 'lucide-react';
 import { EstrategicoGridIcon } from '../icons/EstrategicoGridIcon';
 import type { ExternalWorkspaceLink, UserRole } from '../../types/user';
 import { listActiveExternalLinksByWorkspace } from '../../utils/externalWorkspaceLinks';
 
-export type ViewId = 'workspace' | 'dashboard' | 'table' | 'backlog' | 'performance' | 'roadmap' | 'ia' | 'operacional' | 'agenda';
+export type ViewId = 'workspace' | 'dashboard' | 'table' | 'backlog' | 'performance' | 'roadmap' | 'ia' | 'operacional' | 'agenda' | 'chat';
 
 interface SidebarProps {
   activeView: ViewId;
@@ -42,6 +44,7 @@ interface SidebarProps {
   onWorkspaceShortcutClick?: () => void;
   externalWorkspaceLinks?: ExternalWorkspaceLink[];
   onOpenWorkspaceExternalLink?: (url: string) => void;
+  chatCurrentUser?: { uid: string; nome: string } | null;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -65,7 +68,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onWorkspaceShortcutClick,
   externalWorkspaceLinks,
   onOpenWorkspaceExternalLink,
+  chatCurrentUser = null,
 }) => {
+  const chatUnreadCount = useChatUnread(activeView === 'chat' ? null : chatCurrentUser);
   const [workspaceLinksOpen, setWorkspaceLinksOpen] = useState(false);
 
   const isAdmin = userRole === 'administrador';
@@ -319,6 +324,22 @@ export const Sidebar: React.FC<SidebarProps> = ({
               }`}
             >
               <CalendarDays size={18} /> Agenda
+            </button>
+            <button
+              type="button"
+              onClick={() => handleNavClick('chat')}
+              className={`relative flex items-center gap-2.5 px-3 py-2.5 min-h-[44px] rounded-lg text-sm font-medium transition-all text-left w-full touch-manipulation ${
+                activeView === 'chat'
+                  ? 'bg-blue-600 text-white'
+                  : 'text-slate-400 hover:bg-slate-800/60 hover:text-slate-100'
+              }`}
+            >
+              <MessageSquare size={18} /> Chat
+              {chatUnreadCount > 0 && activeView !== 'chat' && (
+                <span className="ml-auto shrink-0 min-w-[18px] h-[18px] rounded-full bg-blue-500 text-white text-[10px] font-bold flex items-center justify-center px-1">
+                  {chatUnreadCount > 99 ? '99+' : chatUnreadCount}
+                </span>
+              )}
             </button>
           </div>
 

@@ -44,6 +44,105 @@ service cloud.firestore {
       allow read, write: if isAuthenticated();
     }
 
+    match /chat/{messageId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated()
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.texto is string
+        && request.resource.data.texto.size() > 0
+        && request.resource.data.texto.size() <= 2000;
+      allow update, delete: if false;
+    }
+
+    match /privateChats/{chatId} {
+      function isParticipant() {
+        return isAuthenticated() &&
+          request.auth.uid in resource.data.participants;
+      }
+      function isParticipantOnCreate() {
+        return isAuthenticated() &&
+          request.auth.uid in request.resource.data.participants;
+      }
+
+      allow read: if isParticipant();
+      allow create: if isParticipantOnCreate()
+        && request.resource.data.participants.size() == 2
+        && request.resource.data.participants is list;
+      allow update: if isParticipant();
+      allow delete: if false;
+
+      match /messages/{messageId} {
+        function isMessageParticipant() {
+          return isAuthenticated()
+            && request.auth.uid in get(/databases/$(database)/documents/privateChats/$(chatId)).data.participants;
+        }
+        function messageWasNotDeletedForEveryone() {
+          return !('deletedForEveryone' in resource.data) || resource.data.deletedForEveryone == false;
+        }
+        function canUseDeleteForEveryoneWindow() {
+          return (
+            resource.data.createdAtServer is timestamp
+            && request.time.toMillis() <= resource.data.createdAtServer.toMillis() + 180000
+          ) || (
+            !('createdAtServer' in resource.data)
+            && resource.data.createdAt is number
+            && request.time.toMillis() <= resource.data.createdAt + 180000
+          );
+        }
+        function editsOwnMessageText() {
+          return resource.data.senderUid == request.auth.uid
+            && isMessageParticipant()
+            && messageWasNotDeletedForEveryone()
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['texto', 'editedAt'])
+            && request.resource.data.texto is string
+            && request.resource.data.texto.size() > 0
+            && request.resource.data.texto.size() <= 4000
+            && request.resource.data.editedAt is number;
+        }
+        function deletesMessageForSelf() {
+          return isMessageParticipant()
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['deletedFor'])
+            && request.resource.data.deletedFor is map
+            && request.resource.data.deletedFor[request.auth.uid] == true
+            && (
+              (
+                !('deletedFor' in resource.data)
+                && request.resource.data.deletedFor.keys().hasOnly([request.auth.uid])
+              ) || (
+                resource.data.deletedFor is map
+                && request.resource.data.deletedFor.diff(resource.data.deletedFor).affectedKeys().hasOnly([request.auth.uid])
+              )
+            );
+        }
+        function deletesOwnMessageForEveryone() {
+          return resource.data.senderUid == request.auth.uid
+            && isMessageParticipant()
+            && messageWasNotDeletedForEveryone()
+            && canUseDeleteForEveryoneWindow()
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['texto', 'deletedForEveryone', 'deletedAt'])
+            && request.resource.data.texto == ''
+            && request.resource.data.deletedForEveryone == true
+            && request.resource.data.deletedAt is number;
+        }
+        allow read: if isAuthenticated() &&
+          request.auth.uid in get(/databases/$(database)/documents/privateChats/$(chatId)).data.participants;
+        allow create: if isAuthenticated()
+          && request.auth.uid in get(/databases/$(database)/documents/privateChats/$(chatId)).data.participants
+          && request.resource.data.senderUid == request.auth.uid
+          && request.resource.data.keys().hasOnly(['senderUid', 'senderNome', 'texto', 'createdAt', 'createdAtServer'])
+          && request.resource.data.senderNome is string
+          && request.resource.data.createdAt is number
+          && request.resource.data.createdAtServer == request.time
+          && request.resource.data.texto is string
+          && request.resource.data.texto.size() > 0
+          && request.resource.data.texto.size() <= 4000;
+        allow update: if editsOwnMessageText()
+          || deletesMessageForSelf()
+          || deletesOwnMessageForEveryone();
+        allow delete: if false;
+      }
+    }
+
     match /director_notes/{noteId} {
       allow read, update, delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
       allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;

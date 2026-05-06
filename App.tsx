@@ -2,16 +2,18 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useUser } from './contexts/UserContext';
 import { UserLogin } from './components/Auth/UserLogin';
 import { Sidebar } from './components/Layout/Sidebar';
-import { KanbanBoard } from './components/Dashboard/KanbanBoard';
-import { BacklogView } from './components/Dashboard/BacklogView';
-import { EstrategicoView } from './components/Dashboard/EstrategicoView';
-import { QuadroEstrategico, DetalhePrioridadeModal } from './components/Dashboard/QuadroEstrategico';
-import { PrioridadeModal } from './components/Dashboard/PrioridadeModal';
-import { ActionItemModal } from './components/Dashboard/ActionItemModal';
-import { PerformanceView } from './components/Dashboard/PerformanceView';
-import { RoadmapView } from './components/Dashboard/RoadmapView';
-import { OperacionalView } from './components/Dashboard/OperacionalView';
-import { AgendaView } from './components/Dashboard/AgendaView';
+const KanbanBoard = React.lazy(() => import('./components/Dashboard/KanbanBoard').then(m => ({ default: m.KanbanBoard })));
+const BacklogView = React.lazy(() => import('./components/Dashboard/BacklogView').then(m => ({ default: m.BacklogView })));
+const EstrategicoView = React.lazy(() => import('./components/Dashboard/EstrategicoView').then(m => ({ default: m.EstrategicoView })));
+const QuadroEstrategico = React.lazy(() => import('./components/Dashboard/QuadroEstrategico').then(m => ({ default: m.QuadroEstrategico })));
+const DetalhePrioridadeModal = React.lazy(() => import('./components/Dashboard/QuadroEstrategico').then(m => ({ default: m.DetalhePrioridadeModal })));
+const PrioridadeModal = React.lazy(() => import('./components/Dashboard/PrioridadeModal').then(m => ({ default: m.PrioridadeModal })));
+const ActionItemModal = React.lazy(() => import('./components/Dashboard/ActionItemModal').then(m => ({ default: m.ActionItemModal })));
+const PerformanceView = React.lazy(() => import('./components/Dashboard/PerformanceView').then(m => ({ default: m.PerformanceView })));
+const RoadmapView = React.lazy(() => import('./components/Dashboard/RoadmapView').then(m => ({ default: m.RoadmapView })));
+const OperacionalView = React.lazy(() => import('./components/Dashboard/OperacionalView').then(m => ({ default: m.OperacionalView })));
+const AgendaView = React.lazy(() => import('./components/Dashboard/AgendaView').then(m => ({ default: m.AgendaView })));
+const ChatView = React.lazy(() => import('./components/Chat/ChatView').then(m => ({ default: m.ChatView })));
 import { useAgenda } from './controllers/useAgenda';
 import type { ViewId } from './components/Layout/Sidebar';
 import { useStrategicBoard } from './controllers/useStrategicBoard';
@@ -52,11 +54,14 @@ import {
   tarefaAtribuidaAoUsuario,
 } from './components/Dashboard/taskAssignmentUtils';
 import { Toast, type ToastType } from './components/Shared/Toast';
-import { ChatView } from './components/Chat/ChatView';
 import { Modal } from './components/Shared/Modal';
 import { EstrategicoGridIcon } from './components/icons/EstrategicoGridIcon';
 
 const MAVO_NOTIFICATIONS_ENABLED_KEY = '@Mavo:SystemNotificationsEnabled';
+
+const TeamChatScreen = React.lazy(() =>
+  import('./components/Dashboard/TeamChatScreen').then((module) => ({ default: module.TeamChatScreen })),
+);
 
 function normKey(s: string | null | undefined): string {
   return (s ?? '').trim().toLowerCase();
@@ -117,9 +122,13 @@ function empresaParaDemandaDoDono(
 }
 
 function AppContent() {
-  const { isAuthenticated, encryptionKey, logout, profile, hasModuleAction, firebaseUser } = useUser();
+  const { isAuthenticated, encryptionKey, logout, profile, hasModuleAction, firebaseUser, loading: authLoading } = useUser();
   const agenda = useAgenda(firebaseUser?.uid ?? null, profile);
   const [activeView, setActiveView] = useState<ViewId>('backlog');
+  const chatUser = useMemo(
+    () => firebaseUser ? { uid: firebaseUser.uid, nome: profile?.nome?.trim() || firebaseUser.email || firebaseUser.uid } : null,
+    [firebaseUser?.uid, firebaseUser?.email, profile?.nome],
+  );
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [strategicNote, setStrategicNote] = useState('');
   const [noteSaving, setNoteSaving] = useState(false);
@@ -297,7 +306,6 @@ function AppContent() {
           newInvites.length === 1
             ? `${first.ownerNome} convidou você para "${first.event.titulo}".`
             : message,
-        icon: '/favicon.svg',
         tag: newInvites.length === 1 ? `agenda-${first.ownerUid}-${first.eventId}` : 'agenda-new-invites',
       });
       notification.onclick = () => {
@@ -1194,7 +1202,7 @@ function AppContent() {
     setFocusPrioridadeId(null);
   }, []);
 
-  if (!isAuthenticated) return <UserLogin />;
+  if (authLoading || !isAuthenticated) return <UserLogin />;
 
   return (
     <div className="flex h-screen min-h-dvh bg-slate-950 overflow-hidden text-slate-100">
@@ -1271,6 +1279,7 @@ function AppContent() {
         onWorkspaceShortcutClick={handleWorkspaceShortcutClick}
         externalWorkspaceLinks={profile?.externalWorkspaceLinks}
         onOpenWorkspaceExternalLink={handleOpenWorkspaceExternalLink}
+        chatCurrentUser={chatUser}
       />
 
       <main className="flex-1 flex flex-col overflow-hidden relative min-h-0">
@@ -1350,7 +1359,12 @@ function AppContent() {
           </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto overflow-x-hidden min-h-0 p-3 sm:p-4 md:p-6">
+        <React.Suspense fallback={
+          <div className="flex-1 flex items-center justify-center bg-slate-950">
+            <div className="w-8 h-8 border-2 border-slate-700 border-t-blue-500 rounded-full animate-spin" />
+          </div>
+        }>
+        <div className={activeView === 'chat' ? 'flex-1 min-h-0 flex flex-col overflow-hidden' : 'flex-1 overflow-y-auto overflow-x-hidden min-h-0 p-3 sm:p-4 md:p-6'}>
           {activeView === 'quadro' && (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-4 sm:mb-6">
               {[
@@ -1483,6 +1497,12 @@ function AppContent() {
               onToggleSystemNotifications={toggleSystemNotifications}
               onRespondEventInvite={agenda.respondEventInvite}
             />
+          ) : activeView === 'chat' ? (
+              <TeamChatScreen
+                currentUser={chatUser}
+                availableUsers={agenda.availableUsers}
+                systemNotificationsEnabled={systemNotificationsEnabled}
+              />
           ) : activeView === 'ia' ? (
             <div className="pb-8 h-full min-h-0 flex flex-col">
               <ChatView canSend={perm.ia.send} />
@@ -1807,6 +1827,7 @@ function AppContent() {
             </div>
           )}
         </div>
+        </React.Suspense>
 
         {selectedPrioridade && (
           <DetalhePrioridadeModal

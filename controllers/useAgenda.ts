@@ -79,22 +79,60 @@ export function useAgenda(uid: string | null, currentUser?: CurrentAgendaUser | 
       setIncomingEventInvitesReady(false);
       return;
     }
+
+    let cancelled = false;
+    let retryTimeout: ReturnType<typeof setTimeout> | null = null;
+    let currentUnsub: (() => void) | null = null;
+
+    const trySubscribe = () => {
+      if (cancelled) return;
+      currentUnsub?.();
+      currentUnsub = null;
+
+      currentUnsub = subscribeIncomingAgendaEventInvites(
+        uid,
+        (invites) => {
+          if (cancelled) return;
+          const prev = incomingEventInvitesRef.current;
+          if (
+            prev.length === invites.length &&
+            prev.every(
+              (a, i) =>
+                a.ownerUid === invites[i].ownerUid &&
+                a.eventId === invites[i].eventId &&
+                a.status === invites[i].status,
+            )
+          ) {
+            setIncomingEventInvitesReady(true);
+            return;
+          }
+          incomingEventInvitesRef.current = invites;
+          setIncomingEventInvites(invites);
+          setIncomingEventInvitesReady(true);
+        },
+        (error) => {
+          if (cancelled) return;
+          console.error('Falha ao sincronizar convites recebidos.', error);
+          setIncomingEventInvitesReady(true);
+          // Reconecta automaticamente se o índice ainda está sendo construído
+          const msg = (error as { message?: string }).message ?? '';
+          if (msg.includes('index') || msg.includes('FAILED_PRECONDITION') || msg.includes('not ready')) {
+            retryTimeout = setTimeout(trySubscribe, 30_000);
+          }
+        },
+      );
+
+      if (!currentUnsub) setIncomingEventInvitesReady(true);
+    };
+
     setIncomingEventInvitesReady(false);
-    const unsub = subscribeIncomingAgendaEventInvites(uid, (invites) => {
-      // Só atualiza estado se realmente mudou para evitar loops de render
-      const prev = incomingEventInvitesRef.current;
-      if (prev.length === invites.length && prev.every((a, i) => a.ownerUid === invites[i].ownerUid && a.eventId === invites[i].eventId && a.status === invites[i].status)) {
-        if (!incomingEventInvitesReady) setIncomingEventInvitesReady(true);
-        return;
-      }
-      incomingEventInvitesRef.current = invites;
-      setIncomingEventInvites(invites);
-      setIncomingEventInvitesReady(true);
-    }, (error) => {
-      console.error('Falha ao sincronizar convites recebidos.', error);
-      setIncomingEventInvitesReady(true); // Marca como pronto mesmo com erro para não travar
-    });
-    return () => unsub?.();
+    trySubscribe();
+
+    return () => {
+      cancelled = true;
+      if (retryTimeout !== null) clearTimeout(retryTimeout);
+      currentUnsub?.();
+    };
   }, [uid]);
 
   useEffect(() => {

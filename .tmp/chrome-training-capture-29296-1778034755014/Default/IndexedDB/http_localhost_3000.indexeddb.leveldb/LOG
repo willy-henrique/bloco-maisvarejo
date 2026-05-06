@@ -1,0 +1,6 @@
+2026/05/05-23:32:36.464 91fc Creating DB C:\willydev\bloco-maisvarejo-1\.tmp\chrome-training-capture-29296-1778034755014\Default\IndexedDB\http_localhost_3000.indexeddb.leveldb since it was missing.
+2026/05/05-23:32:36.472 91fc Reusing MANIFEST C:\willydev\bloco-maisvarejo-1\.tmp\chrome-training-capture-29296-1778034755014\Default\IndexedDB\http_localhost_3000.indexeddb.leveldb/MANIFEST-000001
+2026/05/05-23:32:36.485 7a18 Level-0 table #5: started
+2026/05/05-23:32:36.489 7a18 Level-0 table #5: 1280 bytes OK
+2026/05/05-23:32:36.493 7a18 Delete type=0 #3
+2026/05/05-23:32:36.493 91fc Manual compaction at level-0 from '\x00\x01\x00\x00\x00' @ 72057594037927935 : 1 .. '\x00\x02\x00\x00\x00' @ 0 : 0; will stop at (end)

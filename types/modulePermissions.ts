@@ -79,6 +79,7 @@ export const MODULE_ACTIONS: Record<ViewId, { id: string; label: string }[]> = {
   ],
   workspace: [{ id: 'read', label: 'Visualizar' }],
   agenda: [{ id: 'read', label: 'Visualizar' }],
+  chat: [{ id: 'read', label: 'Visualizar' }],
 };
 
 /** Opções de view no formulário admin (sem Workspace — só administrador). */
