@@ -63,28 +63,27 @@ export function subscribeBoard(
 
 /**
  * Salva itens no Firestore (criptografados). Outros usuários recebem via onSnapshot.
+ * Usa merge:true diretamente — o getDoc anterior criava race condition READ-MODIFY-WRITE
+ * em multi-tab: outro tab podia sobrescrever o campo entre o read e o write.
  */
 export async function saveBoardItems(items: ActionItem[], encryptionKey: CryptoKey): Promise<void> {
   const ref = getBoardRef();
   if (!ref) return;
 
   const encrypted = await EncryptionService.encrypt(items, encryptionKey);
-  const snap = await getDoc(ref);
-  const existing = (snap.data() as BoardData) || {};
-  await setDoc(ref, { ...existing, itemsEncrypted: encrypted }, { merge: true });
+  await setDoc(ref, { itemsEncrypted: encrypted }, { merge: true });
 }
 
 /**
  * Salva notas no Firestore (criptografadas). Outros usuários recebem via onSnapshot.
+ * Usa merge:true diretamente — elimina race condition READ-MODIFY-WRITE.
  */
 export async function saveBoardNotes(notes: string, encryptionKey: CryptoKey): Promise<void> {
   const ref = getBoardRef();
   if (!ref) return;
 
   const encrypted = await EncryptionService.encrypt(notes, encryptionKey);
-  const snap = await getDoc(ref);
-  const existing = (snap.data() as BoardData) || {};
-  await setDoc(ref, { ...existing, notesEncrypted: encrypted }, { merge: true });
+  await setDoc(ref, { notesEncrypted: encrypted }, { merge: true });
 }
 
 /**
@@ -167,20 +166,25 @@ export async function getRitmoBoardOnce(encryptionKey: CryptoKey): Promise<Ritmo
         : [],
       responsaveis: Array.isArray(dec.responsaveis) ? dec.responsaveis : [],
       empresas: Array.isArray(dec.empresas) ? dec.empresas : [],
+      _tombstones: dec._tombstones && typeof dec._tombstones === 'object' ? dec._tombstones : undefined,
     };
   } catch {
     return null;
   }
 }
 
-/** Salva o board Ritmo de Gestão no Firestore. */
+/**
+ * Salva o board Ritmo de Gestão no Firestore.
+ * Usa merge:true diretamente — o getDoc anterior criava race condition READ-MODIFY-WRITE:
+ * dois tabs simultâneos podiam ler o estado antigo (com item deletado) e sobrescrever
+ * o write de deleção do outro tab, fazendo o item ressurgir no Firestore.
+ * merge:true preserva os outros campos (itemsEncrypted, notesEncrypted) sem necessidade de read.
+ */
 export async function saveRitmoBoard(board: RitmoGestaoBoard, encryptionKey: CryptoKey): Promise<void> {
   const ref = getBoardRef();
   if (!ref) return;
   const encrypted = await EncryptionService.encrypt(board, encryptionKey);
-  const snap = await getDoc(ref);
-  const existing = (snap.data() as BoardData) || {};
-  await setDoc(ref, { ...existing, ritmoEncrypted: encrypted }, { merge: true });
+  await setDoc(ref, { ritmoEncrypted: encrypted }, { merge: true });
 }
 
 /** Inscreve em atualizações do board Ritmo (ritmoEncrypted). Chama onRitmo com board ou null. */
@@ -214,6 +218,7 @@ export function subscribeRitmoBoard(
             : [],
           responsaveis: Array.isArray(board.responsaveis) ? board.responsaveis : [],
           empresas: Array.isArray(board.empresas) ? board.empresas : [],
+          _tombstones: board._tombstones && typeof board._tombstones === 'object' ? board._tombstones : undefined,
         });
     } catch {
       // chave diferente

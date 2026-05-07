@@ -5,11 +5,13 @@ import { useChat, type ChatUser } from '../../controllers/useChat';
 interface TeamChatScreenProps {
   currentUser: ChatUser | null;
   availableUsers: TeamChatUser[];
+  onlineUids: Set<string>;
 }
 
 export const TeamChatScreen = React.memo(function TeamChatScreen({
   currentUser,
   availableUsers,
+  onlineUids,
 }: TeamChatScreenProps) {
   const chat = useChat(currentUser);
 
@@ -25,6 +27,7 @@ export const TeamChatScreen = React.memo(function TeamChatScreen({
       loadingMsgs={chat.loadingMsgs}
       sending={chat.sending}
       error={chat.error}
+      onlineUids={onlineUids}
       onOpenConversation={chat.openConversation}
       onSwitchConversation={chat.switchToConversation}
       onCloseConversation={chat.closeConversation}

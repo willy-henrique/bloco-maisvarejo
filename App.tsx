@@ -26,6 +26,7 @@ import {
   isConversationVisibleForUser,
   subscribeMyConversations,
 } from './services/chatService';
+import { usePresence } from './controllers/useChat';
 import { isDeveloperEmail } from './config/developer';
 import { subscribeAppSettings, getDefaultAppSettings } from './services/appSettings';
 import type { UserProfile } from './types/user';
@@ -155,6 +156,7 @@ function AppContent() {
     () => firebaseUser ? { uid: firebaseUser.uid, nome: profile?.nome?.trim() || firebaseUser.email || firebaseUser.uid } : null,
     [firebaseUser?.uid, firebaseUser?.email, profile?.nome],
   );
+  const onlineUids = usePresence(isAuthenticated ? chatUser : null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [strategicNote, setStrategicNote] = useState('');
   const [noteSaving, setNoteSaving] = useState(false);
@@ -341,8 +343,11 @@ function AppContent() {
       return;
     }
 
+    // Adia a abertura do listener de chat para não concorrer com carregamento inicial
+    let unsub: (() => void) | undefined;
+    const timer = setTimeout(() => {
     const uid = chatUser.uid;
-    const unsub = subscribeMyConversations(uid, (conversations) => {
+    unsub = subscribeMyConversations(uid, (conversations) => {
       const previous = seenChatMessageAtByConversation.current;
       const nextSeen = new Map<string, number>();
       const incoming = conversations
@@ -390,8 +395,12 @@ function AppContent() {
         () => setActiveView('chat'),
       );
     });
+    }, 1500); // aguarda 1.5s para não competir com carregamento inicial
 
-    return () => unsub?.();
+    return () => {
+      clearTimeout(timer);
+      unsub?.();
+    };
   }, [isAuthenticated, chatUser, dispatchSystemNotification]);
 
   useEffect(() => {
@@ -509,7 +518,9 @@ function AppContent() {
       return;
     }
     let cancelled = false;
-    (async () => {
+    // Adia o fetch de usuários para depois da UI principal carregar (não bloqueia o primeiro render)
+    const idle = typeof requestIdleCallback !== 'undefined' ? requestIdleCallback : (cb: () => void) => setTimeout(cb, 2500);
+    const handle = idle(async () => {
       try {
         const all = await listAllUsers();
         if (!cancelled) {
@@ -520,9 +531,10 @@ function AppContent() {
       } catch {
         if (!cancelled) setPerfisCadastroUsuarios([]);
       }
-    })();
+    });
     return () => {
       cancelled = true;
+      if (typeof cancelIdleCallback !== 'undefined' && typeof handle === 'number') cancelIdleCallback(handle);
     };
   }, [isAuthenticated, encryptionKey]);
 
@@ -1786,6 +1798,7 @@ function AppContent() {
               <TeamChatScreen
                 currentUser={chatUser}
                 availableUsers={agenda.availableUsers}
+                onlineUids={onlineUids}
               />
           ) : activeView === 'ia' ? (
             <div className="pb-8 h-full min-h-0 flex flex-col">

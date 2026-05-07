@@ -1,9 +1,20 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback, type KeyboardEvent } from 'react';
-import { Send, ChevronLeft, Search, Trash2, MessageSquare, Plus, X, ArrowLeft, Pencil, Check } from 'lucide-react';
+
+/** Retorna Date.now() e re-renderiza o componente a cada `intervalMs`. */
+function useNow(intervalMs = 5_000): number {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), intervalMs);
+    return () => clearInterval(id);
+  }, [intervalMs]);
+  return now;
+}
+import { Send, ChevronLeft, Search, Trash2, MessageSquare, Plus, X, ArrowLeft, Pencil, Check, Link2 } from 'lucide-react';
 import {
   DELETED_MESSAGE_TEXT,
   DELETE_FOR_EVERYONE_WINDOW_MS,
   canDeletePrivateMessageForEveryone,
+  canDeleteMessage,
   getConversationPreviewForUser,
   isConversationVisibleForUser,
   type ConversationMeta,
@@ -31,6 +42,7 @@ interface TeamChatViewProps {
   loadingMsgs: boolean;
   sending: boolean;
   error: string | null;
+  onlineUids?: Set<string>;
   onOpenConversation: (user: TeamChatUser) => Promise<void>;
   onSwitchConversation: (chatId: string, otherUid: string) => void;
   onCloseConversation: () => void;
@@ -79,13 +91,40 @@ function avatarBg(uid: string) {
   return COLORS[Math.abs(h) % COLORS.length];
 }
 
-const Av = React.memo(function Av({ uid, nome, size = 34 }: { uid: string; nome: string; size?: number }) {
+const Av = React.memo(function Av({
+  uid,
+  nome,
+  size = 34,
+  isOnline = false,
+}: {
+  uid: string;
+  nome: string;
+  size?: number;
+  isOnline?: boolean;
+}) {
+  const dotSize = Math.max(8, Math.round(size * 0.28));
   return (
-    <div
-      style={{ width: size, height: size, background: avatarBg(uid), fontSize: size * 0.38, flexShrink: 0 }}
-      className="rounded-full flex items-center justify-center font-semibold text-white select-none"
-    >
-      {initials(nome)}
+    <div className="relative shrink-0" style={{ width: size, height: size }}>
+      <div
+        style={{ width: size, height: size, background: avatarBg(uid), fontSize: size * 0.38 }}
+        className="rounded-full flex items-center justify-center font-semibold text-white select-none"
+      >
+        {initials(nome)}
+      </div>
+      {isOnline && (
+        <span
+          style={{
+            width: dotSize,
+            height: dotSize,
+            background: '#22c55e',
+            border: '2px solid #071321',
+            borderRadius: '50%',
+            position: 'absolute',
+            bottom: 0,
+            right: 0,
+          }}
+        />
+      )}
     </div>
   );
 });
@@ -94,40 +133,37 @@ const DeleteMessageModal = React.memo(function DeleteMessageModal({
   message,
   currentUid,
   deletingScope,
+  now,
   onClose,
   onDelete,
 }: {
   message: PrivateChatMessage | null;
   currentUid: string;
   deletingScope: DeletePrivateMessageScope | null;
+  now: number;
   onClose: () => void;
   onDelete: (scope: DeletePrivateMessageScope) => void;
 }) {
   const isOpen = Boolean(message);
   const isOwn = message?.senderUid === currentUid;
-  const canDeleteEveryone = Boolean(message && isOwn && canDeletePrivateMessageForEveryone(message));
-  const expired = Boolean(message && isOwn && !message.deletedForEveryone && !canDeleteEveryone);
+  const withinWindow = Boolean(message && canDeleteMessage(message, now));
+  const canDeleteEveryone = Boolean(message && isOwn && canDeletePrivateMessageForEveryone(message, now));
   const minutes = Math.round(DELETE_FOR_EVERYONE_WINDOW_MS / 60000);
   const busy = deletingScope !== null;
 
   return (
     <Modal isOpen={isOpen} onClose={busy ? () => {} : onClose} title="Apagar mensagem" maxWidth="sm">
       <div className="space-y-4">
-        <p className="text-sm leading-relaxed text-slate-200">
-          {canDeleteEveryone
-            ? 'Escolha como deseja apagar esta mensagem.'
-            : 'Esta mensagem será removida apenas da sua conversa.'}
-        </p>
-
-        {expired && (
-          <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs leading-relaxed text-amber-100">
-            O prazo de {minutes} minutos para apagar para todos acabou. Agora só é possível apagar para você.
+        {!withinWindow ? (
+          // Expirado — não permite nenhuma deleção
+          <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm leading-relaxed text-red-200">
+            Não é possível apagar esta mensagem. O prazo de {minutes} minutos já expirou.
           </p>
-        )}
-
-        {message?.deletedForEveryone && (
-          <p className="rounded-lg border border-slate-700 bg-slate-800/70 px-3 py-2 text-xs leading-relaxed text-slate-300">
-            Esta mensagem já foi apagada para todos. Você ainda pode remover o aviso da sua conversa.
+        ) : (
+          <p className="text-sm leading-relaxed text-slate-200">
+            {canDeleteEveryone
+              ? 'Escolha como deseja apagar esta mensagem.'
+              : 'Esta mensagem será removida apenas da sua conversa.'}
           </p>
         )}
 
@@ -138,17 +174,19 @@ const DeleteMessageModal = React.memo(function DeleteMessageModal({
             disabled={busy}
             className="min-h-[40px] rounded-lg border border-slate-700 px-4 text-sm font-medium text-slate-200 transition-colors hover:bg-slate-800 disabled:opacity-50"
           >
-            Cancelar
+            {withinWindow ? 'Cancelar' : 'Fechar'}
           </button>
-          <button
-            type="button"
-            onClick={() => onDelete('me')}
-            disabled={busy}
-            className="min-h-[40px] rounded-lg bg-slate-700 px-4 text-sm font-semibold text-white transition-colors hover:bg-slate-600 disabled:opacity-50"
-          >
-            {deletingScope === 'me' ? 'Apagando...' : 'Apagar para mim'}
-          </button>
-          {canDeleteEveryone && (
+          {withinWindow && (
+            <button
+              type="button"
+              onClick={() => onDelete('me')}
+              disabled={busy}
+              className="min-h-[40px] rounded-lg bg-slate-700 px-4 text-sm font-semibold text-white transition-colors hover:bg-slate-600 disabled:opacity-50"
+            >
+              {deletingScope === 'me' ? 'Apagando...' : 'Apagar para mim'}
+            </button>
+          )}
+          {withinWindow && canDeleteEveryone && (
             <button
               type="button"
               onClick={() => onDelete('everyone')}
@@ -304,6 +342,7 @@ const Sidebar = React.memo(function Sidebar({
   availableUsers,
   conversations,
   activeChatId,
+  onlineUids,
   onSelectConv,
   onNewChat,
 }: {
@@ -311,6 +350,7 @@ const Sidebar = React.memo(function Sidebar({
   availableUsers: TeamChatUser[];
   conversations: ConversationMeta[];
   activeChatId: string | null;
+  onlineUids: Set<string>;
   onSelectConv: (conv: ConversationMeta, otherUser: TeamChatUser) => void;
   onNewChat: () => void;
 }) {
@@ -389,7 +429,7 @@ const Sidebar = React.memo(function Sidebar({
                 {active && (
                   <span className="absolute left-0 top-2 bottom-2 w-[3px] rounded-r-full" style={{ background: '#3b82f6' }} />
                 )}
-                <Av uid={otherUser.uid} nome={otherUser.nome} size={36} />
+                <Av uid={otherUser.uid} nome={otherUser.nome} size={36} isOnline={onlineUids.has(otherUser.uid)} />
                 <div className="flex-1 min-w-0">
                   <div className="flex justify-between items-baseline gap-1">
                     <span
@@ -429,9 +469,34 @@ const Sidebar = React.memo(function Sidebar({
 
 // ─── Chat Panel ───────────────────────────────────────────────────────────────
 
+// ─── helpers de renderização ──────────────────────────────────────────────────
+
+const URL_REGEX = /(https?:\/\/[^\s]+)/g;
+
+function renderTextWithLinks(texto: string) {
+  const parts = texto.split(URL_REGEX);
+  return parts.map((part, i) =>
+    URL_REGEX.test(part) ? (
+      <a
+        key={i}
+        href={part}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="underline break-all"
+        style={{ color: '#93c5fd' }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {part}
+      </a>
+    ) : (
+      <React.Fragment key={i}>{part}</React.Fragment>
+    )
+  );
+}
+
 const ChatPanel = React.memo(function ChatPanel({
   currentUid, activeChatId, otherUser, messages, loadingMsgs,
-  sending, error, onSend, onEditMessage, onDeleteMessage, onClearConversation, onBack, showBack,
+  sending, error, onlineUids, onSend, onEditMessage, onDeleteMessage, onClearConversation, onBack, showBack,
 }: {
   currentUid: string;
   activeChatId: string | null;
@@ -440,6 +505,7 @@ const ChatPanel = React.memo(function ChatPanel({
   loadingMsgs: boolean;
   sending: boolean;
   error: string | null;
+  onlineUids: Set<string>;
   onSend: (t: string) => Promise<void>;
   onEditMessage: (id: string, text: string) => Promise<void>;
   onDeleteMessage: (message: PrivateChatMessage, scope: DeletePrivateMessageScope) => Promise<void>;
@@ -447,8 +513,13 @@ const ChatPanel = React.memo(function ChatPanel({
   onBack: () => void;
   showBack: boolean;
 }) {
+  const now = useNow(5_000); // atualiza a cada 5 s para sumir o botão na hora certa
   const [text, setText] = useState('');
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [linkOpen, setLinkOpen] = useState(false);
+  const [linkUrl, setLinkUrl] = useState('');
+  const [linkTitle, setLinkTitle] = useState('');
+  const linkUrlRef = useRef<HTMLInputElement>(null);
   const [deleteTarget, setDeleteTarget] = useState<PrivateChatMessage | null>(null);
   const [deletingScope, setDeletingScope] = useState<DeletePrivateMessageScope | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -515,6 +586,22 @@ const ChatPanel = React.memo(function ChatPanel({
     }
   }, [onClearConversation]);
 
+  const handleSendLink = useCallback(async (e: React.FormEvent) => {
+    e.preventDefault();
+    const url = linkUrl.trim();
+    if (!url) return;
+    const formatted = linkTitle.trim() ? `${linkTitle.trim()}\n${url}` : url;
+    setLinkOpen(false);
+    setLinkUrl('');
+    setLinkTitle('');
+    await onSend(formatted);
+    setTimeout(() => listRef.current?.scrollTo({ top: 9999999 }), 80);
+  }, [linkUrl, linkTitle, onSend]);
+
+  useEffect(() => {
+    if (linkOpen) setTimeout(() => linkUrlRef.current?.focus(), 50);
+  }, [linkOpen]);
+
   const startEdit = useCallback((msg: PrivateChatMessage) => {
     setEditingId(msg.id);
     setEditingText(msg.texto);
@@ -575,11 +662,19 @@ const ChatPanel = React.memo(function ChatPanel({
             <ChevronLeft size={18} />
           </button>
         )}
-        <Av uid={otherUser.uid} nome={otherUser.nome} size={32} />
+        <Av uid={otherUser.uid} nome={otherUser.nome} size={32} isOnline={onlineUids.has(otherUser.uid)} />
         <div className="min-w-0 flex-1">
           <p className="text-[13px] font-semibold" style={{ color: '#f8fafc' }}>{otherUser.nome}</p>
-          {otherUser.email && (
-            <p className="text-[11px] truncate" style={{ color: '#9fb6d8' }}>{otherUser.email}</p>
+          {onlineUids.has(otherUser.uid) ? (
+            <p className="text-[11px] flex items-center gap-1" style={{ color: '#22c55e' }}>
+              <span className="inline-block w-1.5 h-1.5 rounded-full" style={{ background: '#22c55e' }} />
+              Online
+            </p>
+          ) : (
+            <p className="text-[11px] flex items-center gap-1" style={{ color: '#64748b' }}>
+              <span className="inline-block w-1.5 h-1.5 rounded-full" style={{ background: '#64748b' }} />
+              Offline
+            </p>
           )}
         </div>
         <button
@@ -651,7 +746,7 @@ const ChatPanel = React.memo(function ChatPanel({
                     )}
 
                     <div className={`flex items-end gap-1 max-w-[62%] ${isOwn ? 'flex-row-reverse' : 'flex-row'}`}>
-                      {!isEditing && (
+                      {!isEditing && canDeleteMessage(msg, now) && (
                         <div className="flex items-center gap-1 mb-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 transition-opacity">
                           {isOwn && !isDeletedForEveryone && (
                             <button
@@ -733,7 +828,7 @@ const ChatPanel = React.memo(function ChatPanel({
 	                              opacity: isDel ? 0.3 : 1,
 	                            }}
 	                          >
-	                            {isDeletedForEveryone ? DELETED_MESSAGE_TEXT : msg.texto}
+	                            {isDeletedForEveryone ? DELETED_MESSAGE_TEXT : renderTextWithLinks(msg.texto)}
 	                          </div>
                         )}
                         {showTime && (
@@ -754,7 +849,72 @@ const ChatPanel = React.memo(function ChatPanel({
       {/* Input */}
       <div className="px-4 py-3 shrink-0 border-t" style={{ borderColor: '#24364d', background: '#0d1b2a' }}>
         {error && <p className="text-[11px] mb-2" style={{ color: '#ef4444' }}>{error}</p>}
+
+        {/* Mini-modal de link */}
+        {linkOpen && (
+          <div className="mb-2 rounded-xl border p-3" style={{ background: '#12243a', borderColor: '#3b82f6' }}>
+            <form onSubmit={(e) => void handleSendLink(e)} className="space-y-2">
+              <p className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: '#93c5fd' }}>Anexar link</p>
+              <input
+                ref={linkUrlRef}
+                type="url"
+                value={linkUrl}
+                onChange={(e) => setLinkUrl(e.target.value)}
+                required
+                placeholder="https://docs.google.com/…"
+                className="w-full rounded-lg px-3 py-2 text-[13px] outline-none border placeholder:text-slate-500"
+                style={{ background: '#0d1b2a', borderColor: '#244768', color: '#f8fafc' }}
+                onFocus={(e) => (e.currentTarget.style.borderColor = '#3b82f6')}
+                onBlur={(e) => (e.currentTarget.style.borderColor = '#244768')}
+              />
+              <input
+                type="text"
+                value={linkTitle}
+                onChange={(e) => setLinkTitle(e.target.value)}
+                placeholder="Título (opcional) — ex: Proposta 2026"
+                className="w-full rounded-lg px-3 py-2 text-[13px] outline-none border placeholder:text-slate-500"
+                style={{ background: '#0d1b2a', borderColor: '#244768', color: '#f8fafc' }}
+                onFocus={(e) => (e.currentTarget.style.borderColor = '#3b82f6')}
+                onBlur={(e) => (e.currentTarget.style.borderColor = '#244768')}
+              />
+              <div className="flex justify-end gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => { setLinkOpen(false); setLinkUrl(''); setLinkTitle(''); }}
+                  className="px-3 py-1.5 rounded-lg text-[12px] font-medium border"
+                  style={{ color: '#94a3b8', borderColor: '#334155', background: '#0b1728' }}
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={!linkUrl.trim() || sending}
+                  className="px-4 py-1.5 rounded-lg text-[12px] font-semibold disabled:opacity-40"
+                  style={{ background: '#2563eb', color: '#fff' }}
+                >
+                  Enviar link
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
+
         <div className="flex items-end gap-2">
+          {/* Botão de link */}
+          <button
+            type="button"
+            onClick={() => setLinkOpen((v) => !v)}
+            title="Anexar link de documento"
+            className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 border transition-all"
+            style={{
+              background: linkOpen ? '#1e3a5f' : '#12243a',
+              borderColor: linkOpen ? '#3b82f6' : '#24364d',
+              color: linkOpen ? '#93c5fd' : '#9fb6d8',
+            }}
+          >
+            <Link2 size={15} />
+          </button>
+
           <div
             className="flex-1 rounded-xl px-3 py-2 border transition-colors"
             style={{ background: '#12243a', borderColor: '#24364d' }}
@@ -788,6 +948,7 @@ const ChatPanel = React.memo(function ChatPanel({
       message={deleteTarget}
       currentUid={currentUid}
       deletingScope={deletingScope}
+      now={now}
       onClose={() => setDeleteTarget(null)}
       onDelete={(scope) => void doDelete(scope)}
     />
@@ -806,11 +967,12 @@ const ChatPanel = React.memo(function ChatPanel({
 
 export const TeamChatView: React.FC<TeamChatViewProps> = ({
   currentUid, availableUsers, conversations, activeChatId, activeOtherUid,
-  messages, loadingConvs, loadingMsgs, sending, error,
+  messages, loadingConvs, loadingMsgs, sending, error, onlineUids,
   onOpenConversation, onSwitchConversation, onCloseConversation, onSend, onEditMessage, onDeleteMessage, onClearConversation, onMarkRead,
 }) => {
   const [mobileChat, setMobileChat] = useState(false);
   const [showNewChat, setShowNewChat] = useState(false);
+  const resolvedOnlineUids = onlineUids ?? new Set<string>();
 
   const otherUser = useMemo(() => {
     if (!activeOtherUid) return null;
@@ -871,6 +1033,7 @@ export const TeamChatView: React.FC<TeamChatViewProps> = ({
             availableUsers={availableUsers}
             conversations={conversations}
             activeChatId={activeChatId}
+            onlineUids={resolvedOnlineUids}
             onSelectConv={(conv, user) => void handleSelectConv(conv, user)}
             onNewChat={() => setShowNewChat(true)}
           />
@@ -887,6 +1050,7 @@ export const TeamChatView: React.FC<TeamChatViewProps> = ({
           loadingMsgs={loadingMsgs}
           sending={sending}
           error={error}
+          onlineUids={resolvedOnlineUids}
           onSend={onSend}
           onEditMessage={onEditMessage}
           onDeleteMessage={onDeleteMessage}

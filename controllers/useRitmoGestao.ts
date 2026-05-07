@@ -17,6 +17,7 @@ import type {
   Tarefa,
   Responsavel,
   RitmoGestaoBoard,
+  RitmoBoardTombstones,
   StatusPrioridade,
   StatusPlano,
   StatusTarefa,
@@ -33,7 +34,92 @@ import {
 import { apiAddObserver, apiGetBlockContext, apiRemoveObserver } from '../services/ritmoCollabApi';
 
 const MAX_PRIORIDADES_ATIVAS = 3;
-const PENDING_DELETION_GUARD_MS = 15_000;
+/**
+ * Guard de deleção: tempo máximo que um item pode estar "pendente" de confirmação no Firestore.
+ * Aumentado de 15s para 120s para cobrir redes lentas e concorrência multi-tab.
+ * O guard é renovado a cada snapshot recebido enquanto o Firestore ainda contém o item.
+ * Em paralelo, a deleção é confirmada imediatamente após o write bem-sucedido (não depende só do timer).
+ */
+const PENDING_DELETION_GUARD_MS = 120_000;
+const PENDING_DELETIONS_STORAGE_KEY = '@Estrategico:PendingDeletions';
+
+/** Tombstones expiram após 30 dias — tempo suficiente para todos os usuários sincronizarem. */
+const TOMBSTONE_TTL_MS = 30 * 24 * 60 * 60 * 1_000;
+
+type TombstoneBucket = keyof Required<RitmoBoardTombstones>;
+
+/**
+ * Combina tombstones de várias fontes (local, remoto e pending), mantendo o timestamp
+ * mais novo. Usar o mais antigo fazia tombstones renovados expirarem cedo demais.
+ */
+function mergeTombstones(
+  ...sources: Array<RitmoBoardTombstones | undefined>
+): RitmoBoardTombstones | undefined {
+  if (sources.every((source) => !source)) return undefined;
+  const buckets: TombstoneBucket[] = ['backlog', 'prioridades', 'planos', 'tarefas'];
+  const result: RitmoBoardTombstones = {};
+  const now = Date.now();
+  for (const bucket of buckets) {
+    const ids = new Set<string>();
+    for (const source of sources) {
+      Object.keys(source?.[bucket] ?? {}).forEach((id) => ids.add(id));
+    }
+    if (!ids.size) continue;
+    const merged: Record<string, number> = {};
+    for (const id of ids) {
+      const liveTimestamps = sources
+        .map((source) => source?.[bucket]?.[id])
+        .filter((ts): ts is number => typeof ts === 'number' && Number.isFinite(ts) && now - ts < TOMBSTONE_TTL_MS);
+      if (liveTimestamps.length > 0) merged[id] = Math.max(...liveTimestamps);
+    }
+    if (Object.keys(merged).length) result[bucket] = merged;
+  }
+  return Object.keys(result).length ? result : undefined;
+}
+
+function tombstonesFromPendingSnapshot(
+  pending: PendingDeletionSnapshot,
+  at = Date.now(),
+): RitmoBoardTombstones | undefined {
+  const buckets: TombstoneBucket[] = ['backlog', 'prioridades', 'planos', 'tarefas'];
+  const result: RitmoBoardTombstones = {};
+  for (const bucket of buckets) {
+    if (pending[bucket].size === 0) continue;
+    result[bucket] = Object.fromEntries(Array.from(pending[bucket]).map((id) => [id, at]));
+  }
+  return Object.keys(result).length ? result : undefined;
+}
+
+/**
+ * Filtra do board todos os itens cujos IDs constam nos tombstones, respeitando cascata:
+ * prioridade deletada → planos dela → tarefas deles.
+ */
+function applyTombstones(
+  board: RitmoGestaoBoard,
+  ts: RitmoBoardTombstones | undefined,
+): RitmoGestaoBoard {
+  if (!ts) return board;
+  const planoIds = new Set(Object.keys(ts.planos ?? {}));
+  const tarefaIds = new Set(Object.keys(ts.tarefas ?? {}));
+  const prioIds = new Set(Object.keys(ts.prioridades ?? {}));
+  const backlogIds = new Set(Object.keys(ts.backlog ?? {}));
+  if (!planoIds.size && !tarefaIds.size && !prioIds.size && !backlogIds.size) return board;
+  board.planos.forEach((plano) => {
+    if (prioIds.has(plano.prioridade_id)) planoIds.add(plano.id);
+  });
+  return {
+    ...board,
+    _tombstones: ts,
+    backlog: board.backlog.filter((b) => !backlogIds.has(b.id)),
+    prioridades: board.prioridades.filter((p) => !prioIds.has(p.id)),
+    planos: board.planos.filter(
+      (p) => !planoIds.has(p.id) && !prioIds.has(p.prioridade_id),
+    ),
+    tarefas: board.tarefas.filter(
+      (t) => !tarefaIds.has(t.id) && !planoIds.has(t.plano_id),
+    ),
+  };
+}
 
 type PendingDeletionBucket = 'backlog' | 'prioridades' | 'planos' | 'tarefas';
 type PendingDeletionRegistry = Record<PendingDeletionBucket, Map<string, number>>;
@@ -46,6 +132,47 @@ function createPendingDeletionRegistry(): PendingDeletionRegistry {
     planos: new Map(),
     tarefas: new Map(),
   };
+}
+
+/**
+ * Persiste o registry de deleções pendentes no localStorage (dados não-sensíveis: apenas UUIDs).
+ * Garante que deleções sobrevivam a reloads de página — sem isso, ao reabrir o app
+ * o Firestore (que ainda não confirmou a deleção) traz o item de volta.
+ */
+function savePendingDeletionsToStorage(registry: PendingDeletionRegistry): void {
+  try {
+    const data: Record<string, [string, number][]> = {};
+    (Object.keys(registry) as PendingDeletionBucket[]).forEach((bucket) => {
+      data[bucket] = Array.from(registry[bucket].entries());
+    });
+    localStorage.setItem(PENDING_DELETIONS_STORAGE_KEY, JSON.stringify(data));
+  } catch {
+    // localStorage indisponível (modo privado com cota cheia etc.) — não é fatal
+  }
+}
+
+/**
+ * Restaura o registry de deleções pendentes do localStorage.
+ * Chamado no mount do hook para que nova sessão saiba quais deleções ainda não foram confirmadas.
+ */
+function loadPendingDeletionsFromStorage(): PendingDeletionRegistry {
+  const registry = createPendingDeletionRegistry();
+  try {
+    const raw = localStorage.getItem(PENDING_DELETIONS_STORAGE_KEY);
+    if (!raw) return registry;
+    const data = JSON.parse(raw) as Record<string, [string, number][]>;
+    (Object.keys(registry) as PendingDeletionBucket[]).forEach((bucket) => {
+      if (!Array.isArray(data[bucket])) return;
+      for (const [id, ts] of data[bucket]) {
+        if (typeof id === 'string' && id && typeof ts === 'number') {
+          registry[bucket].set(id, ts);
+        }
+      }
+    });
+  } catch {
+    // JSON inválido ou localStorage indisponível — começa com registry vazio
+  }
+  return registry;
 }
 
 function emptyPendingDeletionSnapshot(): PendingDeletionSnapshot {
@@ -110,27 +237,32 @@ function filterBoardPendingDeletions(
   board: RitmoGestaoBoard,
   pending: PendingDeletionSnapshot = EMPTY_PENDING_DELETIONS,
 ): RitmoGestaoBoard {
+  const tombstoneFiltered = applyTombstones(board, mergeTombstones(board._tombstones));
   if (
     pending.backlog.size === 0 &&
     pending.prioridades.size === 0 &&
     pending.planos.size === 0 &&
     pending.tarefas.size === 0
   ) {
-    return board;
+    return tombstoneFiltered;
   }
+  const pendingPlanos = new Set(pending.planos);
+  tombstoneFiltered.planos.forEach((plano) => {
+    if (pending.prioridades.has(plano.prioridade_id)) pendingPlanos.add(plano.id);
+  });
   return {
-    ...board,
-    backlog: board.backlog.filter((item) => !pending.backlog.has(item.id)),
-    prioridades: board.prioridades.filter((item) => !pending.prioridades.has(item.id)),
-    planos: board.planos.filter(
+    ...tombstoneFiltered,
+    backlog: tombstoneFiltered.backlog.filter((item) => !pending.backlog.has(item.id)),
+    prioridades: tombstoneFiltered.prioridades.filter((item) => !pending.prioridades.has(item.id)),
+    planos: tombstoneFiltered.planos.filter(
       (item) =>
-        !pending.planos.has(item.id) &&
+        !pendingPlanos.has(item.id) &&
         !pending.prioridades.has(item.prioridade_id),
     ),
-    tarefas: board.tarefas.filter(
+    tarefas: tombstoneFiltered.tarefas.filter(
       (item) =>
         !pending.tarefas.has(item.id) &&
-        !pending.planos.has(item.plano_id),
+        !pendingPlanos.has(item.plano_id),
     ),
   };
 }
@@ -205,6 +337,12 @@ function normalizeBoard(raw: RitmoGestaoBoard | undefined | null): RitmoGestaoBo
         ? raw.responsaveis
         : base.responsaveis,
     empresas: Array.isArray(raw.empresas) ? raw.empresas : [],
+    _tombstones: mergeTombstones(
+      (raw as RitmoGestaoBoard)._tombstones &&
+      typeof (raw as RitmoGestaoBoard)._tombstones === 'object'
+        ? (raw as RitmoGestaoBoard)._tombstones
+        : undefined,
+    ),
   };
 }
 
@@ -268,58 +406,78 @@ function alinharPlanosWhoAoDonoMesclado(
   });
 }
 
-/** Carga inicial: não descartar localStorage quando o Firestore ainda não recebeu a última troca de dono. */
+/**
+ * Carga inicial: mescla ownership/dono do local com estado remoto.
+ * O Firestore é fonte de verdade para EXISTÊNCIA de itens — não incluímos extras
+ * do localStorage que não estejam no remoto, pois eles podem ter sido deletados
+ * por outro usuário. Incluí-los causaria ressurreição: o localStorage do usuário B
+ * ainda tem o item que o usuário A deletou; ao recarregar, o item seria re-enviado
+ * ao Firestore e voltaria para todos.
+ */
 function mergeBoardRemotoComLocal(
   remote: RitmoGestaoBoard,
   local: RitmoGestaoBoard,
   pending: PendingDeletionSnapshot = EMPTY_PENDING_DELETIONS,
 ): RitmoGestaoBoard {
-  const rNorm = filterBoardPendingDeletions(normalizeBoard(remote), pending);
-  const lNorm = filterBoardPendingDeletions(normalizeBoard(local), pending);
+  const mergedTombstones = mergeTombstones(
+    remote._tombstones,
+    local._tombstones,
+    tombstonesFromPendingSnapshot(pending),
+  );
+  const rNormRaw = filterBoardPendingDeletions(normalizeBoard(remote), pending);
+  const rNorm = applyTombstones(rNormRaw, mergedTombstones);
+  const lNorm = applyTombstones(filterBoardPendingDeletions(normalizeBoard(local), pending), mergedTombstones);
   const rP = rNorm.prioridades;
+
+  // Mescla apenas ownership/dono para prioridades que existem no remoto.
+  // NÃO adiciona prioridades que só existem no local — elas podem ter sido
+  // deletadas por outro usuário.
   const mergedPrios = mergePrioridadesPreservandoDonoMaisRecente(rP, lNorm.prioridades);
-  const mergedPrioIds = new Set(mergedPrios.map((p) => p.id));
-  const extraPrios = lNorm.prioridades.filter((p) => !mergedPrioIds.has(p.id));
-  const allPrios = [...mergedPrios, ...extraPrios];
 
-  let mergedPlanos = alinharPlanosWhoAoDonoMesclado(rNorm.planos, mergedPrios, rP);
-  const planoIds = new Set(mergedPlanos.map((pl) => pl.id));
-  const extraPlanos = lNorm.planos.filter((pl) => !planoIds.has(pl.id));
-  mergedPlanos = [...mergedPlanos, ...extraPlanos];
-
-  const tarefaIds = new Set(rNorm.tarefas.map((t) => t.id));
-  const extraTarefas = lNorm.tarefas.filter((t) => !tarefaIds.has(t.id));
-
-  const backlogIds = new Set(rNorm.backlog.map((b) => b.id));
-  const extraBacklog = lNorm.backlog.filter((b) => !backlogIds.has(b.id));
+  // Alinha who_id dos planos ao dono mesclado, mas só para planos que existem no remoto.
+  const mergedPlanos = alinharPlanosWhoAoDonoMesclado(rNorm.planos, mergedPrios, rP);
 
   const mergedEmpresas =
     Array.isArray(rNorm.empresas) && rNorm.empresas.length > 0 ? rNorm.empresas : lNorm.empresas;
 
-  return normalizeBoard({
-    ...rNorm,
-    backlog: [...rNorm.backlog, ...extraBacklog],
-    empresas: mergedEmpresas,
-    prioridades: allPrios,
-    planos: mergedPlanos,
-    tarefas: [...rNorm.tarefas, ...extraTarefas],
-    responsaveis:
-      rNorm.responsaveis.length > 0 ? rNorm.responsaveis : lNorm.responsaveis,
-  });
+  return {
+    ...normalizeBoard({
+      ...rNorm,
+      backlog: rNorm.backlog,
+      empresas: mergedEmpresas,
+      prioridades: mergedPrios,
+      planos: mergedPlanos,
+      tarefas: rNorm.tarefas,
+      responsaveis:
+        rNorm.responsaveis.length > 0 ? rNorm.responsaveis : lNorm.responsaveis,
+    }),
+    _tombstones: mergedTombstones,
+  };
 }
 
 /**
  * Mescla um snapshot remoto recebido no `onSnapshot` com o estado React atual (`prev`).
  * O Firestore é fonte de verdade para existência de itens; o merge local aqui
  * só preserva campos auxiliares mais recentes, como dono/observadores.
+ * Tombstones de ambas as fontes são combinados para garantir que deleções feitas por
+ * qualquer usuário prevaleçam mesmo após re-escritas com estado antigo.
  */
 function mergeRemoteSnapshotIntoPrev(
   remote: RitmoGestaoBoard,
   prev: RitmoGestaoBoard,
   pending: PendingDeletionSnapshot = EMPTY_PENDING_DELETIONS,
 ): RitmoGestaoBoard {
-  const rNorm = filterBoardPendingDeletions(normalizeBoard(remote), pending);
-  const prevNorm = filterBoardPendingDeletions(normalizeBoard(prev), pending);
+  // Combina tombstones: local (prev) + remoto. Garante que uma deleção local
+  // sobreviva se outra sessão regravar o Firestore com estado antigo sem tombstone.
+  const mergedTombstones = mergeTombstones(
+    remote._tombstones,
+    prev._tombstones,
+    tombstonesFromPendingSnapshot(pending),
+  );
+  const rNormRaw = filterBoardPendingDeletions(normalizeBoard(remote), pending);
+  // Aplica tombstones mesclados ao snapshot remoto antes do merge.
+  const rNorm = applyTombstones(rNormRaw, mergedTombstones);
+  const prevNorm = applyTombstones(filterBoardPendingDeletions(normalizeBoard(prev), pending), mergedTombstones);
   const remotePrios = rNorm.prioridades;
   const remotePlanos = rNorm.planos;
   const remoteTarefas = rNorm.tarefas;
@@ -350,16 +508,53 @@ function mergeRemoteSnapshotIntoPrev(
 
   const mergedBacklog = remoteBacklog;
 
-  return normalizeBoard({
-    ...rNorm,
-    backlog: mergedBacklog,
-    empresas:
-      Array.isArray(rNorm.empresas) && rNorm.empresas.length > 0 ? rNorm.empresas : prev.empresas,
-    prioridades: mergedPrios,
-    planos: mergedPlanos,
-    tarefas: mergedTarefas,
-    responsaveis: rNorm.responsaveis.length > 0 ? rNorm.responsaveis : prev.responsaveis,
+  return {
+    ...normalizeBoard({
+      ...rNorm,
+      backlog: mergedBacklog,
+      empresas:
+        Array.isArray(rNorm.empresas) && rNorm.empresas.length > 0 ? rNorm.empresas : prev.empresas,
+      prioridades: mergedPrios,
+      planos: mergedPlanos,
+      tarefas: mergedTarefas,
+      responsaveis: rNorm.responsaveis.length > 0 ? rNorm.responsaveis : prev.responsaveis,
+    }),
+    _tombstones: mergedTombstones,
+  };
+}
+
+function boardNeedsTombstoneReassertion(
+  remoteRaw: RitmoGestaoBoard,
+  merged: RitmoGestaoBoard,
+): boolean {
+  const mergedTombstones = mergeTombstones(merged._tombstones);
+  if (!mergedTombstones) return false;
+
+  const remoteTombstones = mergeTombstones(remoteRaw._tombstones);
+  const buckets: TombstoneBucket[] = ['backlog', 'prioridades', 'planos', 'tarefas'];
+  for (const bucket of buckets) {
+    const mergedBucket = mergedTombstones[bucket] ?? {};
+    const remoteBucket = remoteTombstones?.[bucket] ?? {};
+    for (const [id, ts] of Object.entries(mergedBucket)) {
+      if ((remoteBucket[id] ?? 0) < ts) return true;
+    }
+  }
+
+  const deletedPrioridades = new Set(Object.keys(mergedTombstones.prioridades ?? {}));
+  const deletedPlanos = new Set(Object.keys(mergedTombstones.planos ?? {}));
+  const deletedTarefas = new Set(Object.keys(mergedTombstones.tarefas ?? {}));
+  const deletedBacklog = new Set(Object.keys(mergedTombstones.backlog ?? {}));
+
+  remoteRaw.planos.forEach((plano) => {
+    if (deletedPrioridades.has(plano.prioridade_id)) deletedPlanos.add(plano.id);
   });
+
+  return (
+    remoteRaw.backlog.some((item) => deletedBacklog.has(item.id)) ||
+    remoteRaw.prioridades.some((item) => deletedPrioridades.has(item.id)) ||
+    remoteRaw.planos.some((item) => deletedPlanos.has(item.id)) ||
+    remoteRaw.tarefas.some((item) => deletedTarefas.has(item.id) || deletedPlanos.has(item.plano_id))
+  );
 }
 
 function boardItemCount(b: RitmoGestaoBoard): number {
@@ -450,7 +645,11 @@ export function useRitmoGestao(encryptionKey: CryptoKey | null) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const unsubRef = useRef<(() => void) | null>(null);
-  const pendingDeletionsRef = useRef<PendingDeletionRegistry>(createPendingDeletionRegistry());
+  /**
+   * Inicializado com deleções pendentes salvas no localStorage — garante que
+   * itens deletados antes de um reload não ressurjam se o Firestore ainda os contém.
+   */
+  const pendingDeletionsRef = useRef<PendingDeletionRegistry>(loadPendingDeletionsFromStorage());
   /**
    * Espelho síncrono do `board`. Atualizado a cada commit React via useEffect,
    * para uso estritamente READ-ONLY em handlers que precisem do estado fora de
@@ -493,10 +692,30 @@ export function useRitmoGestao(encryptionKey: CryptoKey | null) {
 
   const persist = useCallback(
     async (key: CryptoKey, data: RitmoGestaoBoard) => {
-      await StorageService.saveRitmoBoard(data, key);
-      if (isFirebaseConfigured) await saveRitmoBoardFirestore(data, key);
+      const sanitized = filterBoardPendingDeletions(
+        normalizeBoard(data),
+        snapshotPendingDeletions(pendingDeletionsRef.current),
+      );
+      await StorageService.saveRitmoBoard(sanitized, key);
+      if (isFirebaseConfigured) await saveRitmoBoardFirestore(sanitized, key);
+
+      // Após write bem-sucedido: confirma imediatamente deleções de itens ausentes do board salvo.
+      // Não aguarda o snapshot do Firestore — elimina a janela onde o guard pode expirar antes
+      // da confirmação e um snapshot com o item ainda presente o ressuscitaria.
+      const boardIds: Record<PendingDeletionBucket, Set<string>> = {
+        backlog: new Set(sanitized.backlog.map((i) => i.id)),
+        prioridades: new Set(sanitized.prioridades.map((i) => i.id)),
+        planos: new Set(sanitized.planos.map((i) => i.id)),
+        tarefas: new Set(sanitized.tarefas.map((i) => i.id)),
+      };
+      (Object.keys(pendingDeletionsRef.current) as PendingDeletionBucket[]).forEach((bucket) => {
+        pendingDeletionsRef.current[bucket].forEach((_, id) => {
+          if (!boardIds[bucket].has(id)) pendingDeletionsRef.current[bucket].delete(id);
+        });
+      });
+      savePendingDeletionsToStorage(pendingDeletionsRef.current);
     },
-    []
+    [] // pendingDeletionsRef é um ref estável (useRef) — seguro omitir de deps
   );
 
   /**
@@ -504,10 +723,9 @@ export function useRitmoGestao(encryptionKey: CryptoKey | null) {
    * intermediários são descartados se um novo write chegar antes da fila esvaziar.
    * Idempotente: chamar 2x com a mesma referência apenas atualiza pendingPersistRef.
    *
-   * IMPORTANTE: erros são LOGADOS (não silenciados) para evitar bugs invisíveis
-   * — já tivemos um caso de RangeError em String.fromCharCode(...) que ficou
-   * mascarado por try/catch silencioso, fazendo planos aparecerem na UI mas
-   * nunca serem salvos no Firestore.
+   * Retry automático: falhas no Firestore são retentadas (1x após 3s) para garantir
+   * que deleções cheguem ao servidor mesmo em momentos de instabilidade de rede.
+   * Sem retry, o item permanecia no Firestore e ressurgia quando o guard de 15s expirava.
    */
   const enqueuePersist = useCallback(
     (key: CryptoKey, data: RitmoGestaoBoard) => {
@@ -520,11 +738,20 @@ export function useRitmoGestao(encryptionKey: CryptoKey | null) {
           await persist(key, target);
           lastLocalWriteAtRef.current = Date.now();
         } catch (err) {
-          // Falha de criptografia/serialização/rede: NUNCA silenciar.
-          // Bugs determinísticos (ex.: RangeError em btoa de payload grande)
-          // ficavam invisíveis e faziam o plano sumir só no Firestore.
           if (typeof console !== 'undefined' && console.error) {
-            console.error('[useRitmoGestao] persist falhou:', err);
+            console.error('[useRitmoGestao] persist falhou (tentando novamente em 3s):', err);
+          }
+          // Retry único após 3s: garante que deleções cheguem ao Firestore mesmo em
+          // instabilidade momentânea de rede — sem isso, o item ficava no Firestore
+          // e ressurgia ao expirar o pending guard.
+          await new Promise<void>((resolve) => setTimeout(resolve, 3_000));
+          try {
+            await persist(key, target);
+            lastLocalWriteAtRef.current = Date.now();
+          } catch (retryErr) {
+            if (typeof console !== 'undefined' && console.error) {
+              console.error('[useRitmoGestao] persist falhou no retry — dado pode estar inconsistente:', retryErr);
+            }
           }
         }
         if (pendingPersistRef.current) await run();
@@ -553,10 +780,11 @@ export function useRitmoGestao(encryptionKey: CryptoKey | null) {
         if (remote) {
           const remoteNorm = normalizeBoard(remote);
           acknowledgeRemotePendingDeletions(pendingDeletionsRef.current, remoteNorm);
+          savePendingDeletionsToStorage(pendingDeletionsRef.current);
           const nextPendingDeletes = snapshotPendingDeletions(pendingDeletionsRef.current);
           const remoteVisible = filterBoardPendingDeletions(remoteNorm, nextPendingDeletes);
           data = mergeBoardRemotoComLocal(remoteVisible, localData, nextPendingDeletes);
-          if (boardHasMoreContentThan(data, remoteVisible)) {
+          if (boardHasMoreContentThan(data, remoteVisible) || boardNeedsTombstoneReassertion(remoteNorm, data)) {
             enqueuePersist(encryptionKey, data);
           }
         }
@@ -604,7 +832,10 @@ export function useRitmoGestao(encryptionKey: CryptoKey | null) {
         const pendingDeletes = snapshotPendingDeletions(pendingDeletionsRef.current);
         const local = filterBoardPendingDeletions(normalizeBoard(localRaw), pendingDeletes);
         const remoteNorm = remote ? normalizeBoard(remote) : null;
-        if (remoteNorm) acknowledgeRemotePendingDeletions(pendingDeletionsRef.current, remoteNorm);
+        if (remoteNorm) {
+          acknowledgeRemotePendingDeletions(pendingDeletionsRef.current, remoteNorm);
+          savePendingDeletionsToStorage(pendingDeletionsRef.current);
+        }
         const nextPendingDeletes = snapshotPendingDeletions(pendingDeletionsRef.current);
         const remoteVisible = remoteNorm
           ? filterBoardPendingDeletions(remoteNorm, nextPendingDeletes)
@@ -615,7 +846,12 @@ export function useRitmoGestao(encryptionKey: CryptoKey | null) {
         setBoard((prev) => mergeRemoteSnapshotIntoPrev(serverData, prev, nextPendingDeletes));
         // Reescreve no Firestore se houver dados locais não propagados (ou se nada
         // remoto mas há local). Nunca grava defaultBoard sobre conteúdo existente.
-        if (remoteVisible && boardHasMoreContentThan(serverData, remoteVisible)) {
+        if (
+          remoteNorm &&
+          remoteVisible &&
+          (boardHasMoreContentThan(serverData, remoteVisible) ||
+            boardNeedsTombstoneReassertion(remoteNorm, serverData))
+        ) {
           enqueuePersist(encryptionKey, serverData);
         } else if (!remoteVisible && boardHasAnyContent(local)) {
           enqueuePersist(encryptionKey, local);
@@ -656,9 +892,24 @@ export function useRitmoGestao(encryptionKey: CryptoKey | null) {
           pendingDeletionsRef.current[bucket].set(id, nowMs);
         });
       });
+      // Persiste o estado atualizado do registry (acknowledge pode ter limpado entradas confirmadas).
+      savePendingDeletionsToStorage(pendingDeletionsRef.current);
       const pendingDeletes = snapshotPendingDeletions(pendingDeletionsRef.current);
       const remoteVisible = filterBoardPendingDeletions(raw, pendingDeletes);
-      setBoard((prev) => mergeRemoteSnapshotIntoPrev(remoteVisible, prev, pendingDeletes));
+      setBoard((prev) => {
+        const merged = mergeRemoteSnapshotIntoPrev(remoteVisible, prev, pendingDeletes);
+        // Sincroniza localStorage com o estado remoto para evitar ressurreição:
+        // sem isso, o localStorage do usuário ficaria com itens deletados por outros
+        // usuários e os re-enviaria ao Firestore no próximo reload.
+        StorageService.saveRitmoBoard(merged, encryptionKey).catch(() => {});
+        // Re-persiste no Firestore se um snapshot antigo chegou sem tombstones
+        // ou com itens que os tombstones locais já decretaram deletados.
+        if (boardNeedsTombstoneReassertion(raw, merged)) {
+          const key = encryptionKeyRef.current;
+          if (key) enqueuePersist(key, merged);
+        }
+        return merged;
+      });
     });
     unsubRef.current = unsub ?? null;
 
@@ -718,10 +969,13 @@ export function useRitmoGestao(encryptionKey: CryptoKey | null) {
 
   const deleteBacklog = useCallback(
     (id: string) => {
-      saveBoard((prev) => {
-        markPendingDeletion(pendingDeletionsRef.current, 'backlog', [id]);
-        return { ...prev, backlog: prev.backlog.filter((b) => b.id !== id) };
-      });
+      markPendingDeletion(pendingDeletionsRef.current, 'backlog', [id]);
+      savePendingDeletionsToStorage(pendingDeletionsRef.current);
+      saveBoard((prev) => ({
+        ...prev,
+        backlog: prev.backlog.filter((b) => b.id !== id),
+        _tombstones: mergeTombstones(prev._tombstones, { backlog: { [id]: Date.now() } }),
+      }));
     },
     [saveBoard]
   );
@@ -841,6 +1095,8 @@ export function useRitmoGestao(encryptionKey: CryptoKey | null) {
 
   const deletePrioridade = useCallback(
     (id: string) => {
+      // Marca pending antes do saveBoard para que o snapshot do Firestore que chegar
+      // imediatamente após o write já encontre o guard ativo — evita janela de race.
       saveBoard((prev) => {
         const planoIds = prev.planos
           .filter((p) => p.prioridade_id === id)
@@ -852,11 +1108,23 @@ export function useRitmoGestao(encryptionKey: CryptoKey | null) {
         markPendingDeletion(pendingDeletionsRef.current, 'prioridades', [id]);
         markPendingDeletion(pendingDeletionsRef.current, 'planos', planoIds);
         markPendingDeletion(pendingDeletionsRef.current, 'tarefas', tarefaIds);
+        savePendingDeletionsToStorage(pendingDeletionsRef.current);
+        const now = Date.now();
+        const newTombstones = mergeTombstones(prev._tombstones, {
+          prioridades: { [id]: now },
+          planos: planoIds.length
+            ? Object.fromEntries(planoIds.map((pid) => [pid, now]))
+            : undefined,
+          tarefas: tarefaIds.length
+            ? Object.fromEntries(tarefaIds.map((tid) => [tid, now]))
+            : undefined,
+        });
         return {
           ...prev,
           prioridades: prev.prioridades.filter((p) => p.id !== id),
           planos: prev.planos.filter((p) => p.prioridade_id !== id),
           tarefas: prev.tarefas.filter((t) => !planoIdsSet.has(t.plano_id)),
+          _tombstones: newTombstones,
         };
       });
     },
@@ -896,10 +1164,19 @@ export function useRitmoGestao(encryptionKey: CryptoKey | null) {
           .map((t) => t.id);
         markPendingDeletion(pendingDeletionsRef.current, 'planos', [id]);
         markPendingDeletion(pendingDeletionsRef.current, 'tarefas', tarefaIds);
+        savePendingDeletionsToStorage(pendingDeletionsRef.current);
+        const now = Date.now();
+        const newTombstones = mergeTombstones(prev._tombstones, {
+          planos: { [id]: now },
+          tarefas: tarefaIds.length
+            ? Object.fromEntries(tarefaIds.map((tid) => [tid, now]))
+            : undefined,
+        });
         return {
           ...prev,
           planos: prev.planos.filter((p) => p.id !== id),
           tarefas: prev.tarefas.filter((t) => t.plano_id !== id),
+          _tombstones: newTombstones,
         };
       });
     },
@@ -953,7 +1230,13 @@ export function useRitmoGestao(encryptionKey: CryptoKey | null) {
     (id: string) => {
       saveBoard((prev) => {
         markPendingDeletion(pendingDeletionsRef.current, 'tarefas', [id]);
-        return { ...prev, tarefas: prev.tarefas.filter((t) => t.id !== id) };
+        savePendingDeletionsToStorage(pendingDeletionsRef.current);
+        const newTombstones = mergeTombstones(prev._tombstones, { tarefas: { [id]: Date.now() } });
+        return {
+          ...prev,
+          tarefas: prev.tarefas.filter((t) => t.id !== id),
+          _tombstones: newTombstones,
+        };
       });
     },
     [saveBoard]

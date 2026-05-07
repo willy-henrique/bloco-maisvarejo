@@ -69,6 +69,11 @@ export class StorageService {
       tarefas: Array.isArray(dec.tarefas) ? dec.tarefas : [],
       responsaveis: Array.isArray(dec.responsaveis) ? dec.responsaveis : [],
       empresas: Array.isArray((dec as RitmoGestaoBoard).empresas) ? (dec as RitmoGestaoBoard).empresas : [],
+      _tombstones:
+        (dec as RitmoGestaoBoard)._tombstones &&
+        typeof (dec as RitmoGestaoBoard)._tombstones === 'object'
+          ? (dec as RitmoGestaoBoard)._tombstones
+          : undefined,
     };
   }
 

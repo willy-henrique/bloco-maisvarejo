@@ -9,13 +9,11 @@ export default defineConfig({
     watch: {
       ignored: ['**/dist/**', '**/dist-ssr/**', '**/docs/**', '**/.tmp/**'],
     },
+    // Warmup apenas dos arquivos leves do caminho crítico (login + layout)
     warmup: {
       clientFiles: [
         'index.tsx',
-        'App.tsx',
         'contexts/UserContext.tsx',
-        'services/firebase.ts',
-        'services/firebaseAuth.ts',
         'components/Auth/UserLogin.tsx',
         'components/Layout/Sidebar.tsx',
       ],
@@ -45,13 +43,26 @@ export default defineConfig({
       'react-dom',
       'react-dom/client',
       'react/jsx-runtime',
-      'react-router-dom',
+      // Firebase e lucide pré-bundleados separados (evita re-parse na inicialização)
       'firebase/app',
       'firebase/auth',
       'firebase/firestore',
       'lucide-react',
     ],
     force: false,
+  },
+  build: {
+    rollupOptions: {
+      output: {
+        // Separa Firebase e lucide em chunks próprios para melhor cache
+        manualChunks(id) {
+          if (id.includes('node_modules/firebase')) return 'firebase';
+          if (id.includes('node_modules/lucide-react')) return 'lucide';
+          if (id.includes('node_modules/react-dom')) return 'react-dom';
+        },
+      },
+    },
+    chunkSizeWarningLimit: 800,
   },
   resolve: {
     alias: {

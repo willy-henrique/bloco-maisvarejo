@@ -82,7 +82,15 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
   const [firebaseUser, setFirebaseUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [encryptionKey, setEncryptionKey] = useState<CryptoKey | null>(null);
-  const [loading, setLoading] = useState(true);
+  /**
+   * Inicialização otimista: só bloqueia em "loading" se há uma sessão potencialmente
+   * ativa no sessionStorage. Sem sessão (primeiro acesso ou após logout) → login aparece
+   * instantaneamente, sem aguardar Firebase.
+   * Com sessão → mantém true até o Firebase confirmar e restaurar o perfil.
+   */
+  const [loading, setLoading] = useState(() =>
+    Boolean(sessionStorage.getItem(ENCRYPTION_KEY_KEY))
+  );
 
   useEffect(() => {
     if (!isFirebaseConfigured) {
@@ -101,7 +109,8 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      // Fast path: restore from sessionStorage cache — no network needed
+      // Fast path: restore from sessionStorage cache — no network needed.
+      // Deriva a chave antes de qualquer Firestore call para liberar loading o mais cedo possível.
       const cachedProfile = loadProfileCache(user.uid);
       const storedKeyB64 = sessionStorage.getItem(ENCRYPTION_KEY_KEY);
       let resolvedFromCache = false;
@@ -118,7 +127,23 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         }
       }
 
-      // Background refresh: verify with Firestore and update if changed
+      // Se não conseguiu resolver do cache, deriva a chave do env imediatamente
+      // (importKeyFromEnvHash é local/CPU, não tem latência de rede) e libera loading
+      // antes de buscar o perfil no Firestore.
+      if (!resolvedFromCache) {
+        try {
+          const envKey = await importKeyFromEnvHash();
+          const keyB64 = await exportKeyToBase64(envKey);
+          sessionStorage.setItem(ENCRYPTION_KEY_KEY, keyB64);
+          setEncryptionKey(envKey);
+          // Ainda sem perfil — vai buscar abaixo. Mantém loading=true até ter o perfil.
+        } catch {
+          // Falha catastrófica de env — continua para o catch abaixo
+        }
+      }
+
+      // Background refresh: verify with Firestore and update if changed.
+      // Quando resolvedFromCache=true, isso roda em background (loading já é false).
       try {
         const prof = await getUserProfile(user.uid);
         if (prof) {
@@ -126,19 +151,16 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
           saveProfileCache(user.uid, prof);
         }
 
-        let key: CryptoKey | null = null;
+        // Garante chave atualizada após fetch do perfil
         const currentKeyB64 = sessionStorage.getItem(ENCRYPTION_KEY_KEY);
         if (currentKeyB64) {
-          try { key = await importKeyFromBase64(currentKeyB64); } catch {
+          try {
+            const key = await importKeyFromBase64(currentKeyB64);
+            setEncryptionKey(key);
+          } catch {
             sessionStorage.removeItem(ENCRYPTION_KEY_KEY);
           }
         }
-        if (!key) {
-          key = await importKeyFromEnvHash();
-          const keyB64 = await exportKeyToBase64(key);
-          sessionStorage.setItem(ENCRYPTION_KEY_KEY, keyB64);
-        }
-        setEncryptionKey(key);
       } catch {
         if (!resolvedFromCache) setProfile(null);
       } finally {

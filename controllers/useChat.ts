@@ -14,6 +14,11 @@ import {
   type DeletePrivateMessageScope,
   type PrivateChatMessage,
 } from '../services/chatService';
+import {
+  setUserOnline,
+  setUserOffline,
+  subscribeOnlineUsers,
+} from '../services/presenceService';
 
 export interface ChatUser {
   uid: string;
@@ -80,7 +85,7 @@ export function useChat(currentUser: ChatUser | null) {
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
   const [activeOtherUid, setActiveOtherUid] = useState<string | null>(null);
   const [messages, setMessages] = useState<PrivateChatMessage[]>([]);
-  const [loadingConvs, setLoadingConvs] = useState(true);
+  const [loadingConvs, setLoadingConvs] = useState(false);
   const [loadingMsgs, setLoadingMsgs] = useState(false);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -96,13 +101,15 @@ export function useChat(currentUser: ChatUser | null) {
       setLoadingConvs(false);
       return;
     }
-    setLoadingConvs(true);
+    // Pequeno delay para não abrir listener Firestore enquanto outros hooks inicializam
+    const timer = setTimeout(() => setLoadingConvs(true), 300);
     const unsub = subscribeMyConversations(currentUser.uid, (convs) => {
+      clearTimeout(timer);
       setConversations((prev) => (conversationsAreEqual(prev, convs) ? prev : convs));
       setLoadingConvs(false);
     });
-    if (!unsub) setLoadingConvs(false);
-    return () => unsub?.();
+    if (!unsub) { clearTimeout(timer); setLoadingConvs(false); }
+    return () => { clearTimeout(timer); unsub?.(); };
   }, [currentUser?.uid]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ─── Subscreve mensagens do chat ativo ────────────────────────────────────
@@ -215,8 +222,13 @@ export function useChat(currentUser: ChatUser | null) {
       try {
         await deletePrivateMessage(activeChatId, message.id, currentUser.uid, scope, message.createdAt);
       } catch (e) {
-        const expired = e instanceof Error && e.message === 'DELETE_FOR_EVERYONE_EXPIRED';
-        setError(expired ? 'O prazo para apagar para todos acabou.' : 'Falha ao apagar mensagem. Tente novamente.');
+        const expiredAll = e instanceof Error && e.message === 'DELETE_FOR_EVERYONE_EXPIRED';
+        const expiredAll2 = e instanceof Error && e.message === 'DELETE_EXPIRED';
+        if (expiredAll || expiredAll2) {
+          setError('O prazo de 3 minutos para apagar esta mensagem expirou.');
+        } else {
+          setError('Falha ao apagar mensagem. Tente novamente.');
+        }
         console.error('Falha ao apagar mensagem.', e);
       }
     },
@@ -272,4 +284,55 @@ export function useChat(currentUser: ChatUser | null) {
     clearConversation,
     markRead,
   };
+}
+
+// ─── Presença online ──────────────────────────────────────────────────────────
+
+const HEARTBEAT_INTERVAL_MS = 30_000; // 30 s
+
+export function usePresence(currentUser: ChatUser | null): Set<string> {
+  const [onlineUids, setOnlineUids] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (!currentUser) return;
+
+    const uid = currentUser.uid;
+
+    // Marca como online imediatamente
+    setUserOnline(uid).catch(() => {});
+
+    // Heartbeat para renovar lastSeen periodicamente
+    const heartbeat = setInterval(() => {
+      if (document.visibilityState !== 'hidden') {
+        setUserOnline(uid).catch(() => {});
+      }
+    }, HEARTBEAT_INTERVAL_MS);
+
+    // Reage a mudanças de visibilidade da aba
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') {
+        setUserOffline(uid).catch(() => {});
+      } else {
+        setUserOnline(uid).catch(() => {});
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+
+    // Marca offline ao fechar/sair da página
+    const onUnload = () => { setUserOffline(uid).catch(() => {}); };
+    window.addEventListener('beforeunload', onUnload);
+
+    // Subscreve os usuários online em tempo real
+    const unsub = subscribeOnlineUsers((set) => setOnlineUids(set));
+
+    return () => {
+      clearInterval(heartbeat);
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('beforeunload', onUnload);
+      unsub?.();
+      setUserOffline(uid).catch(() => {});
+    };
+  }, [currentUser?.uid]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  return onlineUids;
 }

@@ -94,6 +94,15 @@ export function canDeletePrivateMessageForEveryone(
   return !message.deletedForEveryone && now - message.createdAt <= DELETE_FOR_EVERYONE_WINDOW_MS;
 }
 
+/** Verifica se ainda é possível apagar a mensagem (qualquer escopo) — janela de 3 min */
+export function canDeleteMessage(
+  message: PrivateChatMessage,
+  now = Date.now(),
+): boolean {
+  if (message.deletedForEveryone) return false;
+  return now - message.createdAt <= DELETE_FOR_EVERYONE_WINDOW_MS;
+}
+
 export function getConversationPreviewForUser(conv: ConversationMeta, uid: string) {
   const globalAt = conv.lastMessageAt ?? null;
   const hiddenAt = conv.lastMessageHiddenAt[uid] ?? null;
@@ -279,6 +288,11 @@ export async function deletePrivateMessage(
   if (!isFirebaseConfigured) return;
   const db = getDb();
   if (!db) return;
+
+  // Bloqueia qualquer deleção fora da janela de 3 minutos
+  if (Date.now() - messageCreatedAtMs > DELETE_FOR_EVERYONE_WINDOW_MS) {
+    throw new Error('DELETE_EXPIRED');
+  }
 
   const messageRef = doc(db, PRIVATE_CHATS, chatId, MESSAGES_SUB, messageId);
   if (scope === 'me') {

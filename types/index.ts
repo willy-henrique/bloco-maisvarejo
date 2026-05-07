@@ -182,6 +182,19 @@ export interface Tarefa {
   workspace_origem?: string;
 }
 
+/**
+ * Tombstones: IDs de itens deletados com timestamp de deleção.
+ * Permite que deleções feitas por um usuário prevaleçam sobre re-escritas
+ * de outro usuário com estado antigo (ex: aba aberta há minutos sem receber o snapshot).
+ * Expiram após 30 dias para não crescer indefinidamente.
+ */
+export type RitmoBoardTombstones = {
+  backlog?: Record<string, number>;
+  prioridades?: Record<string, number>;
+  planos?: Record<string, number>;
+  tarefas?: Record<string, number>;
+};
+
 /** Payload único do board Ritmo de Gestão (persistência) */
 export interface RitmoGestaoBoard {
   backlog: Backlog[];
@@ -191,6 +204,8 @@ export interface RitmoGestaoBoard {
   responsaveis: Responsavel[];
   /** Empresas / workspaces cadastrados no board */
   empresas: string[];
+  /** Tombstones de deleção. Ver RitmoBoardTombstones. */
+  _tombstones?: RitmoBoardTombstones;
 }
 
 export interface UserSession {
