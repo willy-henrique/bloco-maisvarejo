@@ -12,6 +12,7 @@ import {
   subscribePrivateChatMessages,
   type ConversationMeta,
   type DeletePrivateMessageScope,
+  type MessageReplyTo,
   type PrivateChatMessage,
 } from '../services/chatService';
 import {
@@ -158,7 +159,7 @@ export function useChat(currentUser: ChatUser | null) {
 
   // ─── Envia mensagem ───────────────────────────────────────────────────────
   const sendMessage = useCallback(
-    async (texto: string) => {
+    async (texto: string, replyTo?: MessageReplyTo) => {
       if (!currentUser || !activeChatId || !texto.trim()) return;
       const conv = conversations.find((c) => c.chatId === activeChatId);
       const receiverUid = conv?.participants.find((p) => p !== currentUser.uid) ?? activeOtherUid ?? '';
@@ -172,6 +173,7 @@ export function useChat(currentUser: ChatUser | null) {
           currentUser.nome,
           receiverUid,
           texto,
+          replyTo,
         );
       } catch (e) {
         setError('Falha ao enviar mensagem. Tente novamente.');

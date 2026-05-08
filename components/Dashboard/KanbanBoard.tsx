@@ -13,7 +13,7 @@ import {
   Trash2,
   CornerDownLeft,
   Target,
-  Archive,
+  CheckCircle2,
   ExternalLink,
   Building2,
 } from 'lucide-react';
@@ -182,11 +182,11 @@ const KanbanCard: React.FC<{
             <button
               type="button"
               className={`${iconBtnBase} border-emerald-600/50 text-emerald-300/90 hover:bg-emerald-500/15 hover:border-emerald-500/60`}
-              title="Arquivar prioridade"
-              aria-label="Arquivar prioridade"
+              title="Concluir Prioridade"
+              aria-label="Concluir Prioridade"
               onClick={() => onStatusChange(item.id, ItemStatus.COMPLETED)}
             >
-              <Archive size={14} />
+              <CheckCircle2 size={14} />
             </button>
           )}
           {onDelete && caps.canDelete && (

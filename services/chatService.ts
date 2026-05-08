@@ -27,6 +27,12 @@ export type DeletePrivateMessageScope = 'me' | 'everyone';
 
 // ─── tipos ────────────────────────────────────────────────────────────────────
 
+export interface MessageReplyTo {
+  messageId: string;
+  senderNome: string;
+  texto: string;
+}
+
 export interface PrivateChatMessage {
   id: string;
   senderUid: string;
@@ -37,6 +43,7 @@ export interface PrivateChatMessage {
   deletedAt?: number | null;
   deletedFor?: Record<string, boolean>;
   deletedForEveryone?: boolean;
+  replyTo?: MessageReplyTo;
 }
 
 export interface ConversationMeta {
@@ -161,6 +168,7 @@ export async function sendPrivateMessage(
   senderNome: string,
   receiverUid: string,
   texto: string,
+  replyTo?: MessageReplyTo,
 ): Promise<void> {
   if (!isFirebaseConfigured) return;
   const db = getDb();
@@ -169,13 +177,16 @@ export async function sendPrivateMessage(
   const now = Date.now();
   const trimmed = texto.trim();
 
-  await addDoc(collection(db, PRIVATE_CHATS, chatId, MESSAGES_SUB), {
+  const msgData: Record<string, unknown> = {
     senderUid,
     senderNome,
     texto: trimmed,
     createdAt: now,
     createdAtServer: serverTimestamp(),
-  });
+  };
+  if (replyTo) msgData.replyTo = replyTo;
+
+  await addDoc(collection(db, PRIVATE_CHATS, chatId, MESSAGES_SUB), msgData);
 
   await updateDoc(doc(db, PRIVATE_CHATS, chatId), {
     lastMessage: trimmed.slice(0, 100),
@@ -389,6 +400,15 @@ export function subscribePrivateChatMessages(
           const data = d.data();
           const createdAt = messageCreatedAt(data);
           if (createdAt <= clearedAt || isDeletedForUser(data, viewerUid)) return null;
+          const rt = data.replyTo as Record<string, unknown> | undefined;
+          const replyTo: MessageReplyTo | undefined =
+            rt && typeof rt === 'object' && typeof rt.messageId === 'string'
+              ? {
+                  messageId: rt.messageId,
+                  senderNome: String(rt.senderNome ?? ''),
+                  texto: String(rt.texto ?? '').slice(0, 200),
+                }
+              : undefined;
           return {
             id: d.id,
             senderUid: String(data.senderUid ?? ''),
@@ -399,6 +419,7 @@ export function subscribePrivateChatMessages(
             deletedAt: typeof data.deletedAt === 'number' ? data.deletedAt : null,
             deletedFor: asRecord<boolean>(data.deletedFor),
             deletedForEveryone: data.deletedForEveryone === true,
+            replyTo,
           };
         })
         .filter((msg): msg is NonNullable<typeof msg> => msg !== null)

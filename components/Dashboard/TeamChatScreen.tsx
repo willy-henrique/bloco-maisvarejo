@@ -1,6 +1,7 @@
 import React from 'react';
 import { TeamChatView, type TeamChatUser } from './TeamChatView';
 import { useChat, type ChatUser } from '../../controllers/useChat';
+import { useGeneralChat } from '../../controllers/useGeneralChat';
 
 interface TeamChatScreenProps {
   currentUser: ChatUser | null;
@@ -14,6 +15,9 @@ export const TeamChatScreen = React.memo(function TeamChatScreen({
   onlineUids,
 }: TeamChatScreenProps) {
   const chat = useChat(currentUser);
+  const generalChat = useGeneralChat(currentUser);
+  // +1 para incluir o usuário atual
+  const memberCount = availableUsers.length + 1;
 
   return (
     <TeamChatView
@@ -36,6 +40,14 @@ export const TeamChatScreen = React.memo(function TeamChatScreen({
       onDeleteMessage={chat.deleteMessage}
       onClearConversation={chat.clearConversation}
       onMarkRead={chat.markRead}
+      generalMessages={generalChat.messages}
+      generalChatLoading={generalChat.loading}
+      generalChatSending={generalChat.sending}
+      generalChatError={generalChat.error}
+      generalChatHasUnread={generalChat.hasUnread}
+      generalChatMemberCount={memberCount}
+      onGeneralChatMarkRead={generalChat.markRead}
+      onSendGeneralMessage={generalChat.sendMessage}
     />
   );
 });

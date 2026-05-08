@@ -23,7 +23,7 @@ import {
   Calendar,
   Target,
   Play,
-  Archive,
+  CheckCircle2,
   Eye,
   ExternalLink,
 } from 'lucide-react';
@@ -1209,8 +1209,10 @@ const PrioridadeCard: React.FC<{
   canEditResponsavel?: boolean;
   /** Permite atualizar o dono da prioridade (admin) */
   onUpdatePrioridadeOwner?: (ownerId: string) => void;
-  /** Ação para arquivar a prioridade (status Concluido) */
+  /** Ação para marcar prioridade como concluída */
   onArchive?: () => void;
+  /** Ação para reativar prioridade concluída */
+  onReactivate?: () => void;
   onAddPlano: (p: Omit<PlanoDeAcao, 'id' | 'prioridade_id'>) => void;
   onUpdatePlano: (id: string, u: Partial<PlanoDeAcao>) => void;
   onDeletePlano: (id: string) => void;
@@ -1252,6 +1254,7 @@ const PrioridadeCard: React.FC<{
   onUpdatePrioridadeOwner,
   onUpdatePrioridadeLink,
   onArchive,
+  onReactivate,
   onAddPlano,
   onUpdatePlano,
   onDeletePlano,
@@ -1470,18 +1473,25 @@ const PrioridadeCard: React.FC<{
                 </p>
                 <p className="text-[11px] text-slate-500">planos de ação</p>
               </div>
-              {onArchive && canPrioridadeWrite && (
+              {onArchive && (
                 <button
                   type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onArchive();
-                  }}
-                  className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-[11px] font-medium bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-amber-300 transition-colors"
-                  title="Arquivar prioridade (marcar como concluída)"
+                  onClick={(e) => { e.stopPropagation(); onArchive(); }}
+                  className="p-1.5 rounded-md text-emerald-500 hover:text-emerald-400 hover:bg-emerald-500/10 transition-colors"
+                  title="Concluir Prioridade"
                 >
-                  <Archive size={13} />
-                  Arquivar
+                  <CheckCircle2 size={15} />
+                </button>
+              )}
+              {onReactivate && (
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); onReactivate(); }}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-medium text-slate-400 border border-slate-700 hover:border-blue-500/50 hover:text-blue-400 hover:bg-blue-500/10 transition-colors"
+                  title="Reativar prioridade"
+                >
+                  <RotateCcw size={12} />
+                  Reativar
                 </button>
               )}
             </div>
@@ -1682,9 +1692,8 @@ export const EstrategicoView: React.FC<EstrategicoViewProps> = (props) => {
   const viewerSeesAllTarefasNoPlano =
     loggedUserRole === 'administrador' || caps.verTodosPlanos;
   const [expandedByPrioridade, setExpandedByPrioridade] = useState<Record<string, boolean>>({});
+  const [statusFilter, setStatusFilter] = useState<'ativas' | 'concluidas' | 'todas'>('ativas');
   /** Mesmo padrão Operacional: multi-seleção independente; vazio = sem refino extra nesta camada */
-  const [taticoVisibilityFilters, setTaticoVisibilityFilters] = useState<VisibilityFilter[]>([]);
-  const [visFilters, setVisFilters] = useState<VisibilityFilter[]>([]);
   const [detalheAberto, setDetalheAberto] = useState<Prioridade | null>(null);
 
   useEffect(() => {
@@ -1737,22 +1746,16 @@ export const EstrategicoView: React.FC<EstrategicoViewProps> = (props) => {
   const ativas = useMemo(() => {
     let list = filteredPrioridades.filter((p) => p.status_prioridade !== 'Concluido');
     if (!seesAllPrioridades && myResponsavelIds.size > 0) {
+      const uid = normStr(loggedUserUid ?? '');
       list = list.filter((p) => {
-        const uid = normStr(loggedUserUid ?? '');
-        // "Lançado por mim" inclui prioridade, plano OU tarefa criados por mim
-        // (evita sumir prioridade onde só criei plano/tarefa para outra pessoa).
         const lanzadosPorMim =
           !!uid &&
           (normStr(p.created_by) === uid ||
-            planos.some(
-              (pl) => pl.prioridade_id === p.id && normStr(pl.created_by) === uid,
-            ) ||
+            planos.some((pl) => pl.prioridade_id === p.id && normStr(pl.created_by) === uid) ||
             tarefas.some((t) => {
               if (normStr(t.created_by) !== uid) return false;
-              const pl = planos.find((x) => x.id === t.plano_id);
-              return pl?.prioridade_id === p.id;
+              return planos.find((x) => x.id === t.plano_id)?.prioridade_id === p.id;
             }));
-
         const atribuidoParaMim =
           donoPrioridadeCorrespondeAoUsuario(p.dono_id, myResponsavelIds, responsaveis) ||
           planos.some(
@@ -1762,10 +1765,8 @@ export const EstrategicoView: React.FC<EstrategicoViewProps> = (props) => {
           ) ||
           tarefas.some((t) => {
             if (!tarefaAtribuidaAoUsuario(t, myResponsavelIds, responsaveis)) return false;
-            const pl = planos.find((x) => x.id === t.plano_id);
-            return pl?.prioridade_id === p.id;
+            return planos.find((x) => x.id === t.plano_id)?.prioridade_id === p.id;
           });
-
         const itensQueAcompanho =
           (Array.isArray(p.observadores) &&
             p.observadores.some((o) => myResponsavelIds.has(normStr(o.user_id)))) ||
@@ -1776,47 +1777,14 @@ export const EstrategicoView: React.FC<EstrategicoViewProps> = (props) => {
           ) ||
           tarefas.some((t) => {
             if (tarefaAtribuidaAoUsuario(t, myResponsavelIds, responsaveis)) return false;
-            if (
-              !canViewByOwnershipOrObserver(
-                [t.responsavel_id],
-                t.observadores,
-                myResponsavelIds,
-                responsaveis,
-              )
-            )
-              return false;
-            const pl = planos.find((x) => x.id === t.plano_id);
-            return pl?.prioridade_id === p.id;
+            if (!canViewByOwnershipOrObserver([t.responsavel_id], t.observadores, myResponsavelIds, responsaveis)) return false;
+            return planos.find((x) => x.id === t.plano_id)?.prioridade_id === p.id;
           });
-
-        if (taticoVisibilityFilters.length === 0) {
-          return lanzadosPorMim || atribuidoParaMim || itensQueAcompanho;
-        }
-
-        const matchCreated =
-          taticoVisibilityFilters.includes('created') && lanzadosPorMim;
-        const matchAssigned =
-          taticoVisibilityFilters.includes('assigned') && atribuidoParaMim;
-        const matchObserving =
-          taticoVisibilityFilters.includes('observing') && itensQueAcompanho;
-
-        return matchCreated || matchAssigned || matchObserving;
+        return lanzadosPorMim || atribuidoParaMim || itensQueAcompanho;
       });
     }
-    if (!onlyPrioridadeId) return list;
-    list = list.filter((p) => p.id === onlyPrioridadeId);
-    if (isAdmin || visFilters.length === 0) return list;
-    const currentUid = loggedUserUid ?? '';
-    return list.filter((p) => {
-      const isCreator = p.created_by === currentUid;
-      const isOwner = p.dono_id === currentUid;
-      const isObserver = (p.observadores ?? []).some((o) => o.user_id === currentUid);
-      return (
-        (visFilters.includes('created') && isCreator) ||
-        (visFilters.includes('assigned') && isOwner) ||
-        (visFilters.includes('observing') && isObserver)
-      );
-    });
+    if (onlyPrioridadeId) list = list.filter((p) => p.id === onlyPrioridadeId);
+    return list;
   }, [
     filteredPrioridades,
     onlyPrioridadeId,
@@ -1824,11 +1792,20 @@ export const EstrategicoView: React.FC<EstrategicoViewProps> = (props) => {
     responsaveis,
     planos,
     tarefas,
-    taticoVisibilityFilters,
-    isAdmin,
-    visFilters,
+    seesAllPrioridades,
     loggedUserUid,
   ]);
+
+  const concluidas = useMemo(
+    () => filteredPrioridades.filter((p) => p.status_prioridade === 'Concluido'),
+    [filteredPrioridades],
+  );
+
+  const listaExibida = useMemo(() => {
+    if (statusFilter === 'concluidas') return concluidas;
+    if (statusFilter === 'todas') return [...ativas, ...concluidas];
+    return ativas;
+  }, [statusFilter, ativas, concluidas]);
 
   useEffect(() => {
     const ids = new Set(ativas.map((p) => p.id));
@@ -1857,60 +1834,51 @@ export const EstrategicoView: React.FC<EstrategicoViewProps> = (props) => {
           </p>
           <h2 className="text-2xl font-bold text-slate-100">Prioridades Estratégicas</h2>
         </div>
-        <div className="inline-flex flex-wrap items-center gap-2 justify-end">
+        <div className="flex flex-wrap items-center gap-3">
+          {/* Filtros de status */}
+          <div className="inline-flex rounded-lg border border-slate-700 bg-slate-900/60 p-0.5">
+            {(['ativas', 'concluidas', 'todas'] as const).map((s) => (
+              <button
+                key={s}
+                type="button"
+                onClick={() => setStatusFilter(s)}
+                className={`px-3 py-1 text-[11px] rounded-md capitalize transition-colors ${
+                  statusFilter === s
+                    ? s === 'ativas'
+                      ? 'bg-blue-600 text-white'
+                      : s === 'concluidas'
+                        ? 'bg-emerald-600 text-white'
+                        : 'bg-slate-600 text-white'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                {s === 'ativas' ? 'Ativas' : s === 'concluidas' ? 'Concluídas' : 'Todas'}
+              </button>
+            ))}
+          </div>
           <button
             type="button"
-            onClick={() => setTaticoVisibilityFilters((prev) => toggleVisibilityFilter(prev, 'created'))}
-            className={`px-2.5 py-1 text-[11px] rounded-md transition-colors border ${
-              taticoVisibilityFilters.includes('created')
-                ? 'bg-blue-600 text-white border-blue-500'
-                : 'bg-slate-900/60 border-slate-700 text-slate-300 hover:text-slate-100'
-            }`}
+            onClick={scrollToBlocks}
+            className="shrink-0 p-1 rounded-md text-blue-400 hover:text-blue-300 transition-colors"
+            aria-label="Ir para prioridades"
+            title="Ir para prioridades"
           >
-            lançados por mim
-          </button>
-          <button
-            type="button"
-            onClick={() => setTaticoVisibilityFilters((prev) => toggleVisibilityFilter(prev, 'assigned'))}
-            className={`px-2.5 py-1 text-[11px] rounded-md transition-colors border ${
-              taticoVisibilityFilters.includes('assigned')
-                ? 'bg-blue-600 text-white border-blue-500'
-                : 'bg-slate-900/60 border-slate-700 text-slate-300 hover:text-slate-100'
-            }`}
-          >
-            atribuídos para mim
-          </button>
-          <button
-            type="button"
-            onClick={() => setTaticoVisibilityFilters((prev) => toggleVisibilityFilter(prev, 'observing'))}
-            className={`px-2.5 py-1 text-[11px] rounded-md transition-colors border ${
-              taticoVisibilityFilters.includes('observing')
-                ? 'bg-blue-600 text-white border-blue-500'
-                : 'bg-slate-900/60 border-slate-700 text-slate-300 hover:text-slate-100'
-            }`}
-          >
-            itens que eu acompanho
+            <EstrategicoGridIcon size={18} strokeWidth={2} />
           </button>
         </div>
-        <button
-          type="button"
-          onClick={scrollToBlocks}
-          className="shrink-0 p-1 rounded-md text-blue-400 hover:text-blue-300 transition-colors"
-          aria-label="Ir para prioridades"
-          title="Ir para prioridades"
-        >
-          <EstrategicoGridIcon size={18} strokeWidth={2} />
-        </button>
       </div>
-      {!isAdmin && <VisibilityFilterBar active={visFilters} onChange={setVisFilters} />}
 
       <div ref={blocksRef} className="space-y-4">
-        {ativas.length === 0 ? (
+        {listaExibida.length === 0 ? (
           <div className="px-5 py-12 text-center text-slate-500 text-sm border border-slate-800/60 rounded-xl bg-slate-900/30">
-            Nenhuma prioridade ativa {seesAllPrioridades ? 'disponível.' : 'para você.'}
+            {statusFilter === 'concluidas'
+              ? 'Nenhuma prioridade concluída.'
+              : statusFilter === 'todas'
+                ? `Nenhuma prioridade ${seesAllPrioridades ? 'disponível.' : 'para você.'}`
+                : `Nenhuma prioridade ativa ${seesAllPrioridades ? 'disponível.' : 'para você.'}`}
           </div>
         ) : (
-          ativas.map((p) => {
+          listaExibida.map((p) => {
             const nomeDono = displayNomeDonoPrioridade(p.dono_id, responsaveis, perfisCadastro);
             const priorityOwnerNameOverride =
               nomeDono ||
@@ -1951,8 +1919,13 @@ export const EstrategicoView: React.FC<EstrategicoViewProps> = (props) => {
                       : undefined
                   }
                   onArchive={
-                    onUpdatePrioridade && !isLegacyPrioridade
+                    onUpdatePrioridade && p.status_prioridade !== 'Concluido'
                       ? () => onUpdatePrioridade(p.id, { status_prioridade: 'Concluido' })
+                      : undefined
+                  }
+                  onReactivate={
+                    onUpdatePrioridade && p.status_prioridade === 'Concluido'
+                      ? () => onUpdatePrioridade(p.id, { status_prioridade: 'Execucao' })
                       : undefined
                   }
                   onAddPlano={(pl) =>
@@ -1989,6 +1962,7 @@ export const EstrategicoView: React.FC<EstrategicoViewProps> = (props) => {
           })
         )}
       </div>
+
       {detalheAberto && (
         <Modal
           isOpen

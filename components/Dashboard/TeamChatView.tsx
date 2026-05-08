@@ -9,7 +9,7 @@ function useNow(intervalMs = 5_000): number {
   }, [intervalMs]);
   return now;
 }
-import { Send, ChevronLeft, Search, Trash2, MessageSquare, Plus, X, ArrowLeft, Pencil, Check, Link2 } from 'lucide-react';
+import { Send, ChevronLeft, Search, Trash2, MessageSquare, Plus, X, ArrowLeft, Pencil, Check, Link2, CornerUpLeft, Users } from 'lucide-react';
 import {
   DELETED_MESSAGE_TEXT,
   DELETE_FOR_EVERYONE_WINDOW_MS,
@@ -19,8 +19,10 @@ import {
   isConversationVisibleForUser,
   type ConversationMeta,
   type DeletePrivateMessageScope,
+  type MessageReplyTo,
   type PrivateChatMessage,
 } from '../../services/chatService';
+import { type GeneralChatMessage } from '../../services/generalChatService';
 import { Modal } from '../Shared/Modal';
 
 // ─── tipos ────────────────────────────────────────────────────────────────────
@@ -46,11 +48,19 @@ interface TeamChatViewProps {
   onOpenConversation: (user: TeamChatUser) => Promise<void>;
   onSwitchConversation: (chatId: string, otherUid: string) => void;
   onCloseConversation: () => void;
-  onSend: (texto: string) => Promise<void>;
+  onSend: (texto: string, replyTo?: MessageReplyTo) => Promise<void>;
   onEditMessage: (messageId: string, texto: string) => Promise<void>;
   onDeleteMessage: (message: PrivateChatMessage, scope: DeletePrivateMessageScope) => Promise<void>;
   onClearConversation: () => Promise<void>;
   onMarkRead: (chatId: string) => void;
+  generalMessages: GeneralChatMessage[];
+  generalChatLoading: boolean;
+  generalChatSending: boolean;
+  generalChatError: string | null;
+  generalChatHasUnread: boolean;
+  generalChatMemberCount: number;
+  onGeneralChatMarkRead: () => void;
+  onSendGeneralMessage: (texto: string, replyTo?: MessageReplyTo) => Promise<void>;
 }
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
@@ -345,6 +355,9 @@ const Sidebar = React.memo(function Sidebar({
   onlineUids,
   onSelectConv,
   onNewChat,
+  generalChatActive,
+  generalChatHasUnread,
+  onSelectGeneralChat,
 }: {
   currentUid: string;
   availableUsers: TeamChatUser[];
@@ -353,6 +366,9 @@ const Sidebar = React.memo(function Sidebar({
   onlineUids: Set<string>;
   onSelectConv: (conv: ConversationMeta, otherUser: TeamChatUser) => void;
   onNewChat: () => void;
+  generalChatActive: boolean;
+  generalChatHasUnread: boolean;
+  onSelectGeneralChat: () => void;
 }) {
   // Resolve o outro usuário de cada conversa
   const convList = useMemo(() => {
@@ -396,6 +412,32 @@ const Sidebar = React.memo(function Sidebar({
           <Plus size={14} />
         </button>
       </div>
+
+      {/* Chat Geral */}
+      <button
+        type="button"
+        onClick={onSelectGeneralChat}
+        className="w-full flex items-center gap-3 px-3 py-2.5 text-left transition-all relative border-b shrink-0"
+        style={{ background: generalChatActive ? '#132943' : undefined, borderColor: '#1a2f45' }}
+        onMouseEnter={(e) => { if (!generalChatActive) e.currentTarget.style.background = '#10233a'; }}
+        onMouseLeave={(e) => { if (!generalChatActive) e.currentTarget.style.background = ''; }}
+      >
+        {generalChatActive && (
+          <span className="absolute left-0 top-2 bottom-2 w-[3px] rounded-r-full" style={{ background: '#3b82f6' }} />
+        )}
+        <div className="w-9 h-9 rounded-full flex items-center justify-center shrink-0" style={{ background: '#143156' }}>
+          <Users size={16} style={{ color: '#60a5fa' }} />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex justify-between items-center">
+            <span className="text-[13px] font-semibold" style={{ color: '#f8fafc' }}>Chat Geral</span>
+            {generalChatHasUnread && (
+              <span className="shrink-0 w-2 h-2 rounded-full" style={{ background: '#3b82f6' }} />
+            )}
+          </div>
+          <p className="text-[11px]" style={{ color: '#9fb6d8' }}>Todos os colaboradores</p>
+        </div>
+      </button>
 
       {/* Lista */}
       <div className="flex-1 overflow-y-auto">
@@ -506,7 +548,7 @@ const ChatPanel = React.memo(function ChatPanel({
   sending: boolean;
   error: string | null;
   onlineUids: Set<string>;
-  onSend: (t: string) => Promise<void>;
+  onSend: (t: string, replyTo?: MessageReplyTo) => Promise<void>;
   onEditMessage: (id: string, text: string) => Promise<void>;
   onDeleteMessage: (message: PrivateChatMessage, scope: DeletePrivateMessageScope) => Promise<void>;
   onClearConversation: () => Promise<void>;
@@ -527,6 +569,7 @@ const ChatPanel = React.memo(function ChatPanel({
   const [savingEditId, setSavingEditId] = useState<string | null>(null);
   const [showClearChat, setShowClearChat] = useState(false);
   const [clearingChat, setClearingChat] = useState(false);
+  const [replyingTo, setReplyingTo] = useState<PrivateChatMessage | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const taRef = useRef<HTMLTextAreaElement>(null);
   const atBottom = useRef(true);
@@ -547,11 +590,15 @@ const ChatPanel = React.memo(function ChatPanel({
   const doSend = useCallback(async () => {
     const t = text.trim();
     if (!t || sending) return;
+    const reply = replyingTo
+      ? { messageId: replyingTo.id, senderNome: replyingTo.senderNome, texto: replyingTo.texto.slice(0, 200) }
+      : undefined;
     setText('');
+    setReplyingTo(null);
     if (taRef.current) taRef.current.style.height = 'auto';
-    await onSend(t);
+    await onSend(t, reply);
     setTimeout(() => listRef.current?.scrollTo({ top: 9999999 }), 80);
-  }, [text, sending, onSend]);
+  }, [text, sending, replyingTo, onSend]);
 
   const handleTextareaChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setText(e.target.value);
@@ -746,30 +793,43 @@ const ChatPanel = React.memo(function ChatPanel({
                     )}
 
                     <div className={`flex items-end gap-1 max-w-[62%] ${isOwn ? 'flex-row-reverse' : 'flex-row'}`}>
-                      {!isEditing && canDeleteMessage(msg, now) && (
+                      {!isEditing && !isDeletedForEveryone && (
                         <div className="flex items-center gap-1 mb-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 transition-opacity">
-                          {isOwn && !isDeletedForEveryone && (
-                            <button
-                              type="button"
-                              disabled={isDel}
-                              onClick={() => startEdit(msg)}
-                              className="w-7 h-7 rounded-lg flex items-center justify-center border transition-colors disabled:opacity-40"
-                              style={{ color: '#bfdbfe', background: '#10233a', borderColor: '#244768' }}
-                              title="Editar mensagem"
-                            >
-                              <Pencil size={13} />
-                            </button>
-                          )}
                           <button
                             type="button"
-                            disabled={isDel}
-                            onClick={() => setDeleteTarget(msg)}
-                            className="w-7 h-7 rounded-lg flex items-center justify-center border transition-colors disabled:opacity-40"
-                            style={{ color: '#fecaca', background: '#2a1620', borderColor: '#7f1d1d' }}
-                            title="Apagar mensagem"
+                            onClick={() => { setReplyingTo(msg); setTimeout(() => taRef.current?.focus(), 50); }}
+                            className="w-7 h-7 rounded-lg flex items-center justify-center border transition-colors"
+                            style={{ color: '#93c5fd', background: '#10233a', borderColor: '#244768' }}
+                            title="Responder"
                           >
-                            <Trash2 size={13} />
+                            <CornerUpLeft size={13} />
                           </button>
+                          {canDeleteMessage(msg, now) && (
+                            <>
+                              {isOwn && (
+                                <button
+                                  type="button"
+                                  disabled={isDel}
+                                  onClick={() => startEdit(msg)}
+                                  className="w-7 h-7 rounded-lg flex items-center justify-center border transition-colors disabled:opacity-40"
+                                  style={{ color: '#bfdbfe', background: '#10233a', borderColor: '#244768' }}
+                                  title="Editar mensagem"
+                                >
+                                  <Pencil size={13} />
+                                </button>
+                              )}
+                              <button
+                                type="button"
+                                disabled={isDel}
+                                onClick={() => setDeleteTarget(msg)}
+                                className="w-7 h-7 rounded-lg flex items-center justify-center border transition-colors disabled:opacity-40"
+                                style={{ color: '#fecaca', background: '#2a1620', borderColor: '#7f1d1d' }}
+                                title="Apagar mensagem"
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            </>
+                          )}
                         </div>
                       )}
 
@@ -819,17 +879,34 @@ const ChatPanel = React.memo(function ChatPanel({
                             </div>
                           </div>
                         ) : (
-	                          <div
-	                            className={`px-3 py-1.5 text-[13px] leading-relaxed break-words whitespace-pre-wrap transition-opacity ${isDeletedForEveryone ? 'italic' : ''}`}
-	                            style={{
-	                              borderRadius: br,
-	                              background: isDeletedForEveryone ? '#12243a' : isOwn ? '#2563eb' : '#172a43',
-	                              color: isDeletedForEveryone ? '#9fb6d8' : isOwn ? '#ffffff' : '#e5eefc',
-	                              opacity: isDel ? 0.3 : 1,
-	                            }}
-	                          >
-	                            {isDeletedForEveryone ? DELETED_MESSAGE_TEXT : renderTextWithLinks(msg.texto)}
-	                          </div>
+                          <div
+                            className={`px-3 py-1.5 text-[13px] leading-relaxed break-words whitespace-pre-wrap transition-opacity ${isDeletedForEveryone ? 'italic' : ''}`}
+                            style={{
+                              borderRadius: br,
+                              background: isDeletedForEveryone ? '#12243a' : isOwn ? '#2563eb' : '#172a43',
+                              color: isDeletedForEveryone ? '#9fb6d8' : isOwn ? '#ffffff' : '#e5eefc',
+                              opacity: isDel ? 0.3 : 1,
+                            }}
+                          >
+                            {!isDeletedForEveryone && msg.replyTo && (
+                              <div
+                                className="mb-1.5 px-2 py-1 rounded-lg text-[11px] leading-snug border-l-2 opacity-80 cursor-default select-none"
+                                style={{
+                                  background: isOwn ? 'rgba(0,0,0,0.2)' : 'rgba(255,255,255,0.07)',
+                                  borderColor: isOwn ? '#93c5fd' : '#4b8bcb',
+                                  color: isOwn ? '#bfdbfe' : '#aac0de',
+                                }}
+                              >
+                                <span className="font-semibold block" style={{ color: isOwn ? '#93c5fd' : '#7eb3e8' }}>
+                                  {msg.replyTo.senderNome}
+                                </span>
+                                <span className="line-clamp-2">
+                                  {msg.replyTo.texto.length > 120 ? msg.replyTo.texto.slice(0, 120) + '…' : msg.replyTo.texto}
+                                </span>
+                              </div>
+                            )}
+                            {isDeletedForEveryone ? DELETED_MESSAGE_TEXT : renderTextWithLinks(msg.texto)}
+                          </div>
                         )}
                         {showTime && (
 	                          <p className="text-[9px] mt-0.5 mx-0.5" style={{ color: '#8aa4c2' }}>
@@ -849,6 +926,33 @@ const ChatPanel = React.memo(function ChatPanel({
       {/* Input */}
       <div className="px-4 py-3 shrink-0 border-t" style={{ borderColor: '#24364d', background: '#0d1b2a' }}>
         {error && <p className="text-[11px] mb-2" style={{ color: '#ef4444' }}>{error}</p>}
+
+        {/* Preview de resposta */}
+        {replyingTo && (
+          <div
+            className="flex items-start gap-2 mb-2 px-3 py-2 rounded-xl border-l-2"
+            style={{ background: '#12243a', borderColor: '#3b82f6' }}
+          >
+            <CornerUpLeft size={14} className="mt-0.5 shrink-0" style={{ color: '#93c5fd' }} />
+            <div className="flex-1 min-w-0">
+              <p className="text-[11px] font-semibold mb-0.5" style={{ color: '#93c5fd' }}>
+                Respondendo a {replyingTo.senderNome}
+              </p>
+              <p className="text-[11px] truncate" style={{ color: '#7a9fc0' }}>
+                {replyingTo.texto.length > 80 ? replyingTo.texto.slice(0, 80) + '…' : replyingTo.texto}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setReplyingTo(null)}
+              className="shrink-0 w-5 h-5 flex items-center justify-center rounded"
+              style={{ color: '#7a9fc0' }}
+              title="Cancelar resposta"
+            >
+              <X size={12} />
+            </button>
+          </div>
+        )}
 
         {/* Mini-modal de link */}
         {linkOpen && (
@@ -963,15 +1067,378 @@ const ChatPanel = React.memo(function ChatPanel({
   );
 });
 
+// ─── General Chat Panel ───────────────────────────────────────────────────────
+
+const GeneralChatPanel = React.memo(function GeneralChatPanel({
+  currentUid,
+  messages,
+  memberCount,
+  loading,
+  sending,
+  error,
+  onSend,
+  onBack,
+  showBack,
+}: {
+  currentUid: string;
+  messages: GeneralChatMessage[];
+  memberCount: number;
+  loading: boolean;
+  sending: boolean;
+  error: string | null;
+  onSend: (t: string, replyTo?: MessageReplyTo) => Promise<void>;
+  onBack: () => void;
+  showBack: boolean;
+}) {
+  const [text, setText] = useState('');
+  const [replyingTo, setReplyingTo] = useState<GeneralChatMessage | null>(null);
+  const [linkOpen, setLinkOpen] = useState(false);
+  const [linkUrl, setLinkUrl] = useState('');
+  const [linkTitle, setLinkTitle] = useState('');
+  const listRef = useRef<HTMLDivElement>(null);
+  const taRef = useRef<HTMLTextAreaElement>(null);
+  const linkUrlRef = useRef<HTMLInputElement>(null);
+  const atBottom = useRef(true);
+
+  useEffect(() => {
+    if (atBottom.current) listRef.current?.scrollTo({ top: 9999999 });
+  }, [messages]);
+
+  useEffect(() => {
+    if (!loading) setTimeout(() => listRef.current?.scrollTo({ top: 9999999 }), 50);
+  }, [loading]);
+
+  const handleScroll = useCallback(() => {
+    const el = listRef.current;
+    if (el) atBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 60;
+  }, []);
+
+  const doSend = useCallback(async () => {
+    const t = text.trim();
+    if (!t || sending) return;
+    const reply = replyingTo
+      ? { messageId: replyingTo.id, senderNome: replyingTo.senderNome, texto: replyingTo.texto.slice(0, 200) }
+      : undefined;
+    setText('');
+    setReplyingTo(null);
+    if (taRef.current) taRef.current.style.height = 'auto';
+    await onSend(t, reply);
+    setTimeout(() => listRef.current?.scrollTo({ top: 9999999 }), 80);
+  }, [text, sending, replyingTo, onSend]);
+
+  const handleTextareaChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setText(e.target.value);
+    e.target.style.height = 'auto';
+    e.target.style.height = Math.min(e.target.scrollHeight, 96) + 'px';
+  }, []);
+
+  const handleTextareaKeyDown = useCallback((e: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void doSend(); }
+  }, [doSend]);
+
+  const handleSendLink = useCallback(async (e: React.FormEvent) => {
+    e.preventDefault();
+    const url = linkUrl.trim();
+    if (!url) return;
+    const formatted = linkTitle.trim() ? `${linkTitle.trim()}\n${url}` : url;
+    setLinkOpen(false);
+    setLinkUrl('');
+    setLinkTitle('');
+    await onSend(formatted);
+    setTimeout(() => listRef.current?.scrollTo({ top: 9999999 }), 80);
+  }, [linkUrl, linkTitle, onSend]);
+
+  useEffect(() => {
+    if (linkOpen) setTimeout(() => linkUrlRef.current?.focus(), 50);
+  }, [linkOpen]);
+
+  const grouped = useMemo(() => {
+    const m = new Map<string, GeneralChatMessage[]>();
+    for (const msg of messages) {
+      const k = dayKey(msg.createdAt);
+      if (!m.has(k)) m.set(k, []);
+      m.get(k)!.push(msg);
+    }
+    return Array.from(m.entries());
+  }, [messages]);
+
+  return (
+    <div className="flex flex-col h-full" style={{ background: '#071321' }}>
+      {/* Header */}
+      <div
+        className="flex items-center gap-3 px-4 py-2.5 shrink-0 border-b"
+        style={{ borderColor: '#24364d', background: '#0d1b2a' }}
+      >
+        {showBack && (
+          <button type="button" onClick={onBack} style={{ color: '#9fb6d8' }}
+            onMouseEnter={(e) => (e.currentTarget.style.color = '#ffffff')}
+            onMouseLeave={(e) => (e.currentTarget.style.color = '#9fb6d8')}
+          >
+            <ChevronLeft size={18} />
+          </button>
+        )}
+        <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0" style={{ background: '#143156' }}>
+          <Users size={15} style={{ color: '#60a5fa' }} />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-[13px] font-semibold" style={{ color: '#f8fafc' }}>Chat Geral</p>
+          <p className="text-[11px]" style={{ color: '#64748b' }}>
+            {memberCount} colaborador{memberCount !== 1 ? 'es' : ''}
+          </p>
+        </div>
+      </div>
+
+      {/* Mensagens */}
+      <div
+        ref={listRef}
+        onScroll={handleScroll}
+        className="flex-1 overflow-y-auto px-5 py-4 min-h-0"
+      >
+        {loading && (
+          <div className="flex items-center justify-center h-full">
+            <span className="text-xs" style={{ color: '#94a3b8' }}>Carregando…</span>
+          </div>
+        )}
+
+        {!loading && messages.length === 0 && (
+          <div className="flex flex-col items-center justify-center h-full gap-3">
+            <div className="w-12 h-12 rounded-2xl flex items-center justify-center" style={{ background: '#12243a' }}>
+              <Users size={20} style={{ color: '#60a5fa' }} />
+            </div>
+            <p className="text-xs" style={{ color: '#cbd5e1' }}>Nenhuma mensagem ainda. Diga olá!</p>
+          </div>
+        )}
+
+        {!loading && grouped.map(([dk, dayMsgs]) => (
+          <div key={dk}>
+            <div className="flex items-center gap-3 my-4">
+              <div className="flex-1 h-px" style={{ background: '#24364d' }} />
+              <span className="text-[10px] uppercase tracking-widest" style={{ color: '#8db3eb' }}>
+                {fmtDayLabel(dayMsgs[0].createdAt)}
+              </span>
+              <div className="flex-1 h-px" style={{ background: '#24364d' }} />
+            </div>
+
+            <div className="flex flex-col gap-0.5">
+              {dayMsgs.map((msg, idx) => {
+                const isOwn = msg.senderUid === currentUid;
+                const prev = dayMsgs[idx - 1];
+                const next = dayMsgs[idx + 1];
+                const samePrev = prev?.senderUid === msg.senderUid;
+                const sameNext = next?.senderUid === msg.senderUid;
+                const showTime = !sameNext || (next && dayKey(next.createdAt) !== dk);
+
+                const br = isOwn
+                  ? `14px 4px ${sameNext ? '4px' : '14px'} 14px`
+                  : `4px 14px 14px ${sameNext ? '4px' : '14px'}`;
+
+                return (
+                  <div
+                    key={msg.id}
+                    className={`flex items-end gap-2 group ${isOwn ? 'flex-row-reverse' : 'flex-row'} ${samePrev ? 'mt-0.5' : 'mt-3'}`}
+                  >
+                    {!isOwn && (
+                      <div className="w-7 shrink-0">
+                        {!sameNext && <Av uid={msg.senderUid} nome={msg.senderNome} size={26} />}
+                      </div>
+                    )}
+
+                    <div className={`flex items-end gap-1 max-w-[62%] ${isOwn ? 'flex-row-reverse' : 'flex-row'}`}>
+                      <div className="flex items-center gap-1 mb-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 transition-opacity">
+                        <button
+                          type="button"
+                          onClick={() => { setReplyingTo(msg); setTimeout(() => taRef.current?.focus(), 50); }}
+                          className="w-7 h-7 rounded-lg flex items-center justify-center border transition-colors"
+                          style={{ color: '#93c5fd', background: '#10233a', borderColor: '#244768' }}
+                          title="Responder"
+                        >
+                          <CornerUpLeft size={13} />
+                        </button>
+                      </div>
+
+                      <div className={`flex flex-col ${isOwn ? 'items-end' : 'items-start'}`}>
+                        {!isOwn && !samePrev && (
+                          <p className="text-[10px] mb-0.5 ml-0.5" style={{ color: '#aac0de' }}>{msg.senderNome}</p>
+                        )}
+                        <div
+                          className="px-3 py-1.5 text-[13px] leading-relaxed break-words whitespace-pre-wrap"
+                          style={{
+                            borderRadius: br,
+                            background: isOwn ? '#2563eb' : '#172a43',
+                            color: isOwn ? '#ffffff' : '#e5eefc',
+                          }}
+                        >
+                          {msg.replyTo && (
+                            <div
+                              className="mb-1.5 px-2 py-1 rounded-lg text-[11px] leading-snug border-l-2 opacity-80 cursor-default select-none"
+                              style={{
+                                background: isOwn ? 'rgba(0,0,0,0.2)' : 'rgba(255,255,255,0.07)',
+                                borderColor: isOwn ? '#93c5fd' : '#4b8bcb',
+                                color: isOwn ? '#bfdbfe' : '#aac0de',
+                              }}
+                            >
+                              <span className="font-semibold block" style={{ color: isOwn ? '#93c5fd' : '#7eb3e8' }}>
+                                {msg.replyTo.senderNome}
+                              </span>
+                              <span className="line-clamp-2">
+                                {msg.replyTo.texto.length > 120 ? msg.replyTo.texto.slice(0, 120) + '…' : msg.replyTo.texto}
+                              </span>
+                            </div>
+                          )}
+                          {renderTextWithLinks(msg.texto)}
+                        </div>
+                        {showTime && (
+                          <p className="text-[9px] mt-0.5 mx-0.5" style={{ color: '#8aa4c2' }}>
+                            {fmtHour(msg.createdAt)}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Input */}
+      <div className="px-4 py-3 shrink-0 border-t" style={{ borderColor: '#24364d', background: '#0d1b2a' }}>
+        {error && <p className="text-[11px] mb-2" style={{ color: '#ef4444' }}>{error}</p>}
+
+        {replyingTo && (
+          <div
+            className="flex items-start gap-2 mb-2 px-3 py-2 rounded-xl border-l-2"
+            style={{ background: '#12243a', borderColor: '#3b82f6' }}
+          >
+            <CornerUpLeft size={14} className="mt-0.5 shrink-0" style={{ color: '#93c5fd' }} />
+            <div className="flex-1 min-w-0">
+              <p className="text-[11px] font-semibold mb-0.5" style={{ color: '#93c5fd' }}>
+                Respondendo a {replyingTo.senderNome}
+              </p>
+              <p className="text-[11px] truncate" style={{ color: '#7a9fc0' }}>
+                {replyingTo.texto.length > 80 ? replyingTo.texto.slice(0, 80) + '…' : replyingTo.texto}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setReplyingTo(null)}
+              className="shrink-0 w-5 h-5 flex items-center justify-center rounded"
+              style={{ color: '#7a9fc0' }}
+              title="Cancelar resposta"
+            >
+              <X size={12} />
+            </button>
+          </div>
+        )}
+
+        {linkOpen && (
+          <div className="mb-2 rounded-xl border p-3" style={{ background: '#12243a', borderColor: '#3b82f6' }}>
+            <form onSubmit={(e) => void handleSendLink(e)} className="space-y-2">
+              <p className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: '#93c5fd' }}>Anexar link</p>
+              <input
+                ref={linkUrlRef}
+                type="url"
+                value={linkUrl}
+                onChange={(e) => setLinkUrl(e.target.value)}
+                required
+                placeholder="https://docs.google.com/…"
+                className="w-full rounded-lg px-3 py-2 text-[13px] outline-none border placeholder:text-slate-500"
+                style={{ background: '#0d1b2a', borderColor: '#244768', color: '#f8fafc' }}
+                onFocus={(e) => (e.currentTarget.style.borderColor = '#3b82f6')}
+                onBlur={(e) => (e.currentTarget.style.borderColor = '#244768')}
+              />
+              <input
+                type="text"
+                value={linkTitle}
+                onChange={(e) => setLinkTitle(e.target.value)}
+                placeholder="Título (opcional)"
+                className="w-full rounded-lg px-3 py-2 text-[13px] outline-none border placeholder:text-slate-500"
+                style={{ background: '#0d1b2a', borderColor: '#244768', color: '#f8fafc' }}
+                onFocus={(e) => (e.currentTarget.style.borderColor = '#3b82f6')}
+                onBlur={(e) => (e.currentTarget.style.borderColor = '#244768')}
+              />
+              <div className="flex justify-end gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => { setLinkOpen(false); setLinkUrl(''); setLinkTitle(''); }}
+                  className="px-3 py-1.5 rounded-lg text-[12px] font-medium border"
+                  style={{ color: '#94a3b8', borderColor: '#334155', background: '#0b1728' }}
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={!linkUrl.trim() || sending}
+                  className="px-4 py-1.5 rounded-lg text-[12px] font-semibold disabled:opacity-40"
+                  style={{ background: '#2563eb', color: '#fff' }}
+                >
+                  Enviar link
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
+
+        <div className="flex items-end gap-2">
+          <button
+            type="button"
+            onClick={() => setLinkOpen((v) => !v)}
+            title="Anexar link"
+            className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 border transition-all"
+            style={{
+              background: linkOpen ? '#1e3a5f' : '#12243a',
+              borderColor: linkOpen ? '#3b82f6' : '#24364d',
+              color: linkOpen ? '#93c5fd' : '#9fb6d8',
+            }}
+          >
+            <Link2 size={15} />
+          </button>
+
+          <div
+            className="flex-1 rounded-xl px-3 py-2 border transition-colors"
+            style={{ background: '#12243a', borderColor: '#24364d' }}
+            onFocusCapture={(e) => (e.currentTarget.style.borderColor = '#3b82f6')}
+            onBlurCapture={(e) => (e.currentTarget.style.borderColor = '#24364d')}
+          >
+            <textarea
+              ref={taRef}
+              value={text}
+              onChange={handleTextareaChange}
+              onKeyDown={handleTextareaKeyDown}
+              placeholder="Mensagem para o grupo…"
+              rows={1}
+              className="w-full bg-transparent text-[13px] outline-none resize-none leading-relaxed placeholder:text-slate-400"
+              style={{ color: '#f8fafc', maxHeight: 96 }}
+            />
+          </div>
+          <button
+            type="button"
+            onClick={() => void doSend()}
+            disabled={!text.trim() || sending}
+            className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 transition-all disabled:opacity-25"
+            style={{ background: '#1d4ed8' }}
+          >
+            <Send size={14} className="text-white translate-x-px" />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+});
+
 // ─── Root ─────────────────────────────────────────────────────────────────────
 
 export const TeamChatView: React.FC<TeamChatViewProps> = ({
   currentUid, availableUsers, conversations, activeChatId, activeOtherUid,
   messages, loadingConvs, loadingMsgs, sending, error, onlineUids,
   onOpenConversation, onSwitchConversation, onCloseConversation, onSend, onEditMessage, onDeleteMessage, onClearConversation, onMarkRead,
+  generalMessages, generalChatLoading, generalChatSending, generalChatError,
+  generalChatHasUnread, generalChatMemberCount, onGeneralChatMarkRead, onSendGeneralMessage,
 }) => {
   const [mobileChat, setMobileChat] = useState(false);
   const [showNewChat, setShowNewChat] = useState(false);
+  const [generalChatActive, setGeneralChatActive] = useState(false);
   const resolvedOnlineUids = onlineUids ?? new Set<string>();
 
   const otherUser = useMemo(() => {
@@ -989,18 +1456,29 @@ export const TeamChatView: React.FC<TeamChatViewProps> = ({
   }, [activeChatId, onMarkRead]);
 
   const handleSelectUser = useCallback(async (user: TeamChatUser) => {
+    setGeneralChatActive(false);
     setShowNewChat(false);
     setMobileChat(true);
     await onOpenConversation(user);
   }, [onOpenConversation]);
 
   const handleSelectConv = useCallback((conv: ConversationMeta, user: TeamChatUser) => {
+    setGeneralChatActive(false);
     setMobileChat(true);
     onSwitchConversation(conv.chatId, user.uid);
   }, [onSwitchConversation]);
 
+  const handleOpenGeneralChat = useCallback(() => {
+    setGeneralChatActive(true);
+    setShowNewChat(false);
+    setMobileChat(true);
+    onGeneralChatMarkRead();
+    onCloseConversation();
+  }, [onGeneralChatMarkRead, onCloseConversation]);
+
   const handleBack = useCallback(() => {
     setMobileChat(false);
+    setGeneralChatActive(false);
     onCloseConversation();
   }, [onCloseConversation]);
 
@@ -1032,32 +1510,49 @@ export const TeamChatView: React.FC<TeamChatViewProps> = ({
             currentUid={currentUid}
             availableUsers={availableUsers}
             conversations={conversations}
-            activeChatId={activeChatId}
+            activeChatId={generalChatActive ? null : activeChatId}
             onlineUids={resolvedOnlineUids}
             onSelectConv={(conv, user) => void handleSelectConv(conv, user)}
             onNewChat={() => setShowNewChat(true)}
+            generalChatActive={generalChatActive}
+            generalChatHasUnread={generalChatHasUnread}
+            onSelectGeneralChat={handleOpenGeneralChat}
           />
         )}
       </div>
 
       {/* Chat */}
       <div className={`${!mobileChat ? 'hidden sm:flex' : 'flex'} flex-col flex-1 min-w-0`}>
-        <ChatPanel
-          currentUid={currentUid}
-          activeChatId={activeChatId}
-          otherUser={otherUser}
-          messages={messages}
-          loadingMsgs={loadingMsgs}
-          sending={sending}
-          error={error}
-          onlineUids={resolvedOnlineUids}
-          onSend={onSend}
-          onEditMessage={onEditMessage}
-          onDeleteMessage={onDeleteMessage}
-          onClearConversation={handleClearConversation}
-          onBack={handleBack}
-          showBack={mobileChat}
-        />
+        {generalChatActive ? (
+          <GeneralChatPanel
+            currentUid={currentUid}
+            messages={generalMessages}
+            memberCount={generalChatMemberCount}
+            loading={generalChatLoading}
+            sending={generalChatSending}
+            error={generalChatError}
+            onSend={onSendGeneralMessage}
+            onBack={handleBack}
+            showBack={mobileChat}
+          />
+        ) : (
+          <ChatPanel
+            currentUid={currentUid}
+            activeChatId={activeChatId}
+            otherUser={otherUser}
+            messages={messages}
+            loadingMsgs={loadingMsgs}
+            sending={sending}
+            error={error}
+            onlineUids={resolvedOnlineUids}
+            onSend={onSend}
+            onEditMessage={onEditMessage}
+            onDeleteMessage={onDeleteMessage}
+            onClearConversation={handleClearConversation}
+            onBack={handleBack}
+            showBack={mobileChat}
+          />
+        )}
       </div>
     </div>
   );
