@@ -13,7 +13,6 @@ const PerformanceView = React.lazy(() => import('./components/Dashboard/Performa
 const RoadmapView = React.lazy(() => import('./components/Dashboard/RoadmapView').then(m => ({ default: m.RoadmapView })));
 const OperacionalView = React.lazy(() => import('./components/Dashboard/OperacionalView').then(m => ({ default: m.OperacionalView })));
 const AgendaView = React.lazy(() => import('./components/Dashboard/AgendaView').then(m => ({ default: m.AgendaView })));
-const ChatView = React.lazy(() => import('./components/Chat/ChatView').then(m => ({ default: m.ChatView })));
 import { useAgenda } from './controllers/useAgenda';
 import type { ViewId } from './components/Layout/Sidebar';
 import { useStrategicBoard } from './controllers/useStrategicBoard';
@@ -43,7 +42,6 @@ import {
   AlertCircle,
   PieChart,
   Briefcase,
-  Bot,
   ShieldCheck,
   FileText,
   Bell,
@@ -1095,9 +1093,6 @@ function AppContent() {
       roadmap: {
         edit: hasModuleAction('roadmap', 'edit'),
       },
-      ia: {
-        send: hasModuleAction('ia', 'send'),
-      },
     }),
     [hasModuleAction, profile]
   );
@@ -1600,7 +1595,6 @@ function AppContent() {
               {activeView === 'backlog' && <ListTodo size={18} className="text-blue-500 shrink-0" />}
               {activeView === 'performance' && <PieChart size={18} className="text-violet-500 shrink-0" />}
               {activeView === 'roadmap' && <Briefcase size={18} className="text-cyan-500 shrink-0" />}
-              {activeView === 'ia' && <Bot size={18} className="text-blue-400 shrink-0" />}
               {activeView === 'workspace' && <ShieldCheck size={18} className="text-blue-400 shrink-0" />}
               {activeView === 'operacional' && <FileText size={18} className="text-blue-500 shrink-0" />}
               <h2 className="text-base font-semibold text-slate-100 tracking-tight">
@@ -1610,7 +1604,6 @@ function AppContent() {
                 {activeView === 'backlog' && 'Backlog'}
                 {activeView === 'performance' && 'Desempenho'}
                 {activeView === 'roadmap' && 'Roadmap 2026'}
-                {activeView === 'ia' && '5W2H CHAT'}
                 {activeView === 'operacional' && 'Operacional'}
               </h2>
             </div>
@@ -1637,8 +1630,7 @@ function AppContent() {
                 <Plus size={16} /> <span className="hidden sm:inline">Nova prioridade</span>
               </button>
             )}
-            {activeView !== 'ia' &&
-              activeView !== 'quadro' &&
+            {activeView !== 'quadro' &&
               activeView !== 'table' &&
               activeView !== 'operacional' &&
               ((activeView === 'backlog' && perm.backlog.create) ||
@@ -1800,10 +1792,6 @@ function AppContent() {
                 availableUsers={agenda.availableUsers}
                 onlineUids={onlineUids}
               />
-          ) : activeView === 'ia' ? (
-            <div className="pb-8 h-full min-h-0 flex flex-col">
-              <ChatView canSend={perm.ia.send} />
-            </div>
           ) : activeView === 'workspace' ? (
             <div className="pb-8 max-w-xl">
               <div className="bg-slate-900/70 border border-slate-800 rounded-xl p-4 space-y-4">

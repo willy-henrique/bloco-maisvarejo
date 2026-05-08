@@ -5,12 +5,12 @@
  * Nenhum componente de UI foi duplicado — todos são os mesmos do sistema principal.
  *
  * Telas com avulso ativo: Gerencial e Operacional.
- * Telas em observação (dados reais): Estratégico, Backlog, Desempenho, Roadmap, IA.
+ * Telas em observação (dados reais): Estratégico, Backlog, Desempenho, Roadmap.
  */
 import React, { useMemo, useState, useCallback, useRef, useEffect } from 'react';
 import {
   Menu, FileText, Plus, X, Target, ListTodo,
-  PieChart, Briefcase, Bot, Search, Activity, AlertCircle, CalendarDays, MessageSquare,
+  PieChart, Briefcase, Search, Activity, AlertCircle, CalendarDays, MessageSquare,
 } from 'lucide-react';
 import { useUser } from '../contexts/UserContext';
 import { useRitmoGestao } from '../controllers/useRitmoGestao';
@@ -25,7 +25,6 @@ import { PerformanceView } from '../components/Dashboard/PerformanceView';
 import { RoadmapView } from '../components/Dashboard/RoadmapView';
 import { KanbanBoard } from '../components/Dashboard/KanbanBoard';
 import { ActionItemModal } from '../components/Dashboard/ActionItemModal';
-import { ChatView } from '../components/Chat/ChatView';
 import { AgendaView } from '../components/Dashboard/AgendaView';
 import { useAgenda } from '../controllers/useAgenda';
 import { EstrategicoGridIcon } from '../components/icons/EstrategicoGridIcon';
@@ -288,7 +287,6 @@ function ProContent() {
     backlog: 'Backlog',
     performance: 'Desempenho',
     roadmap: 'Roadmap 2026',
-    ia: '5W2H CHAT',
     workspace: 'Workspace',
     agenda: 'Agenda',
     chat: 'Chat',
@@ -301,7 +299,6 @@ function ProContent() {
     backlog: <ListTodo size={18} className="text-blue-500 shrink-0" />,
     performance: <PieChart size={18} className="text-violet-500 shrink-0" />,
     roadmap: <Briefcase size={18} className="text-cyan-500 shrink-0" />,
-    ia: <Bot size={18} className="text-blue-400 shrink-0" />,
     workspace: <Target size={18} className="text-blue-400 shrink-0" />,
     agenda: <CalendarDays size={18} className="text-blue-400 shrink-0" />,
     chat: <MessageSquare size={18} className="text-blue-400 shrink-0" />,
@@ -564,13 +561,6 @@ function ProContent() {
               onCycleStatus={agenda.cycleStatus}
               onDelete={agenda.deleteItem}
             />
-          )}
-
-          {/* ── IA ─────────────────────────────────────────────────────────── */}
-          {activeView === 'ia' && (
-            <div className="pb-8 h-full min-h-0 flex flex-col">
-              <ChatView canSend={true} />
-            </div>
           )}
 
           {/* ── WORKSPACE ──────────────────────────────────────────────────── */}

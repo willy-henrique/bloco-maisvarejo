@@ -73,10 +73,6 @@ export const MODULE_ACTIONS: Record<ViewId, { id: string; label: string }[]> = {
     { id: 'read', label: 'Visualizar' },
     { id: 'edit', label: 'Abrir/editar iniciativa' },
   ],
-  ia: [
-    { id: 'read', label: 'Visualizar' },
-    { id: 'send', label: 'Enviar mensagens' },
-  ],
   workspace: [{ id: 'read', label: 'Visualizar' }],
   agenda: [{ id: 'read', label: 'Visualizar' }],
   chat: [{ id: 'read', label: 'Visualizar' }],
@@ -90,7 +86,6 @@ export const ADMIN_SELECTABLE_VIEWS: { id: ViewId; label: string }[] = [
   { id: 'operacional', label: 'Operacional' },
   { id: 'performance', label: 'Desempenho' },
   { id: 'roadmap', label: 'Roadmap' },
-  { id: 'ia', label: '5W2H CHAT' },
 ];
 
 export function allActionIdsForView(view: ViewId): string[] {

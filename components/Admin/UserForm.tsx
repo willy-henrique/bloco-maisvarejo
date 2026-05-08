@@ -60,7 +60,15 @@ const EXTERNAL_LINK_KINDS: { id: ExternalWorkspaceLinkKind; label: string }[] = 
   { id: 'other', label: 'Outro' },
 ];
 
+const ADMIN_SELECTABLE_VIEW_IDS = new Set<ViewId>(ADMIN_SELECTABLE_VIEWS.map((view) => view.id));
+
 const normalizeWorkspace = (value: string) => value.trim().toLowerCase();
+
+const ensureBacklogView = (list: ViewId[]): ViewId[] =>
+  list.includes('backlog') ? list : (['backlog', ...list] as ViewId[]);
+
+const normalizeAdminViews = (list: ViewId[]): ViewId[] =>
+  ensureBacklogView(list.filter((view) => ADMIN_SELECTABLE_VIEW_IDS.has(view)));
 
 function looksValidExternalUrl(raw: string): boolean {
   try {
@@ -79,9 +87,6 @@ export const UserForm: React.FC<UserFormProps> = ({
   onCreate,
   onUpdate,
 }) => {
-  const ensureBacklogView = (list: ViewId[]): ViewId[] =>
-    list.includes('backlog') ? list : (['backlog', ...list] as ViewId[]);
-
   const [nome, setNome] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -99,7 +104,7 @@ export const UserForm: React.FC<UserFormProps> = ({
       setNome(user.nome);
       setEmail(user.email);
       setRole(user.role);
-      const safeViews = ensureBacklogView(Array.isArray(user.views) ? user.views : []);
+      const safeViews = normalizeAdminViews(Array.isArray(user.views) ? user.views : []);
       setViews(safeViews);
       if (user.modulePermissions && Object.keys(user.modulePermissions).length > 0) {
         const ver = user.permissionsSchemaVersion ?? 1;
@@ -181,7 +186,7 @@ export const UserForm: React.FC<UserFormProps> = ({
     setRole(r);
     if (r === 'gerente' || r === 'usuario') {
       setViews((prev) => {
-        if (prev.length > 0) return ensureBacklogView(prev);
+        if (prev.length > 0) return normalizeAdminViews(prev);
         const allIds = ensureBacklogView(ADMIN_SELECTABLE_VIEWS.map((x) => x.id));
         setModulePermissions(defaultModulePermissionsForViews(allIds));
         return allIds;
@@ -271,9 +276,9 @@ export const UserForm: React.FC<UserFormProps> = ({
           role === 'administrador'
             ? {}
             : Object.fromEntries(
-                ensureBacklogView(views).map((v) => [v, modulePermissions[v] ?? allActionIdsForView(v)])
+                normalizeAdminViews(views).map((v) => [v, modulePermissions[v] ?? allActionIdsForView(v)])
               ) as ModulePermissionMap;
-        const safeViews = ensureBacklogView(views);
+        const safeViews = normalizeAdminViews(views);
         await onCreate({
           nome,
           email,
@@ -294,7 +299,7 @@ export const UserForm: React.FC<UserFormProps> = ({
           ativo,
         };
         if (role === 'usuario' || role === 'gerente') {
-          const safeViews = ensureBacklogView(views);
+          const safeViews = normalizeAdminViews(views);
           base.views = safeViews;
           base.modulePermissions = Object.fromEntries(
             safeViews.map((v) => [v, modulePermissions[v] ?? allActionIdsForView(v)])

@@ -7,7 +7,6 @@ import {
   Briefcase,
   X,
   ListTodo,
-  Bot,
   Target,
   FileText,
   ChevronDown,
@@ -21,7 +20,7 @@ import { EstrategicoGridIcon } from '../icons/EstrategicoGridIcon';
 import type { ExternalWorkspaceLink, UserRole } from '../../types/user';
 import { listActiveExternalLinksByWorkspace } from '../../utils/externalWorkspaceLinks';
 
-export type ViewId = 'workspace' | 'dashboard' | 'table' | 'backlog' | 'performance' | 'roadmap' | 'ia' | 'operacional' | 'agenda' | 'chat';
+export type ViewId = 'workspace' | 'dashboard' | 'table' | 'backlog' | 'performance' | 'roadmap' | 'operacional' | 'agenda' | 'chat';
 
 interface SidebarProps {
   activeView: ViewId;
@@ -342,23 +341,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
               )}
             </button>
           </div>
-
-          {canAccessView('ia') && (
-            <div className="mt-4 pt-4 border-t border-slate-800 flex flex-col gap-0.5">
-              <p className="px-3 py-1.5 text-[10px] text-slate-500 uppercase tracking-wider font-medium">IA</p>
-              <button
-                type="button"
-                onClick={() => handleNavClick('ia')}
-                className={`flex items-center gap-2.5 px-3 py-2.5 min-h-[44px] rounded-lg text-sm font-medium transition-all text-left w-full touch-manipulation ${
-                  activeView === 'ia'
-                    ? 'bg-blue-600 text-white'
-                    : 'text-slate-400 hover:bg-slate-800/60 hover:text-slate-100'
-                }`}
-              >
-                <Bot size={18} /> 5W2H CHAT
-              </button>
-            </div>
-          )}
         </nav>
 
         <div className="p-2 border-t border-slate-800 space-y-1">
