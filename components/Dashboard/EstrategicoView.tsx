@@ -1900,11 +1900,11 @@ export const EstrategicoView: React.FC<EstrategicoViewProps> = (props) => {
                   responsaveis={responsaveis}
                   whoUsers={whoPool}
                   computeStatusPlano={computeStatusPlano}
-                  expanded={expandedByPrioridade[p.id] ?? true}
+                  expanded={expandedByPrioridade[p.id] ?? false}
                   onToggle={() =>
                     setExpandedByPrioridade((prev) => ({
                       ...prev,
-                      [p.id]: !(prev[p.id] ?? true),
+                      [p.id]: !(prev[p.id] ?? false),
                     }))
                   }
                   showDonoName

@@ -59,6 +59,7 @@ interface TeamChatViewProps {
   generalChatError: string | null;
   generalChatHasUnread: boolean;
   generalChatMemberCount: number;
+  generalMentionUsers: TeamChatUser[];
   onGeneralChatMarkRead: () => void;
   onSendGeneralMessage: (texto: string, replyTo?: MessageReplyTo) => Promise<void>;
 }
@@ -99,6 +100,29 @@ function avatarBg(uid: string) {
   let h = 0;
   for (let i = 0; i < uid.length; i++) h = (h * 31 + uid.charCodeAt(i)) | 0;
   return COLORS[Math.abs(h) % COLORS.length];
+}
+
+function normalizeSearch(value: string): string {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+}
+
+function mentionName(user: TeamChatUser): string {
+  return user.nome.trim() || user.email.split('@')[0]?.trim() || 'Usuario';
+}
+
+function getActiveMention(text: string, cursor: number): { start: number; query: string } | null {
+  const beforeCursor = text.slice(0, cursor);
+  const start = beforeCursor.lastIndexOf('@');
+  if (start < 0) return null;
+  const charBefore = start > 0 ? beforeCursor[start - 1] : '';
+  if (charBefore && !/\s|\(|\[|\{/.test(charBefore)) return null;
+  const query = beforeCursor.slice(start + 1);
+  if (query.length > 40 || /[\s\n\r,;:!?()[\]{}]/.test(query)) return null;
+  return { start, query };
 }
 
 const Av = React.memo(function Av({
@@ -1073,6 +1097,7 @@ const GeneralChatPanel = React.memo(function GeneralChatPanel({
   currentUid,
   messages,
   memberCount,
+  mentionUsers,
   loading,
   sending,
   error,
@@ -1083,6 +1108,7 @@ const GeneralChatPanel = React.memo(function GeneralChatPanel({
   currentUid: string;
   messages: GeneralChatMessage[];
   memberCount: number;
+  mentionUsers: TeamChatUser[];
   loading: boolean;
   sending: boolean;
   error: string | null;
@@ -1095,10 +1121,51 @@ const GeneralChatPanel = React.memo(function GeneralChatPanel({
   const [linkOpen, setLinkOpen] = useState(false);
   const [linkUrl, setLinkUrl] = useState('');
   const [linkTitle, setLinkTitle] = useState('');
+  const [mentionTrigger, setMentionTrigger] = useState<{ start: number; query: string } | null>(null);
+  const [mentionIndex, setMentionIndex] = useState(0);
   const listRef = useRef<HTMLDivElement>(null);
   const taRef = useRef<HTMLTextAreaElement>(null);
   const linkUrlRef = useRef<HTMLInputElement>(null);
   const atBottom = useRef(true);
+
+  const mentionableUsers = useMemo(() => {
+    const byUid = new Map<string, TeamChatUser>();
+    for (const user of mentionUsers) {
+      if (user.uid && user.nome.trim()) byUid.set(user.uid, user);
+    }
+    return Array.from(byUid.values()).sort((a, b) => mentionName(a).localeCompare(mentionName(b), 'pt-BR'));
+  }, [mentionUsers]);
+
+  const mentionOptions = useMemo(() => {
+    if (!mentionTrigger) return [];
+    const query = normalizeSearch(mentionTrigger.query);
+    return mentionableUsers.filter((user) => {
+      if (!query) return true;
+      const name = normalizeSearch(mentionName(user));
+      const email = normalizeSearch(user.email);
+      return name.includes(query) || email.includes(query);
+    });
+  }, [mentionTrigger, mentionableUsers]);
+
+  const mentionOpen = mentionTrigger !== null;
+
+  useEffect(() => {
+    setMentionIndex(0);
+  }, [mentionTrigger?.query]);
+
+  useEffect(() => {
+    if (mentionIndex >= mentionOptions.length) setMentionIndex(Math.max(mentionOptions.length - 1, 0));
+  }, [mentionIndex, mentionOptions.length]);
+
+  const syncMentionTrigger = useCallback((value: string, cursor: number) => {
+    setMentionTrigger(getActiveMention(value, cursor));
+  }, []);
+
+  const resizeTextarea = useCallback((el: HTMLTextAreaElement | null) => {
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = Math.min(el.scrollHeight, 96) + 'px';
+  }, []);
 
   useEffect(() => {
     if (atBottom.current) listRef.current?.scrollTo({ top: 9999999 });
@@ -1120,6 +1187,7 @@ const GeneralChatPanel = React.memo(function GeneralChatPanel({
       ? { messageId: replyingTo.id, senderNome: replyingTo.senderNome, texto: replyingTo.texto.slice(0, 200) }
       : undefined;
     setText('');
+    setMentionTrigger(null);
     setReplyingTo(null);
     if (taRef.current) taRef.current.style.height = 'auto';
     await onSend(t, reply);
@@ -1127,14 +1195,56 @@ const GeneralChatPanel = React.memo(function GeneralChatPanel({
   }, [text, sending, replyingTo, onSend]);
 
   const handleTextareaChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setText(e.target.value);
-    e.target.style.height = 'auto';
-    e.target.style.height = Math.min(e.target.scrollHeight, 96) + 'px';
-  }, []);
+    const next = e.target.value;
+    setText(next);
+    resizeTextarea(e.target);
+    syncMentionTrigger(next, e.target.selectionStart ?? next.length);
+  }, [resizeTextarea, syncMentionTrigger]);
+
+  const insertMention = useCallback((user: TeamChatUser) => {
+    if (!mentionTrigger) return;
+    const cursor = taRef.current?.selectionStart ?? text.length;
+    const before = text.slice(0, mentionTrigger.start);
+    const after = text.slice(cursor);
+    const insertion = `@${mentionName(user)} `;
+    const next = `${before}${insertion}${after}`;
+    const nextCursor = before.length + insertion.length;
+    setText(next);
+    setMentionTrigger(null);
+    requestAnimationFrame(() => {
+      const el = taRef.current;
+      if (!el) return;
+      el.focus();
+      el.setSelectionRange(nextCursor, nextCursor);
+      resizeTextarea(el);
+    });
+  }, [mentionTrigger, resizeTextarea, text]);
 
   const handleTextareaKeyDown = useCallback((e: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (mentionOpen) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setMentionIndex((i) => (mentionOptions.length ? (i + 1) % mentionOptions.length : 0));
+        return;
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setMentionIndex((i) => (mentionOptions.length ? (i - 1 + mentionOptions.length) % mentionOptions.length : 0));
+        return;
+      }
+      if ((e.key === 'Enter' || e.key === 'Tab') && mentionOptions[mentionIndex]) {
+        e.preventDefault();
+        insertMention(mentionOptions[mentionIndex]);
+        return;
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setMentionTrigger(null);
+        return;
+      }
+    }
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void doSend(); }
-  }, [doSend]);
+  }, [doSend, insertMention, mentionIndex, mentionOpen, mentionOptions]);
 
   const handleSendLink = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1396,16 +1506,61 @@ const GeneralChatPanel = React.memo(function GeneralChatPanel({
           </button>
 
           <div
-            className="flex-1 rounded-xl px-3 py-2 border transition-colors"
+            className="relative flex-1 rounded-xl px-3 py-2 border transition-colors"
             style={{ background: '#12243a', borderColor: '#24364d' }}
             onFocusCapture={(e) => (e.currentTarget.style.borderColor = '#3b82f6')}
             onBlurCapture={(e) => (e.currentTarget.style.borderColor = '#24364d')}
           >
+            {mentionOpen && (
+              <div
+                className="absolute left-0 right-0 bottom-[calc(100%+8px)] z-20 overflow-hidden rounded-xl border shadow-2xl"
+                style={{ background: '#0b1728', borderColor: '#244768' }}
+              >
+                <div className="max-h-56 overflow-y-auto py-1">
+                  {mentionOptions.length === 0 ? (
+                    <p className="px-3 py-3 text-[12px]" style={{ color: '#8aa4c2' }}>
+                      Nenhum usuário encontrado.
+                    </p>
+                  ) : (
+                    mentionOptions.map((user, index) => {
+                      const active = index === mentionIndex;
+                      return (
+                        <button
+                          key={user.uid}
+                          type="button"
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            insertMention(user);
+                          }}
+                          onMouseEnter={() => setMentionIndex(index)}
+                          className="w-full flex items-center gap-2.5 px-3 py-2 text-left transition-colors"
+                          style={{ background: active ? '#132943' : 'transparent' }}
+                        >
+                          <Av uid={user.uid} nome={mentionName(user)} size={28} />
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-[13px] font-medium" style={{ color: '#f8fafc' }}>
+                              {mentionName(user)}
+                            </p>
+                            {user.email && (
+                              <p className="truncate text-[11px]" style={{ color: '#8aa4c2' }}>
+                                {user.email}
+                              </p>
+                            )}
+                          </div>
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            )}
             <textarea
               ref={taRef}
               value={text}
               onChange={handleTextareaChange}
               onKeyDown={handleTextareaKeyDown}
+              onSelect={(e) => syncMentionTrigger(text, e.currentTarget.selectionStart ?? text.length)}
+              onBlur={() => window.setTimeout(() => setMentionTrigger(null), 120)}
               placeholder="Mensagem para o grupo…"
               rows={1}
               className="w-full bg-transparent text-[13px] outline-none resize-none leading-relaxed placeholder:text-slate-400"
@@ -1434,7 +1589,7 @@ export const TeamChatView: React.FC<TeamChatViewProps> = ({
   messages, loadingConvs, loadingMsgs, sending, error, onlineUids,
   onOpenConversation, onSwitchConversation, onCloseConversation, onSend, onEditMessage, onDeleteMessage, onClearConversation, onMarkRead,
   generalMessages, generalChatLoading, generalChatSending, generalChatError,
-  generalChatHasUnread, generalChatMemberCount, onGeneralChatMarkRead, onSendGeneralMessage,
+  generalChatHasUnread, generalChatMemberCount, generalMentionUsers, onGeneralChatMarkRead, onSendGeneralMessage,
 }) => {
   const [mobileChat, setMobileChat] = useState(false);
   const [showNewChat, setShowNewChat] = useState(false);
@@ -1528,6 +1683,7 @@ export const TeamChatView: React.FC<TeamChatViewProps> = ({
             currentUid={currentUid}
             messages={generalMessages}
             memberCount={generalChatMemberCount}
+            mentionUsers={generalMentionUsers}
             loading={generalChatLoading}
             sending={generalChatSending}
             error={generalChatError}

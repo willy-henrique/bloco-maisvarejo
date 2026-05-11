@@ -54,6 +54,69 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    match /generalChat/{chatId} {
+      function isMainChat() {
+        return chatId == 'main';
+      }
+      function metaShapeIsValid() {
+        return request.resource.data.keys().hasOnly(['lastMessage', 'lastMessageAt', 'lastReadAt'])
+          && (!('lastMessage' in request.resource.data) || request.resource.data.lastMessage is string)
+          && (!('lastMessageAt' in request.resource.data) || request.resource.data.lastMessageAt is number)
+          && (!('lastReadAt' in request.resource.data) || request.resource.data.lastReadAt is map);
+      }
+      function updatesLastMessageOnly() {
+        return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastMessage', 'lastMessageAt'])
+          && metaShapeIsValid();
+      }
+      function marksOwnReadOnly() {
+        return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastReadAt'])
+          && request.resource.data.lastReadAt is map
+          && request.resource.data.lastReadAt[request.auth.uid] is number
+          && (
+            (
+              !('lastReadAt' in resource.data)
+              && request.resource.data.lastReadAt.keys().hasOnly([request.auth.uid])
+            ) || (
+              resource.data.lastReadAt is map
+              && request.resource.data.lastReadAt.diff(resource.data.lastReadAt).affectedKeys().hasOnly([request.auth.uid])
+            )
+          );
+      }
+
+      allow read: if isAuthenticated() && isMainChat();
+      allow create: if isAuthenticated() && isMainChat() && metaShapeIsValid();
+      allow update: if isAuthenticated() && isMainChat() && (updatesLastMessageOnly() || marksOwnReadOnly());
+      allow delete: if false;
+
+      match /messages/{messageId} {
+        function replyShapeIsValid() {
+          return !('replyTo' in request.resource.data)
+            || (
+              request.resource.data.replyTo is map
+              && request.resource.data.replyTo.keys().hasOnly(['messageId', 'senderNome', 'texto'])
+              && request.resource.data.replyTo.messageId is string
+              && request.resource.data.replyTo.senderNome is string
+              && request.resource.data.replyTo.texto is string
+              && request.resource.data.replyTo.texto.size() <= 200
+            );
+        }
+
+        allow read: if isAuthenticated() && isMainChat();
+        allow create: if isAuthenticated()
+          && isMainChat()
+          && request.resource.data.senderUid == request.auth.uid
+          && request.resource.data.keys().hasOnly(['senderUid', 'senderNome', 'texto', 'createdAt', 'createdAtServer', 'replyTo'])
+          && request.resource.data.senderNome is string
+          && request.resource.data.createdAt is number
+          && request.resource.data.createdAtServer == request.time
+          && request.resource.data.texto is string
+          && request.resource.data.texto.size() > 0
+          && request.resource.data.texto.size() <= 4000
+          && replyShapeIsValid();
+        allow update, delete: if false;
+      }
+    }
+
     match /privateChats/{chatId} {
       function isParticipant() {
         return isAuthenticated() &&

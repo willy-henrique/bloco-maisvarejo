@@ -322,7 +322,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   : 'text-slate-400 hover:bg-slate-800/60 hover:text-slate-100'
               }`}
             >
-              <CalendarDays size={18} /> Agenda
+              <CalendarDays size={18} /> Google Agenda
             </button>
             <button
               type="button"

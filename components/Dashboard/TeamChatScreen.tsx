@@ -16,6 +16,16 @@ export const TeamChatScreen = React.memo(function TeamChatScreen({
 }: TeamChatScreenProps) {
   const chat = useChat(currentUser);
   const generalChat = useGeneralChat(currentUser);
+  const generalMentionUsers = React.useMemo(() => {
+    const byUid = new Map<string, TeamChatUser>();
+    if (currentUser?.uid) {
+      byUid.set(currentUser.uid, { uid: currentUser.uid, nome: currentUser.nome, email: '' });
+    }
+    for (const user of availableUsers) {
+      if (user.uid) byUid.set(user.uid, user);
+    }
+    return Array.from(byUid.values()).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+  }, [availableUsers, currentUser]);
   // +1 para incluir o usuário atual
   const memberCount = availableUsers.length + 1;
 
@@ -46,6 +56,7 @@ export const TeamChatScreen = React.memo(function TeamChatScreen({
       generalChatError={generalChat.error}
       generalChatHasUnread={generalChat.hasUnread}
       generalChatMemberCount={memberCount}
+      generalMentionUsers={generalMentionUsers}
       onGeneralChatMarkRead={generalChat.markRead}
       onSendGeneralMessage={generalChat.sendMessage}
     />

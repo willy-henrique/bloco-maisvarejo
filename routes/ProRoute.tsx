@@ -25,8 +25,7 @@ import { PerformanceView } from '../components/Dashboard/PerformanceView';
 import { RoadmapView } from '../components/Dashboard/RoadmapView';
 import { KanbanBoard } from '../components/Dashboard/KanbanBoard';
 import { ActionItemModal } from '../components/Dashboard/ActionItemModal';
-import { AgendaView } from '../components/Dashboard/AgendaView';
-import { useAgenda } from '../controllers/useAgenda';
+import { GoogleAgendaView } from '../components/Dashboard/GoogleAgendaView';
 import { EstrategicoGridIcon } from '../components/icons/EstrategicoGridIcon';
 import { mergeResponsaveisComPerfis } from '../utils/mergeResponsaveisComPerfis';
 import { nomeExibicaoWhoParaItem } from '../components/Dashboard/responsavelSearchUtils';
@@ -172,7 +171,6 @@ function NovoPlanoModal({
 
 function ProContent() {
   const { profile, encryptionKey, logout, firebaseUser } = useUser();
-  const agenda = useAgenda(firebaseUser?.uid ?? null);
   const ritmo = useRitmoGestao(encryptionKey ?? null);
   const { items, loading: loadingItems, addItem, updateItem, deleteItem, updateStatus } =
     useStrategicBoard(encryptionKey ?? null);
@@ -288,7 +286,7 @@ function ProContent() {
     performance: 'Desempenho',
     roadmap: 'Roadmap 2026',
     workspace: 'Workspace',
-    agenda: 'Agenda',
+    agenda: 'Google Agenda',
     chat: 'Chat',
   };
 
@@ -554,13 +552,7 @@ function ProContent() {
 
           {/* ── AGENDA ─────────────────────────────────────────────────────── */}
           {activeView === 'agenda' && (
-            <AgendaView
-              items={agenda.items}
-              loading={agenda.loading}
-              onAdd={agenda.addItem}
-              onCycleStatus={agenda.cycleStatus}
-              onDelete={agenda.deleteItem}
-            />
+            <GoogleAgendaView />
           )}
 
           {/* ── WORKSPACE ──────────────────────────────────────────────────── */}

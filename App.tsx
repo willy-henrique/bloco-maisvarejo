@@ -12,8 +12,7 @@ const ActionItemModal = React.lazy(() => import('./components/Dashboard/ActionIt
 const PerformanceView = React.lazy(() => import('./components/Dashboard/PerformanceView').then(m => ({ default: m.PerformanceView })));
 const RoadmapView = React.lazy(() => import('./components/Dashboard/RoadmapView').then(m => ({ default: m.RoadmapView })));
 const OperacionalView = React.lazy(() => import('./components/Dashboard/OperacionalView').then(m => ({ default: m.OperacionalView })));
-const AgendaView = React.lazy(() => import('./components/Dashboard/AgendaView').then(m => ({ default: m.AgendaView })));
-import { useAgenda } from './controllers/useAgenda';
+const GoogleAgendaView = React.lazy(() => import('./components/Dashboard/GoogleAgendaView').then(m => ({ default: m.GoogleAgendaView })));
 import type { ViewId } from './components/Layout/Sidebar';
 import { useStrategicBoard } from './controllers/useStrategicBoard';
 import { useRitmoGestao } from './controllers/useRitmoGestao';
@@ -42,6 +41,7 @@ import {
   AlertCircle,
   PieChart,
   Briefcase,
+  CalendarDays,
   ShieldCheck,
   FileText,
   Bell,
@@ -148,7 +148,6 @@ function empresaParaDemandaDoDono(
 
 function AppContent() {
   const { isAuthenticated, encryptionKey, logout, profile, hasModuleAction, firebaseUser, loading: authLoading } = useUser();
-  const agenda = useAgenda(firebaseUser?.uid ?? null, profile);
   const [activeView, setActiveView] = useState<ViewId>('backlog');
   const chatUser = useMemo(
     () => firebaseUser ? { uid: firebaseUser.uid, nome: profile?.nome?.trim() || firebaseUser.email || firebaseUser.uid } : null,
@@ -183,8 +182,6 @@ function AppContent() {
   const [quadroVerConcluidas, setQuadroVerConcluidas] = useState(false);
   const [focusPrioridadeId, setFocusPrioridadeId] = useState<string | null>(null);
   const focusedPrioridadeId = useRef<string | null>(null);
-  const agendaInviteNotificationsReady = useRef(false);
-  const seenAgendaInviteKeys = useRef<Set<string>>(new Set());
   const activeViewRef = useRef<ViewId>(activeView);
   const chatNotificationsReady = useRef(false);
   const seenChatMessageAtByConversation = useRef<Map<string, number>>(new Map());
@@ -198,6 +195,13 @@ function AppContent() {
   const [empresasLocais, setEmpresasLocais] = useState<string[]>([]);
   const [appSettings, setAppSettings] = useState<AppSettings>(() => getDefaultAppSettings());
   const [empresasBloqueadas, setEmpresasBloqueadas] = useState<string[]>([]);
+  const chatAvailableUsers = useMemo(
+    () =>
+      perfisCadastroUsuarios
+        .filter((user) => user.uid !== firebaseUser?.uid && user.ativo !== false)
+        .map(({ uid, nome, email }) => ({ uid, nome, email })),
+    [perfisCadastroUsuarios, firebaseUser?.uid],
+  );
   const canEditTaskDueDate = profile?.role === 'administrador' || appSettings.tarefaPermiteAlterarData;
   const hasAllWorkspaceAccess = useMemo(() => profileHasAllWorkspaceAccess(profile), [profile]);
   const allowedWorkspaceNames = useMemo(() => profileAllowedWorkspaces(profile), [profile]);
@@ -326,8 +330,6 @@ function AppContent() {
   }, [isAuthenticated, firebaseUser?.uid]);
 
   useEffect(() => {
-    agendaInviteNotificationsReady.current = false;
-    seenAgendaInviteKeys.current = new Set();
     chatNotificationsReady.current = false;
     seenChatMessageAtByConversation.current = new Map();
     assignmentNotificationsReady.current = false;
@@ -400,57 +402,6 @@ function AppContent() {
       unsub?.();
     };
   }, [isAuthenticated, chatUser, dispatchSystemNotification]);
-
-  useEffect(() => {
-    if (!agenda.incomingEventInvitesReady) return;
-
-    const pendingInvites = agenda.incomingEventInvites.filter((invite) => invite.status === 'pending');
-    const currentKeys = new Set(
-      pendingInvites.map((invite) => `${invite.ownerUid}:${invite.eventId}`),
-    );
-
-    if (!agendaInviteNotificationsReady.current) {
-      seenAgendaInviteKeys.current = currentKeys;
-      agendaInviteNotificationsReady.current = true;
-      return;
-    }
-
-    const newInvites = pendingInvites.filter(
-      (invite) => !seenAgendaInviteKeys.current.has(`${invite.ownerUid}:${invite.eventId}`),
-    );
-
-    seenAgendaInviteKeys.current = currentKeys;
-
-    if (newInvites.length === 0) return;
-
-    const first = newInvites[0];
-    const message =
-      newInvites.length === 1
-        ? `Novo convite para evento: ${first.event.titulo}`
-        : `${newInvites.length} novos convites para eventos`;
-
-    setToast({ message, type: 'success' });
-
-    if (
-      systemNotificationsEnabled &&
-      typeof window !== 'undefined' &&
-      'Notification' in window &&
-      Notification.permission === 'granted'
-    ) {
-      const notification = new Notification('Convite para evento', {
-        body:
-          newInvites.length === 1
-            ? `${first.ownerNome} convidou você para "${first.event.titulo}".`
-            : message,
-        tag: newInvites.length === 1 ? `agenda-${first.ownerUid}-${first.eventId}` : 'agenda-new-invites',
-      });
-      notification.onclick = () => {
-        window.focus();
-        setActiveView('agenda');
-        notification.close();
-      };
-    }
-  }, [agenda.incomingEventInvites, agenda.incomingEventInvitesReady, systemNotificationsEnabled]);
 
   const matchWorkspace = useCallback(
     (empresa?: string) => {
@@ -1595,6 +1546,7 @@ function AppContent() {
               {activeView === 'backlog' && <ListTodo size={18} className="text-blue-500 shrink-0" />}
               {activeView === 'performance' && <PieChart size={18} className="text-violet-500 shrink-0" />}
               {activeView === 'roadmap' && <Briefcase size={18} className="text-cyan-500 shrink-0" />}
+              {activeView === 'agenda' && <CalendarDays size={18} className="text-blue-400 shrink-0" />}
               {activeView === 'workspace' && <ShieldCheck size={18} className="text-blue-400 shrink-0" />}
               {activeView === 'operacional' && <FileText size={18} className="text-blue-500 shrink-0" />}
               <h2 className="text-base font-semibold text-slate-100 tracking-tight">
@@ -1604,6 +1556,7 @@ function AppContent() {
                 {activeView === 'backlog' && 'Backlog'}
                 {activeView === 'performance' && 'Desempenho'}
                 {activeView === 'roadmap' && 'Roadmap 2026'}
+                {activeView === 'agenda' && 'Google Agenda'}
                 {activeView === 'operacional' && 'Operacional'}
               </h2>
             </div>
@@ -1633,6 +1586,7 @@ function AppContent() {
             {activeView !== 'quadro' &&
               activeView !== 'table' &&
               activeView !== 'operacional' &&
+              activeView !== 'agenda' &&
               ((activeView === 'backlog' && perm.backlog.create) ||
                 (activeView === 'dashboard' && perm.dashboard.create) ||
                 (activeView !== 'backlog' &&
@@ -1767,29 +1721,11 @@ function AppContent() {
           )}
 
           {activeView === 'agenda' ? (
-            <AgendaView
-              items={agenda.items}
-              loading={agenda.loading}
-              onAdd={agenda.addItem}
-              onCycleStatus={agenda.cycleStatus}
-              onDelete={agenda.deleteItem}
-              onEdit={agenda.updateItem}
-              availableUsers={agenda.availableUsers}
-              incomingEventInvites={agenda.incomingEventInvites}
-              outgoingEventInvites={agenda.outgoingEventInvites}
-              sharedAgendas={agenda.sharedAgendas}
-              sharingLoading={agenda.sharingLoading}
-              systemNotificationsSupported={typeof window !== 'undefined' && 'Notification' in window}
-              systemNotificationPermission={systemNotificationPermission}
-              systemNotificationsEnabled={systemNotificationsEnabled}
-              onEnableSystemNotifications={requestSystemNotifications}
-              onToggleSystemNotifications={toggleSystemNotifications}
-              onRespondEventInvite={agenda.respondEventInvite}
-            />
+            <GoogleAgendaView />
           ) : activeView === 'chat' ? (
               <TeamChatScreen
                 currentUser={chatUser}
-                availableUsers={agenda.availableUsers}
+                availableUsers={chatAvailableUsers}
                 onlineUids={onlineUids}
               />
           ) : activeView === 'workspace' ? (

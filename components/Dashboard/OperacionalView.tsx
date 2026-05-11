@@ -13,7 +13,6 @@ import { canViewByOwnershipOrObserver, tarefaAtribuidaAoUsuario } from './taskAs
 import { ObserversPanel } from './ObserversPanel';
 import { TaskBlockReasonModal } from './TaskBlockReasonModal';
 import { apiGetBlockContext } from '../../services/ritmoCollabApi';
-import { type VisibilityFilter } from '../Shared/VisibilityFilterBar';
 
 // Utilidades
 function tsFromDateInput(v: string): number {
@@ -1188,7 +1187,6 @@ export const OperacionalView: React.FC<OperacionalProps> = ({
   onUpdatePlano,
   operacionalCaps,
 }) => {
-  const [visibilityFilters, setVisibilityFilters] = useState<VisibilityFilter[]>(['assigned']);
   const [openTaskObservers, setOpenTaskObservers] = useState<Record<string, boolean>>({});
   const [tarefaParaBloquear, setTarefaParaBloquear] = useState<Tarefa | null>(null);
   const [tarefaParaExcluirGlobal, setTarefaParaExcluirGlobal] = useState<Tarefa | null>(null);
@@ -1204,11 +1202,6 @@ export const OperacionalView: React.FC<OperacionalProps> = ({
   };
   const whoPool = whoUsers && whoUsers.length > 0 ? whoUsers : responsaveis;
   const observerPool = observerUsers && observerUsers.length > 0 ? observerUsers : responsaveis;
-  const toggleVisibilityFilter = (filter: VisibilityFilter) => {
-    setVisibilityFilters((prev) =>
-      prev.includes(filter) ? prev.filter((item) => item !== filter) : [...prev, filter],
-    );
-  };
 
   const seesAllPrioridades = loggedUserRole === 'administrador';
   const viewerSeesAllTarefasNoPlano = loggedUserRole === 'administrador';
@@ -1326,14 +1319,10 @@ export const OperacionalView: React.FC<OperacionalProps> = ({
         Array.isArray(pl.observadores) &&
         pl.observadores.some((o) => myResponsavelIds.has(normStr(o.user_id)));
 
-      if (visibilityFilters.length === 0) return false;
-      const matchesCreated = visibilityFilters.includes('created') && isCreator;
-      const matchesAssigned = visibilityFilters.includes('assigned') && isAssigned;
-      const matchesObserving = visibilityFilters.includes('observing') && isObserving;
-      return matchesCreated || matchesAssigned || matchesObserving;
+      return isCreator || isAssigned || isObserving;
     });
     return list;
-  }, [planos, tarefas, visiblePrioridades, visibilityFilters, myResponsavelIds, responsaveis, loggedUserUid]);
+  }, [planos, tarefas, visiblePrioridades, myResponsavelIds, responsaveis, loggedUserUid]);
   // Mapas completos (não filtrados por visibilidade) para o drawer de detalhes
   const allPlanosById = useMemo(() => {
     const map = new Map<string, PlanoDeAcao>();
@@ -1357,17 +1346,13 @@ export const OperacionalView: React.FC<OperacionalProps> = ({
         Array.isArray(t.observadores) &&
         t.observadores.some((o) => myResponsavelIds.has(normStr(o.user_id)));
 
-      if (visibilityFilters.length === 0) return false;
-      const matchesAssigned = visibilityFilters.includes('assigned') && isAssigned;
       // Tarefas atribuídas ao usuário aparecem independente do workspace de origem
-      if (matchesAssigned) return true;
+      if (isAssigned) return true;
 
       // Para criadas/observando, exige que o plano esteja no escopo visível
       const isInVisiblePlan = planosVisiveisIds.has(t.plano_id);
       if (!isInVisiblePlan) return false;
-      const matchesCreated = visibilityFilters.includes('created') && isCreator;
-      const matchesObserving = visibilityFilters.includes('observing') && isObserving;
-      return matchesCreated || matchesObserving;
+      return isCreator || isObserving;
     });
     return filtradas.sort((a, b) => a.data_vencimento - b.data_vencimento);
   }, [
@@ -1375,61 +1360,17 @@ export const OperacionalView: React.FC<OperacionalProps> = ({
     visiblePlanos,
     myResponsavelIds,
     responsaveis,
-    visibilityFilters,
     loggedUserUid,
   ]);
 
   return (
-    <div className="space-y-2">
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div className="inline-flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={() => toggleVisibilityFilter('created')}
-            className={`px-2.5 py-1 text-[11px] rounded-md transition-colors ${
-              visibilityFilters.includes('created')
-                ? 'bg-blue-600 text-white border border-blue-500'
-                : 'bg-slate-900/60 border border-slate-700 text-slate-300 hover:text-slate-100'
-            }`}
-          >
-            lançados por mim
-          </button>
-          <button
-            type="button"
-            onClick={() => toggleVisibilityFilter('assigned')}
-            className={`px-2.5 py-1 text-[11px] rounded-md transition-colors ${
-              visibilityFilters.includes('assigned')
-                ? 'bg-blue-600 text-white border border-blue-500'
-                : 'bg-slate-900/60 border border-slate-700 text-slate-300 hover:text-slate-100'
-            }`}
-          >
-            atribuídos para mim
-          </button>
-          <button
-            type="button"
-            onClick={() => toggleVisibilityFilter('observing')}
-            className={`px-2.5 py-1 text-[11px] rounded-md transition-colors ${
-              visibilityFilters.includes('observing')
-                ? 'bg-blue-600 text-white border border-blue-500'
-                : 'bg-slate-900/60 border border-slate-700 text-slate-300 hover:text-slate-100'
-            }`}
-          >
-            itens que eu acompanho
-          </button>
+    <div>
+      {visibleTarefas.length === 0 ? (
+        <div className="px-4 py-10 text-sm text-slate-500 text-center">
+          Nenhuma tarefa operacional disponível {seesAllPrioridades ? '' : 'para o seu usuário'}.
         </div>
-        <span className="text-[10px] text-slate-500 bg-slate-800 px-2 py-1 rounded tabular-nums">
-          {visibleTarefas.length} {visibleTarefas.length === 1 ? 'tarefa' : 'tarefas'}
-        </span>
-      </div>
-
-      <section className="bg-slate-900/60 border border-slate-800 rounded-xl overflow-hidden">
-        <div className="p-4">
-          {visibleTarefas.length === 0 ? (
-            <div className="px-4 py-10 text-sm text-slate-500 text-center">
-              Nenhuma tarefa operacional disponível {seesAllPrioridades ? '' : 'para o seu usuário'}.
-            </div>
-          ) : (
-            <div className="overflow-x-auto rounded-lg border border-slate-800 bg-slate-900/50">
+      ) : (
+        <div className="overflow-x-auto bg-slate-900/50">
               <table className="w-full table-fixed min-w-[900px] text-sm">
                 <thead>
                   <tr className="bg-slate-900/80 text-slate-400 text-[10px] uppercase tracking-wider border-b border-slate-800">
@@ -1565,9 +1506,8 @@ export const OperacionalView: React.FC<OperacionalProps> = ({
                   })}
                 </tbody>
               </table>
-            </div>
-          )}
         </div>
+      )}
       <TaskBlockReasonModal
         isOpen={tarefaParaBloquear !== null}
         taskTitle={tarefaParaBloquear?.titulo}
@@ -1602,7 +1542,6 @@ export const OperacionalView: React.FC<OperacionalProps> = ({
           </div>
         </div>
       </Modal>
-      </section>
 
       {tarefaDetalhe && (
         <TarefaDetailDrawer
