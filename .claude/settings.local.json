@@ -2,7 +2,12 @@
   "permissions": {
     "allow": [
       "Bash(grep -n \"responsavelSearchUtils\\\\|taskAssignmentUtils\" /c/willydev/bloco-maisvarejo-1/components/Dashboard/*.tsx)",
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "Bash(Get-ChildItem -Path \"c:\\\\willydev\\\\bloco-maisvarejo\" -Directory)",
+      "Bash(Select-Object -First 20)",
+      "Bash(Format-Table Name)",
+      "Bash(Get-ChildItem -Path \"c:\\\\willydev\\\\bloco-maisvarejo\" -Recurse -Filter \"*Estrategico*\")",
+      "Bash(xargs grep -l \"PopoverMenu\\\\|DropdownMenu\\\\|ActionMenu\")"
     ]
   }
 }

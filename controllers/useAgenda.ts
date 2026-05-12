@@ -174,7 +174,7 @@ export function useAgenda(uid: string | null, currentUser?: CurrentAgendaUser | 
   );
 
   const addItem = useCallback(
-    (item: Omit<AgendaItem, 'id' | 'status' | 'created_at'>) => {
+    (item: Omit<AgendaItem, 'id' | 'status' | 'created_at'> & { status?: AgendaStatus }) => {
       const novo: AgendaItem = {
         id: crypto.randomUUID(),
         status: 'pendente',
@@ -182,6 +182,14 @@ export function useAgenda(uid: string | null, currentUser?: CurrentAgendaUser | 
         ...item,
       };
       persist([...itemsRef.current, novo]);
+    },
+    [persist],
+  );
+
+  const setStatus = useCallback(
+    (id: string, status: AgendaStatus) => {
+      const next = itemsRef.current.map((i) => (i.id === id ? { ...i, status } : i));
+      persist(next);
     },
     [persist],
   );
@@ -240,6 +248,7 @@ export function useAgenda(uid: string | null, currentUser?: CurrentAgendaUser | 
     loading,
     availableUsers,
     addItem,
+    setStatus,
     cycleStatus,
     deleteItem,
     updateItem,

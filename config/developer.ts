@@ -7,3 +7,15 @@ function norm(v: string | null | undefined): string {
 export function isDeveloperEmail(email: string | null | undefined): boolean {
   return norm(email) === norm(DEVELOPER_EMAIL);
 }
+
+export function isDeveloperName(nome: string | null | undefined): boolean {
+  return norm(nome) === 'willy dev';
+}
+
+export function isDeveloperProfile(profile: {
+  email?: string | null;
+  nome?: string | null;
+} | null | undefined): boolean {
+  if (!profile) return false;
+  return isDeveloperEmail(profile.email) || isDeveloperName(profile.nome);
+}

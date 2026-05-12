@@ -30,6 +30,7 @@ import { useAgenda } from '../controllers/useAgenda';
 import { EstrategicoGridIcon } from '../components/icons/EstrategicoGridIcon';
 import { mergeResponsaveisComPerfis } from '../utils/mergeResponsaveisComPerfis';
 import { nomeExibicaoWhoParaItem } from '../components/Dashboard/responsavelSearchUtils';
+import { isDeveloperProfile } from '../config/developer';
 import type { ViewId } from '../components/Layout/Sidebar';
 import type { PlanoDeAcao, Prioridade, Tarefa } from '../types';
 import type { ActionItem } from '../types';
@@ -185,7 +186,7 @@ function ProContent() {
   useEffect(() => {
     let cancelled = false;
     listAllUsers().then((all) => {
-      if (!cancelled) setPerfisCadastro(all);
+      if (!cancelled) setPerfisCadastro(all.filter((u) => u.ativo !== false && !isDeveloperProfile(u)));
     }).catch(() => {});
     return () => { cancelled = true; };
   }, []);
@@ -558,7 +559,7 @@ function ProContent() {
               items={agenda.items}
               loading={agenda.loading}
               onAdd={agenda.addItem}
-              onCycleStatus={agenda.cycleStatus}
+              onSetStatus={agenda.setStatus}
               onDelete={agenda.deleteItem}
             />
           )}

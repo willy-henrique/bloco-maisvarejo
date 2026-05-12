@@ -10,12 +10,20 @@ import {
   displayNomeDonoPrioridade,
 } from './responsavelSearchUtils';
 import { canViewByOwnershipOrObserver, tarefaAtribuidaAoUsuario } from './taskAssignmentUtils';
-import { ObserversPanel } from './ObserversPanel';
+import { ObserversPanel, type ObserverUserInput } from './ObserversPanel';
 import { TaskBlockReasonModal } from './TaskBlockReasonModal';
 import { apiGetBlockContext } from '../../services/ritmoCollabApi';
 import { type VisibilityFilter } from '../Shared/VisibilityFilterBar';
 
 // Utilidades
+function toObserverUserInput(r: Responsavel): ObserverUserInput {
+  return {
+    id: r.id,
+    label: r.nome,
+    workspaces: Array.isArray(r.empresas) ? r.empresas : [],
+  };
+}
+
 function tsFromDateInput(v: string): number {
   return new Date(v + 'T12:00:00').getTime();
 }
@@ -386,7 +394,7 @@ const TarefaRow: React.FC<{
   canDeleteTarefa?: boolean;
   canEditPrazo?: boolean;
   canEditObservers?: boolean;
-  allUsers: Array<{ id: string; label: string }>;
+  allUsers: ObserverUserInput[];
   onAddObserver?: (entity: 'prioridade' | 'plano' | 'tarefa', entityId: string, userId: string) => void;
   onRemoveObserver?: (entity: 'prioridade' | 'plano' | 'tarefa', entityId: string, userId: string) => void;
 }> = ({
@@ -636,7 +644,7 @@ const OperacionalPlanoCard: React.FC<{
   canDeleteTarefa?: boolean;
   canEditPrazo?: boolean;
   canEditObservers?: boolean;
-  allUsers: Array<{ id: string; label: string }>;
+  allUsers: ObserverUserInput[];
   onAddObserver?: (entity: 'prioridade' | 'plano' | 'tarefa', entityId: string, userId: string) => void;
   onRemoveObserver?: (entity: 'prioridade' | 'plano' | 'tarefa', entityId: string, userId: string) => void;
 }> = ({
@@ -1429,7 +1437,7 @@ export const OperacionalView: React.FC<OperacionalProps> = ({
               Nenhuma tarefa operacional disponível {seesAllPrioridades ? '' : 'para o seu usuário'}.
             </div>
           ) : (
-            <div className="overflow-x-auto rounded-lg border border-slate-800 bg-slate-900/50">
+            <div className="overflow-x-auto">
               <table className="w-full table-fixed min-w-[900px] text-sm">
                 <thead>
                   <tr className="bg-slate-900/80 text-slate-400 text-[10px] uppercase tracking-wider border-b border-slate-800">
@@ -1550,7 +1558,7 @@ export const OperacionalView: React.FC<OperacionalProps> = ({
                                 entity="tarefa"
                                 entityId={t.id}
                                 observers={t.observadores ?? []}
-                                allUsers={observerPool.map((r) => ({ id: r.id, label: r.nome }))}
+                                allUsers={observerPool.map(toObserverUserInput)}
                                 resolveUserName={(userId) => displayNomeDonoPrioridade(userId, responsaveis) || userId}
                                 onAdd={(userId) => onAddObserver?.('tarefa', t.id, userId)}
                                 onRemove={(userId) => onRemoveObserver?.('tarefa', t.id, userId)}

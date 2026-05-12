@@ -14,7 +14,7 @@ import {
 } from 'firebase/firestore';
 import type { AgendaItem, AgendaMember, AgendaStatus } from '../types';
 import { getDb, isFirebaseConfigured, USERS_COLLECTION } from './firebase';
-import { isDeveloperEmail } from '../config/developer';
+import { isDeveloperProfile } from '../config/developer';
 
 const AGENDA_COLLECTION = 'userAgenda';
 const AGENDA_INVITES_SUBCOLLECTION = 'agendaInvites';
@@ -127,6 +127,11 @@ function normalizeAgendaItem(raw: Record<string, unknown>, fallbackId: string): 
   const data_hora = typeof raw.data_hora === 'number' ? raw.data_hora : Date.now();
   const created_at = typeof raw.created_at === 'number' ? raw.created_at : data_hora;
   const participantes = normalizeMembers(raw.participantes);
+  const google_event_id = typeof raw.google_event_id === 'string' ? raw.google_event_id : undefined;
+  const google_calendar_id = typeof raw.google_calendar_id === 'string' ? raw.google_calendar_id : undefined;
+  const shared_owner_uid = typeof raw.shared_owner_uid === 'string' ? raw.shared_owner_uid : undefined;
+  const shared_owner_nome = typeof raw.shared_owner_nome === 'string' ? raw.shared_owner_nome : undefined;
+  const shared_event_id = typeof raw.shared_event_id === 'string' ? raw.shared_event_id : undefined;
   return {
     id,
     titulo,
@@ -135,6 +140,11 @@ function normalizeAgendaItem(raw: Record<string, unknown>, fallbackId: string): 
     status: normalizeAgendaStatus(raw.status),
     created_at,
     ...(participantes.length > 0 ? { participantes } : {}),
+    ...(google_event_id ? { google_event_id } : {}),
+    ...(google_calendar_id ? { google_calendar_id } : {}),
+    ...(shared_owner_uid ? { shared_owner_uid } : {}),
+    ...(shared_owner_nome ? { shared_owner_nome } : {}),
+    ...(shared_event_id ? { shared_event_id } : {}),
   };
 }
 
@@ -266,6 +276,11 @@ function eventSnapshot(item: AgendaItem): AgendaItem {
     created_at: item.created_at,
   };
   if (item.descricao !== undefined) snapshot.descricao = item.descricao;
+  if (item.google_event_id !== undefined) snapshot.google_event_id = item.google_event_id;
+  if (item.google_calendar_id !== undefined) snapshot.google_calendar_id = item.google_calendar_id;
+  if (item.shared_owner_uid !== undefined) snapshot.shared_owner_uid = item.shared_owner_uid;
+  if (item.shared_owner_nome !== undefined) snapshot.shared_owner_nome = item.shared_owner_nome;
+  if (item.shared_event_id !== undefined) snapshot.shared_event_id = item.shared_event_id;
   return snapshot;
 }
 
@@ -277,27 +292,27 @@ export async function findUserByEmail(email: string): Promise<AgendaSharedUser |
   const db = getDb();
   if (!db || !isFirebaseConfigured) return null;
   const normalized = email.trim().toLowerCase();
+  const toSharedUser = (id: string, data: Record<string, unknown>, fallbackEmail: string): AgendaSharedUser | null => {
+    const uid = String(data.uid ?? id);
+    const nome = String(data.nome ?? fallbackEmail).trim();
+    const userEmail = String(data.email ?? fallbackEmail).trim();
+    const ativo = data.ativo !== false;
+    if (!ativo || isDeveloperProfile({ nome, email: userEmail })) return null;
+    return { uid, nome, email: userEmail };
+  };
   try {
     const normalizedQuery = query(collection(db, USERS_COLLECTION), where('email', '==', normalized));
     const normalizedSnap = await getDocs(normalizedQuery);
     if (!normalizedSnap.empty) {
       const d = normalizedSnap.docs[0].data();
-      return {
-        uid: normalizedSnap.docs[0].id,
-        nome: d.nome ?? normalized,
-        email: d.email ?? normalized,
-      };
+      return toSharedUser(normalizedSnap.docs[0].id, d, normalized);
     }
 
     const exactQuery = query(collection(db, USERS_COLLECTION), where('email', '==', email.trim()));
     const exactSnap = await getDocs(exactQuery);
     if (!exactSnap.empty) {
       const d = exactSnap.docs[0].data();
-      return {
-        uid: exactSnap.docs[0].id,
-        nome: d.nome ?? email.trim(),
-        email: d.email ?? email.trim(),
-      };
+      return toSharedUser(exactSnap.docs[0].id, d, email.trim());
     }
 
     return null;
@@ -320,7 +335,7 @@ export async function listAgendaUsers(excludeUid?: string | null): Promise<Agend
         const ativo = data.ativo !== false;
         return { uid, nome, email, ativo };
       })
-      .filter((user) => user.ativo && user.uid !== excludeUid && !isDeveloperEmail(user.email))
+      .filter((user) => user.ativo && user.uid !== excludeUid && !isDeveloperProfile(user))
       .map(({ uid, nome, email }) => ({ uid, nome, email }))
       .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
   } catch {

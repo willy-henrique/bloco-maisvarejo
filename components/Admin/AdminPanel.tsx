@@ -22,7 +22,6 @@ import {
   auditarAtividadeUsuarioNaPlataforma,
   type UserActivityAuditResult,
 } from '../../utils/userActivityAudit';
-import { isDeveloperEmail } from '../../config/developer';
 import { getAppSettings, saveAppSettings } from '../../services/appSettings';
 import type { UserProfile } from '../../types/user';
 import { PERMISSIONS_SCHEMA_VERSION } from '../../types/user';
@@ -76,8 +75,7 @@ export const AdminPanel: React.FC = () => {
     setLoadingUsers(true);
     try {
       const all = await listAllUsers();
-      const visible = all.filter((u) => !isDeveloperEmail(u.email));
-      setUsers(visible);
+      setUsers(all);
     } catch {
       setError('Erro ao carregar usuários.');
     } finally {

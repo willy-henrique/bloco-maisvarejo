@@ -26,6 +26,7 @@ import {
   CheckCircle2,
   Eye,
   ExternalLink,
+  FolderInput,
 } from 'lucide-react';
 import { EstrategicoGridIcon } from '../icons/EstrategicoGridIcon';
 import { ResponsavelAutocomplete } from './ResponsavelAutocomplete';
@@ -36,7 +37,7 @@ import {
   displayNomeDonoPrioridade,
 } from './responsavelSearchUtils';
 import { canViewByOwnershipOrObserver, tarefaAtribuidaAoUsuario } from './taskAssignmentUtils';
-import { ObserversPanel } from './ObserversPanel';
+import { ObserversPanel, type ObserverUserInput } from './ObserversPanel';
 import { apiGetBlockContext } from '../../services/ritmoCollabApi';
 import { Modal } from '../Shared/Modal';
 import { TaskBlockReasonModal } from './TaskBlockReasonModal';
@@ -47,6 +48,14 @@ function toggleVisibilityFilter(prev: VisibilityFilter[], filter: VisibilityFilt
 }
 
 const EMPTY_ID_SET = new Set<string>();
+
+function toObserverUserInput(r: Responsavel): ObserverUserInput {
+  return {
+    id: r.id,
+    label: r.nome,
+    workspaces: Array.isArray(r.empresas) ? r.empresas : [],
+  };
+}
 
 function initials(nome: string): string {
   return nome
@@ -188,7 +197,7 @@ const TarefaRow: React.FC<{
   canAssignTarefa?: boolean;
   canDeleteTarefa?: boolean;
   canEditPrazo?: boolean;
-  allUsers: Array<{ id: string; label: string }>;
+  allUsers: ObserverUserInput[];
   onAddObserver?: (entity: 'prioridade' | 'plano' | 'tarefa', entityId: string, userId: string) => void;
   onRemoveObserver?: (entity: 'prioridade' | 'plano' | 'tarefa', entityId: string, userId: string) => void;
   canEditObservers?: boolean;
@@ -448,11 +457,12 @@ const PlanoCard: React.FC<{
   prioridadeDonoId?: string;
   viewerIsAdmin?: boolean;
   viewerMyResponsavelIds?: Set<string>;
-  allUsers: Array<{ id: string; label: string }>;
+  allUsers: ObserverUserInput[];
   onAddObserver?: (entity: 'prioridade' | 'plano' | 'tarefa', entityId: string, userId: string) => void;
   onRemoveObserver?: (entity: 'prioridade' | 'plano' | 'tarefa', entityId: string, userId: string) => void;
   canEditObservers?: boolean;
   perfisCadastro?: UserProfile[] | null;
+  onMoverParaPrioridade?: () => void;
 }> = ({
   plano,
   tarefas,
@@ -482,6 +492,7 @@ const PlanoCard: React.FC<{
   onRemoveObserver,
   canEditObservers = true,
   perfisCadastro,
+  onMoverParaPrioridade,
 }) => {
   const whoPool = whoUsers && whoUsers.length > 0 ? whoUsers : responsaveis;
   const myViewerIds = viewerMyResponsavelIds ?? EMPTY_ID_SET;
@@ -700,6 +711,11 @@ const PlanoCard: React.FC<{
         >
           <Eye size={13} />
         </button>
+        {onMoverParaPrioridade && (
+          <button type="button" onClick={onMoverParaPrioridade} className="p-1.5 text-slate-500 hover:text-blue-400 hover:bg-blue-500/10 rounded transition-colors shrink-0" title="Mover para prioridade">
+            <FolderInput size={13} />
+          </button>
+        )}
         {canDeletePlano && (
           <button type="button" onClick={() => setConfirmDeletePlano(true)} className="p-1.5 text-slate-600 hover:text-red-400 hover:bg-red-500/10 rounded transition-colors shrink-0" title="Excluir plano">
             <Trash2 size={13} />
@@ -1178,7 +1194,7 @@ const DetalhePrioridade: React.FC<{
             lockWhoToOverrideName={false}
             prioridadeDonoId={prioridade.dono_id}
             viewerIsAdmin={true}
-            allUsers={responsaveis.map((r) => ({ id: r.id, label: r.nome }))}
+            allUsers={responsaveis.map(toObserverUserInput)}
           />
         ))}
       </div>
@@ -1228,7 +1244,7 @@ const PrioridadeCard: React.FC<{
   canEditPrazo?: boolean;
   viewerIsAdmin?: boolean;
   viewerMyResponsavelIds?: Set<string>;
-  allUsers: Array<{ id: string; label: string }>;
+  allUsers: ObserverUserInput[];
   onAddObserver?: (entity: 'prioridade' | 'plano' | 'tarefa', entityId: string, userId: string) => void;
   onRemoveObserver?: (entity: 'prioridade' | 'plano' | 'tarefa', entityId: string, userId: string) => void;
   onOpenDetalhe?: (p: Prioridade) => void;
@@ -1236,6 +1252,8 @@ const PrioridadeCard: React.FC<{
   perfisCadastro?: UserProfile[] | null;
   /** Permite atualizar o link externo da prioridade */
   onUpdatePrioridadeLink?: (link: string) => void;
+  /** Callback para mover um plano órfão para outra prioridade */
+  onMoverPlanoPrioridade?: (planoId: string) => void;
 }> = ({
   prioridade,
   planos,
@@ -1276,6 +1294,7 @@ const PrioridadeCard: React.FC<{
   onOpenDetalhe,
   canEditObservers = true,
   perfisCadastro,
+  onMoverPlanoPrioridade,
 }) => {
   const whoPool = whoUsers && whoUsers.length > 0 ? whoUsers : responsaveis;
   const myViewerIds = viewerMyResponsavelIds ?? EMPTY_ID_SET;
@@ -1628,6 +1647,7 @@ const PrioridadeCard: React.FC<{
                 onRemoveObserver={onRemoveObserver}
                 canEditObservers={canEditObservers}
                 perfisCadastro={perfisCadastro}
+                onMoverParaPrioridade={onMoverPlanoPrioridade ? () => onMoverPlanoPrioridade(plano.id) : undefined}
               />
             ))}
           </div>
@@ -1693,8 +1713,10 @@ export const EstrategicoView: React.FC<EstrategicoViewProps> = (props) => {
     loggedUserRole === 'administrador' || caps.verTodosPlanos;
   const [expandedByPrioridade, setExpandedByPrioridade] = useState<Record<string, boolean>>({});
   const [statusFilter, setStatusFilter] = useState<'ativas' | 'concluidas' | 'todas'>('ativas');
-  /** Mesmo padrão Operacional: multi-seleção independente; vazio = sem refino extra nesta camada */
   const [detalheAberto, setDetalheAberto] = useState<Prioridade | null>(null);
+  const [planoParaMover, setPlanoParaMover] = useState<string | null>(null);
+  const [prioridadeDestinoId, setPrioridadeDestinoId] = useState('');
+  const [whoDestinoId, setWhoDestinoId] = useState('');
 
   useEffect(() => {
     const targetId = focusCardId || focusPrioridadeId;
@@ -1807,6 +1829,15 @@ export const EstrategicoView: React.FC<EstrategicoViewProps> = (props) => {
     return ativas;
   }, [statusFilter, ativas, concluidas]);
 
+  const allPrioridadeIds = useMemo(() => new Set(prioridades.map((p) => p.id)), [prioridades]);
+
+  const planosOrfaos = useMemo(
+    () => planos.filter((pl) => !allPrioridadeIds.has(pl.prioridade_id)),
+    [planos, allPrioridadeIds],
+  );
+
+  const isDevUser = loggedUserEmail === 'willydev01@gmail.com';
+
   useEffect(() => {
     const ids = new Set(ativas.map((p) => p.id));
     setExpandedByPrioridade((prev) => {
@@ -1878,7 +1909,67 @@ export const EstrategicoView: React.FC<EstrategicoViewProps> = (props) => {
                 : `Nenhuma prioridade ativa ${seesAllPrioridades ? 'disponível.' : 'para você.'}`}
           </div>
         ) : (
-          listaExibida.map((p) => {
+          <>
+          {isDevUser && planosOrfaos.length > 0 && statusFilter !== 'concluidas' && (
+            <div key="__orphaned__">
+              <PrioridadeCard
+                prioridade={{
+                  id: '__orphaned__',
+                  titulo: 'Sem prioridade',
+                  descricao: 'Planos cujas prioridades foram removidas',
+                  dono_id: '',
+                  data_inicio: 0,
+                  data_alvo: 0,
+                  status_prioridade: 'Execucao',
+                  created_by: '',
+                }}
+                planos={planosOrfaos}
+                todasTarefas={tarefas}
+                responsaveis={responsaveis}
+                whoUsers={whoPool}
+                computeStatusPlano={computeStatusPlano}
+                expanded={expandedByPrioridade['__orphaned__'] ?? false}
+                onToggle={() =>
+                  setExpandedByPrioridade((prev) => ({
+                    ...prev,
+                    __orphaned__: !(prev['__orphaned__'] ?? true),
+                  }))
+                }
+                showDonoName={false}
+                lockPlanoWhoToPriorityDono={false}
+                loggedUserResponsavelId={loggedUserResponsavelId}
+                loggedUserResponsavelNomeDisplay={loggedUserResponsavelNomeDisplay}
+                canEditResponsavel={false}
+                onUpdatePrioridadeOwner={undefined}
+                onArchive={undefined}
+                onReactivate={undefined}
+                onAddPlano={undefined}
+                onUpdatePlano={onUpdatePlano}
+                onDeletePlano={onDeletePlano}
+                onAddTarefa={onAddTarefa}
+                onUpdateTarefa={onUpdateTarefa}
+                onDeleteTarefa={onDeleteTarefa}
+                canPrioridadeWrite={false}
+                canPlanoWrite={false}
+                canPlanoDelete={caps.planoDelete}
+                canTarefaWrite={caps.tarefaWrite}
+                canTarefaAssign={caps.tarefaAssign}
+                canTarefaDelete={caps.tarefaDelete}
+                canEditPrazo={caps.tarefaEditPrazo}
+                viewerIsAdmin={viewerSeesAllTarefasNoPlano}
+                viewerMyResponsavelIds={myResponsavelIds}
+                allUsers={observerPool.map(toObserverUserInput)}
+                onAddObserver={onAddObserver}
+                onRemoveObserver={onRemoveObserver}
+                onOpenDetalhe={setDetalheAberto}
+                canEditObservers={caps.observerEdit}
+                perfisCadastro={perfisCadastro}
+                onUpdatePrioridadeLink={undefined}
+                onMoverPlanoPrioridade={setPlanoParaMover}
+              />
+            </div>
+          )}
+          {listaExibida.map((p) => {
             const nomeDono = displayNomeDonoPrioridade(p.dono_id, responsaveis, perfisCadastro);
             const priorityOwnerNameOverride =
               nomeDono ||
@@ -1900,7 +1991,7 @@ export const EstrategicoView: React.FC<EstrategicoViewProps> = (props) => {
                   responsaveis={responsaveis}
                   whoUsers={whoPool}
                   computeStatusPlano={computeStatusPlano}
-                  expanded={expandedByPrioridade[p.id] ?? true}
+                  expanded={expandedByPrioridade[p.id] ?? false}
                   onToggle={() =>
                     setExpandedByPrioridade((prev) => ({
                       ...prev,
@@ -1945,7 +2036,7 @@ export const EstrategicoView: React.FC<EstrategicoViewProps> = (props) => {
                   canEditPrazo={caps.tarefaEditPrazo}
                   viewerIsAdmin={viewerSeesAllTarefasNoPlano}
                   viewerMyResponsavelIds={myResponsavelIds}
-                  allUsers={observerPool.map((r) => ({ id: r.id, label: r.nome }))}
+                  allUsers={observerPool.map(toObserverUserInput)}
                   onAddObserver={onAddObserver}
                   onRemoveObserver={onRemoveObserver}
                   onOpenDetalhe={setDetalheAberto}
@@ -1959,9 +2050,74 @@ export const EstrategicoView: React.FC<EstrategicoViewProps> = (props) => {
                 />
               </div>
             );
-          })
+          })}
+          </>
         )}
       </div>
+
+      {planoParaMover && (
+        <Modal
+          isOpen
+          onClose={() => { setPlanoParaMover(null); setPrioridadeDestinoId(''); setWhoDestinoId(''); }}
+          title="Mover plano para prioridade"
+          maxWidth="sm"
+        >
+          <div className="space-y-4">
+            <div className="space-y-1">
+              <label className="text-xs text-slate-500 uppercase tracking-wider">Prioridade de destino</label>
+              <select
+                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-blue-500"
+                value={prioridadeDestinoId}
+                onChange={(e) => setPrioridadeDestinoId(e.target.value)}
+              >
+                <option value="">-- Selecione uma prioridade --</option>
+                {prioridades.filter((p) => p.id !== '__orphaned__').map((p) => (
+                  <option key={p.id} value={p.id}>{p.titulo}</option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs text-slate-500 uppercase tracking-wider">Responsável (WHO)</label>
+              <select
+                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-blue-500"
+                value={whoDestinoId}
+                onChange={(e) => setWhoDestinoId(e.target.value)}
+              >
+                <option value="">-- Manter atual --</option>
+                {whoPool.map((r) => (
+                  <option key={r.id} value={r.id}>{r.nome}</option>
+                ))}
+              </select>
+            </div>
+            <div className="flex justify-end gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => { setPlanoParaMover(null); setPrioridadeDestinoId(''); setWhoDestinoId(''); }}
+                className="px-3 py-1.5 text-sm text-slate-400 hover:text-slate-200 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={!prioridadeDestinoId}
+                onClick={() => {
+                  if (onUpdatePlano && prioridadeDestinoId) {
+                    const patch: Partial<PlanoDeAcao> = { prioridade_id: prioridadeDestinoId };
+                    if (whoDestinoId) patch.who_id = whoDestinoId;
+                    onUpdatePlano(planoParaMover, patch);
+                    setPlanoParaMover(null);
+                    setPrioridadeDestinoId('');
+                    setWhoDestinoId('');
+                  }
+                }}
+                className="px-3 py-1.5 text-sm bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-lg transition-colors"
+              >
+                Confirmar
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
 
       {detalheAberto && (
         <Modal

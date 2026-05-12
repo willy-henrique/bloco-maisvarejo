@@ -17,12 +17,13 @@ import {
 import type { AgendaItem, AgendaMember, AgendaStatus } from '../../types';
 import type { AgendaEventInvite, AgendaInviteStatus, AgendaSharedUser, SharedAgendaEntry } from '../../services/agendaService';
 import { Modal } from '../Shared/Modal';
+import { GoogleCalendarPanel, type GoogleCalendarEvent, useGoogleCalendar } from './GoogleCalendarPanel';
 
 interface AgendaViewProps {
   items: AgendaItem[];
   loading: boolean;
-  onAdd: (item: Omit<AgendaItem, 'id' | 'status' | 'created_at'>) => void;
-  onCycleStatus: (id: string) => void;
+  onAdd: (item: Omit<AgendaItem, 'id' | 'status' | 'created_at'> & { status?: AgendaStatus }) => void;
+  onSetStatus: (id: string, status: AgendaStatus) => void;
   onDelete: (id: string) => void;
   onEdit: (id: string, changes: Partial<Omit<AgendaItem, 'id' | 'status' | 'created_at'>>) => void;
   availableUsers: AgendaSharedUser[];
@@ -75,6 +76,8 @@ const INVITE_STATUS_CFG: Record<AgendaInviteStatus, { label: string; cls: string
     cls: 'text-red-300 bg-red-500/10 border-red-500/30',
   },
 };
+
+const STATUS_OPTIONS: AgendaStatus[] = ['pendente', 'em_andamento', 'concluido'];
 
 function fmtDate(ts: number): string {
   return new Date(ts).toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: 'short' });
@@ -140,18 +143,51 @@ function selectedMembers(users: AgendaSharedUser[], selectedIds: string[]): Agen
     .map(({ uid, nome, email }) => ({ uid, nome, email }));
 }
 
+function parseGoogleEventDate(value?: string): number | null {
+  if (!value) return null;
+  const normalized = /^\d{4}-\d{2}-\d{2}$/.test(value) ? `${value}T00:00:00` : value;
+  const ts = new Date(normalized).getTime();
+  return Number.isFinite(ts) ? ts : null;
+}
+
+function googleEventToAgendaItem(event: GoogleCalendarEvent): AgendaItemEx | null {
+  if (event.status === 'cancelled') return null;
+  const startRaw = event.start.dateTime ?? event.start.date;
+  const start = parseGoogleEventDate(startRaw);
+  if (!start) return null;
+  const end = parseGoogleEventDate(event.end.dateTime ?? event.end.date);
+  return {
+    id: `google:${event.id}`,
+    titulo: event.summary?.trim() || 'Evento Google',
+    descricao: event.description,
+    data_hora: start,
+    status: 'pendente',
+    created_at: start,
+    google_event_id: event.id,
+    google_calendar_id: 'primary',
+    google_html_link: event.htmlLink,
+    google_end_hora: end ?? undefined,
+    google_all_day: !!event.start.date,
+    source: 'google',
+  };
+}
+
 type Tab = 'pendente' | 'em_andamento' | 'concluido';
 
 interface AgendaItemEx extends AgendaItem {
   ownerNome?: string;
   ownerUid?: string;
+  google_html_link?: string;
+  google_end_hora?: number;
+  google_all_day?: boolean;
+  source?: 'mavo' | 'google';
 }
 
 export const AgendaView: React.FC<AgendaViewProps> = ({
   items,
   loading,
   onAdd,
-  onCycleStatus,
+  onSetStatus,
   onDelete,
   onEdit,
   availableUsers,
@@ -166,6 +202,8 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
   onToggleSystemNotifications,
   onRespondEventInvite,
 }) => {
+  const googleCalendar = useGoogleCalendar();
+  const [showGoogleCalendar, setShowGoogleCalendar] = useState(true);
   const [titulo, setTitulo] = useState('');
   const [descricao, setDescricao] = useState('');
   const [dataHora, setDataHora] = useState(() => {
@@ -181,15 +219,36 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
   const [decliningInviteKey, setDecliningInviteKey] = useState<string | null>(null);
   const [declineReason, setDeclineReason] = useState('');
   const [inviteActionError, setInviteActionError] = useState<string | null>(null);
+  const [googleSyncError, setGoogleSyncError] = useState<string | null>(null);
+  const [savingAgendaEvent, setSavingAgendaEvent] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<AgendaItemEx | null>(null);
 
-  const allItems = useMemo<AgendaItemEx[]>(() => {
-    const own: AgendaItemEx[] = items.map((i) => ({ ...i }));
-    const shared: AgendaItemEx[] = sharedAgendas.flatMap((entry) =>
-      entry.items.map((i) => ({ ...i, ownerNome: entry.ownerNome, ownerUid: entry.ownerUid })),
+  const googleOnlyItems = useMemo<AgendaItemEx[]>(() => {
+    const linkedGoogleIds = new Set(
+      items
+        .map((item) => item.google_event_id)
+        .filter((id): id is string => Boolean(id)),
     );
-    return [...own, ...shared];
-  }, [items, sharedAgendas]);
+    return googleCalendar.events
+      .map(googleEventToAgendaItem)
+      .filter((item): item is AgendaItemEx => Boolean(item))
+      .filter((item) => !item.google_event_id || !linkedGoogleIds.has(item.google_event_id));
+  }, [googleCalendar.events, items]);
+
+  const allItems = useMemo<AgendaItemEx[]>(() => {
+    const own: AgendaItemEx[] = items.map((i) => ({ ...i, source: 'mavo' }));
+    const linkedSharedKeys = new Set(
+      items
+        .filter((item) => item.shared_owner_uid && item.shared_event_id)
+        .map((item) => `${item.shared_owner_uid}:${item.shared_event_id}`),
+    );
+    const shared: AgendaItemEx[] = sharedAgendas.flatMap((entry) =>
+      entry.items
+        .filter((i) => !linkedSharedKeys.has(`${entry.ownerUid}:${i.id}`))
+        .map((i) => ({ ...i, ownerNome: entry.ownerNome, ownerUid: entry.ownerUid })),
+    );
+    return [...own, ...shared, ...googleOnlyItems];
+  }, [googleOnlyItems, items, sharedAgendas]);
 
   const byStatus = useMemo(() => {
     const sorted = [...allItems].sort((a, b) => a.data_hora - b.data_hora);
@@ -237,20 +296,96 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
     [incomingEventInvites],
   );
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!titulo.trim() || !dataHora) return;
     const participantes = selectedMembers(availableUsers, selectedMemberIds);
-    onAdd({
+    const agendaItem: Omit<AgendaItem, 'id' | 'status' | 'created_at'> = {
       titulo: titulo.trim(),
       descricao: descricao.trim() || undefined,
       data_hora: new Date(dataHora).getTime(),
       participantes: participantes.length > 0 ? participantes : undefined,
-    });
+    };
+
+    setGoogleSyncError(null);
+    setSavingAgendaEvent(true);
+    try {
+      if (googleCalendar.isConnected) {
+        const googleEvent = await googleCalendar.createEvent({
+          title: agendaItem.titulo,
+          description: agendaItem.descricao,
+          start: agendaItem.data_hora,
+          end: agendaItem.data_hora + 60 * 60 * 1000,
+        });
+        agendaItem.google_event_id = googleEvent.id;
+        agendaItem.google_calendar_id = 'primary';
+      }
+      onAdd(agendaItem);
+    } catch (error) {
+      setGoogleSyncError(error instanceof Error ? error.message : 'Erro ao criar evento no Google Calendar.');
+      setSavingAgendaEvent(false);
+      return;
+    }
+
     setTitulo('');
     setDescricao('');
     setSelectedMemberIds([]);
     setShowForm(false);
+    setSavingAgendaEvent(false);
+  };
+
+  const handleEditAgendaItem = async (
+    item: AgendaItemEx,
+    changes: Partial<Omit<AgendaItem, 'id' | 'status' | 'created_at'>>,
+  ) => {
+    if (item.google_event_id) {
+      if (!googleCalendar.isConnected) {
+        throw new Error('Conecte o Google Calendar para editar este evento.');
+      }
+      const start = changes.data_hora ?? item.data_hora;
+      const originalDuration =
+        item.google_end_hora && item.google_end_hora > item.data_hora
+          ? item.google_end_hora - item.data_hora
+          : 60 * 60 * 1000;
+      await googleCalendar.updateEvent(item.google_event_id, {
+        title: changes.titulo ?? item.titulo,
+        description: changes.descricao ?? item.descricao,
+        start,
+        end: start + originalDuration,
+        allDay: item.google_all_day,
+      });
+    }
+
+    if (item.source !== 'google') {
+      onEdit(item.id, changes);
+    }
+  };
+
+  const handleSetItemStatus = (item: AgendaItemEx, status: AgendaStatus) => {
+    if (item.ownerUid) {
+      onAdd({
+        titulo: item.titulo,
+        descricao: item.descricao,
+        data_hora: item.data_hora,
+        shared_owner_uid: item.ownerUid,
+        shared_owner_nome: item.ownerNome,
+        shared_event_id: item.id,
+        status,
+      });
+      return;
+    }
+    if (item.source === 'google') {
+      onAdd({
+        titulo: item.titulo,
+        descricao: item.descricao,
+        data_hora: item.data_hora,
+        google_event_id: item.google_event_id,
+        google_calendar_id: item.google_calendar_id,
+        status,
+      });
+      return;
+    }
+    onSetStatus(item.id, status);
   };
 
   const handleAcceptInvite = async (invite: AgendaEventInvite) => {
@@ -299,7 +434,7 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
     pendingIncomingInvites.length + outgoingEventInvites.filter((invite) => invite.status === 'pending').length;
 
   return (
-    <div className="max-w-3xl mx-auto py-6 px-4 space-y-6">
+    <div className={`${showGoogleCalendar ? 'max-w-6xl' : 'max-w-3xl'} mx-auto py-6 px-4 space-y-6`}>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-wrap items-center gap-2">
           <CalendarDays size={20} className="text-blue-400" />
@@ -330,6 +465,18 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
           </button>
           <button
             type="button"
+            onClick={() => setShowGoogleCalendar((v) => !v)}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg border text-sm font-medium transition-colors ${
+              showGoogleCalendar
+                ? 'bg-blue-600/20 border-blue-500/40 text-blue-300'
+                : 'border-slate-700 text-slate-400 hover:text-slate-200 hover:border-slate-600'
+            }`}
+            title="Google Calendar"
+          >
+            <CalendarDays size={15} /> Google Calendar
+          </button>
+          <button
+            type="button"
             onClick={() => setShowForm((v) => !v)}
             className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition-colors"
           >
@@ -337,6 +484,8 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
           </button>
         </div>
       </div>
+
+      {showGoogleCalendar && <GoogleCalendarPanel calendar={googleCalendar} />}
 
       {pendingIncomingInvites.length > 0 && !showInvites && (
         <button
@@ -576,6 +725,11 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
             className="agenda-datetime-input w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100 outline-none focus:border-blue-500"
             required
           />
+          {googleSyncError && (
+            <p className="rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs text-red-300">
+              {googleSyncError}
+            </p>
+          )}
           <MemberSelector
             users={availableUsers}
             selectedIds={selectedMemberIds}
@@ -585,12 +739,17 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
             <button
               type="button"
               onClick={() => setShowForm(false)}
+              disabled={savingAgendaEvent}
               className="flex-1 py-2 rounded-lg border border-slate-600 text-slate-300 hover:bg-slate-800 text-sm"
             >
               Cancelar
             </button>
-            <button type="submit" className="flex-1 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium">
-              Salvar
+            <button
+              type="submit"
+              disabled={savingAgendaEvent}
+              className="flex-1 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-medium"
+            >
+              {savingAgendaEvent ? 'Salvando...' : 'Salvar'}
             </button>
           </div>
         </form>
@@ -644,9 +803,9 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
                       isShared={!!item.ownerUid}
                       availableUsers={availableUsers}
                       eventInvites={eventInvitesByEventId.get(item.id) ?? []}
-                      onCycleStatus={item.ownerUid ? undefined : onCycleStatus}
-                      onDelete={item.ownerUid ? undefined : () => setDeleteTarget(item)}
-                      onEdit={item.ownerUid ? undefined : onEdit}
+                      onStatusChange={(status) => handleSetItemStatus(item, status)}
+                      onDelete={item.ownerUid || item.source === 'google' ? undefined : () => setDeleteTarget(item)}
+                      onEdit={item.ownerUid || item.shared_owner_uid ? undefined : (_id, changes) => handleEditAgendaItem(item, changes)}
                       onStartEdit={() => setEditingId(item.id)}
                       onCancelEdit={() => setEditingId(null)}
                     />
@@ -671,9 +830,9 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
               isShared={!!item.ownerUid}
               availableUsers={availableUsers}
               eventInvites={eventInvitesByEventId.get(item.id) ?? []}
-              onCycleStatus={item.ownerUid ? undefined : onCycleStatus}
-              onDelete={item.ownerUid ? undefined : () => setDeleteTarget(item)}
-              onEdit={item.ownerUid ? undefined : onEdit}
+              onStatusChange={(status) => handleSetItemStatus(item, status)}
+              onDelete={item.ownerUid || item.source === 'google' ? undefined : () => setDeleteTarget(item)}
+              onEdit={item.ownerUid || item.shared_owner_uid ? undefined : (_id, changes) => handleEditAgendaItem(item, changes)}
               onStartEdit={() => setEditingId(item.id)}
               onCancelEdit={() => setEditingId(null)}
             />
@@ -836,14 +995,17 @@ const MemberSelector: React.FC<MemberSelectorProps> = ({ users, selectedIds, onC
 };
 
 interface AgendaCardProps {
-  item: AgendaItem & { ownerNome?: string; ownerUid?: string };
+  item: AgendaItemEx;
   isEditing: boolean;
   isShared: boolean;
   availableUsers: AgendaSharedUser[];
   eventInvites: AgendaEventInvite[];
-  onCycleStatus?: (id: string) => void;
+  onStatusChange?: (status: AgendaStatus) => void | Promise<void>;
   onDelete?: () => void;
-  onEdit?: (id: string, changes: Partial<Omit<AgendaItem, 'id' | 'status' | 'created_at'>>) => void;
+  onEdit?: (
+    id: string,
+    changes: Partial<Omit<AgendaItem, 'id' | 'status' | 'created_at'>>,
+  ) => void | Promise<void>;
   onStartEdit: () => void;
   onCancelEdit: () => void;
 }
@@ -854,7 +1016,7 @@ const AgendaCard: React.FC<AgendaCardProps> = ({
   isShared,
   availableUsers,
   eventInvites,
-  onCycleStatus,
+  onStatusChange,
   onDelete,
   onEdit,
   onStartEdit,
@@ -870,18 +1032,44 @@ const AgendaCard: React.FC<AgendaCardProps> = ({
   const [editDescricao, setEditDescricao] = useState(item.descricao ?? '');
   const [editDataHora, setEditDataHora] = useState(toLocalISOString(item.data_hora));
   const [editMemberIds, setEditMemberIds] = useState(() => (item.participantes ?? []).map((member) => member.uid));
+  const [editError, setEditError] = useState<string | null>(null);
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [statusMenuOpen, setStatusMenuOpen] = useState(false);
+  const [statusChanging, setStatusChanging] = useState(false);
 
-  const handleSaveEdit = (e: React.FormEvent) => {
+  const handleStatusSelect = async (status: AgendaStatus) => {
+    if (!onStatusChange || status === item.status) {
+      setStatusMenuOpen(false);
+      return;
+    }
+    setStatusChanging(true);
+    try {
+      await onStatusChange(status);
+      setStatusMenuOpen(false);
+    } finally {
+      setStatusChanging(false);
+    }
+  };
+
+  const handleSaveEdit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editTitulo.trim() || !editDataHora) return;
     const participantes = selectedMembers(memberOptions, editMemberIds);
-    onEdit?.(item.id, {
-      titulo: editTitulo.trim(),
-      descricao: editDescricao.trim() || undefined,
-      data_hora: new Date(editDataHora).getTime(),
-      participantes: participantes.length > 0 ? participantes : undefined,
-    });
-    onCancelEdit();
+    setSavingEdit(true);
+    setEditError(null);
+    try {
+      await onEdit?.(item.id, {
+        titulo: editTitulo.trim(),
+        descricao: editDescricao.trim() || undefined,
+        data_hora: new Date(editDataHora).getTime(),
+        participantes: participantes.length > 0 ? participantes : undefined,
+      });
+      onCancelEdit();
+    } catch (error) {
+      setEditError(error instanceof Error ? error.message : 'Erro ao editar evento.');
+    } finally {
+      setSavingEdit(false);
+    }
   };
 
   const handleStartEdit = () => {
@@ -889,6 +1077,7 @@ const AgendaCard: React.FC<AgendaCardProps> = ({
     setEditDescricao(item.descricao ?? '');
     setEditDataHora(toLocalISOString(item.data_hora));
     setEditMemberIds((item.participantes ?? []).map((member) => member.uid));
+    setEditError(null);
     onStartEdit();
   };
 
@@ -918,20 +1107,29 @@ const AgendaCard: React.FC<AgendaCardProps> = ({
           className="agenda-datetime-input w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100 outline-none focus:border-blue-500"
           required
         />
-        <MemberSelector users={memberOptions} selectedIds={editMemberIds} onChange={setEditMemberIds} />
+        {item.source !== 'google' && (
+          <MemberSelector users={memberOptions} selectedIds={editMemberIds} onChange={setEditMemberIds} />
+        )}
+        {editError && (
+          <p className="rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs text-red-300">
+            {editError}
+          </p>
+        )}
         <div className="flex gap-2">
           <button
             type="button"
             onClick={onCancelEdit}
+            disabled={savingEdit}
             className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-slate-600 text-slate-300 hover:bg-slate-800 text-xs"
           >
             <X size={12} /> Cancelar
           </button>
           <button
             type="submit"
-            className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium"
+            disabled={savingEdit}
+            className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-xs font-medium"
           >
-            <Check size={12} /> Salvar
+            <Check size={12} /> {savingEdit ? 'Salvando...' : 'Salvar'}
           </button>
         </div>
       </form>
@@ -948,17 +1146,46 @@ const AgendaCard: React.FC<AgendaCardProps> = ({
             ? 'bg-red-900/10 border-red-800/30'
             : 'bg-slate-800/50 border-slate-700/60 hover:border-slate-600'
     }`}>
-      {onCycleStatus ? (
-        <button
-          type="button"
-          onClick={() => onCycleStatus(item.id)}
-          title="Clique para avançar o status"
-          className={`mt-0.5 shrink-0 inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border text-[10px] font-semibold transition-all hover:opacity-80 ${cfg.cls}`}
-        >
-          <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`} />
-          {cfg.label}
-          <ChevronRight size={10} />
-        </button>
+      {onStatusChange ? (
+        <div className="relative mt-0.5 shrink-0">
+          <button
+            type="button"
+            onClick={() => setStatusMenuOpen((open) => !open)}
+            disabled={statusChanging}
+            title="Selecionar status"
+            className={`inline-flex min-w-[92px] items-center justify-between gap-1.5 rounded-full border px-2 py-0.5 text-[10px] font-semibold transition-all hover:opacity-90 disabled:opacity-60 ${cfg.cls}`}
+          >
+            <span className="inline-flex min-w-0 items-center gap-1.5">
+              <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`} />
+              <span className="truncate">{cfg.label}</span>
+            </span>
+            <ChevronDown size={10} className={`shrink-0 transition-transform ${statusMenuOpen ? 'rotate-180' : ''}`} />
+          </button>
+          {statusMenuOpen && (
+            <div className="absolute left-0 top-full z-30 mt-1 w-44 rounded-lg border border-slate-700 bg-slate-950 p-1 shadow-xl shadow-black/30">
+              {STATUS_OPTIONS.map((status) => {
+                const option = STATUS_CFG[status];
+                const active = item.status === status;
+                return (
+                  <button
+                    key={status}
+                    type="button"
+                    onClick={() => void handleStatusSelect(status)}
+                    className={`flex w-full items-center justify-between gap-2 rounded-md px-2 py-2 text-left text-xs transition-colors ${
+                      active ? 'bg-slate-800 text-slate-100' : 'text-slate-300 hover:bg-slate-900'
+                    }`}
+                  >
+                    <span className="inline-flex items-center gap-2">
+                      <span className={`h-2 w-2 rounded-full ${option.dot}`} />
+                      {option.label}
+                    </span>
+                    {active && <Check size={12} className="text-blue-300" />}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
       ) : (
         <span className={`mt-0.5 shrink-0 inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border text-[10px] font-semibold ${cfg.cls}`}>
           <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`} />
@@ -1015,6 +1242,12 @@ const CardBody: React.FC<{
     <>
       {isShared && item.ownerNome && (
         <p className="text-[10px] text-purple-400 font-medium mb-0.5">Reunião de {item.ownerNome}</p>
+      )}
+      {!isShared && item.google_event_id && (
+        <p className="text-[10px] text-blue-400 font-medium mb-0.5">Google Calendar</p>
+      )}
+      {!isShared && item.shared_owner_nome && (
+        <p className="text-[10px] text-purple-400 font-medium mb-0.5">Reunião de {item.shared_owner_nome}</p>
       )}
       <p className={`text-sm font-medium ${item.status === 'concluido' ? 'line-through text-slate-400' : 'text-slate-100'}`}>
         {item.titulo}

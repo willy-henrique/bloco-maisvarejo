@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { ChunkErrorBoundary } from './components/Shared/ChunkErrorBoundary';
 import { useUser } from './contexts/UserContext';
 import { UserLogin } from './components/Auth/UserLogin';
 import { Sidebar } from './components/Layout/Sidebar';
@@ -26,7 +27,7 @@ import {
   subscribeMyConversations,
 } from './services/chatService';
 import { usePresence } from './controllers/useChat';
-import { isDeveloperEmail } from './config/developer';
+import { isDeveloperProfile } from './config/developer';
 import { subscribeAppSettings, getDefaultAppSettings } from './services/appSettings';
 import type { UserProfile } from './types/user';
 import type { AppSettings } from './types/appSettings';
@@ -523,7 +524,7 @@ function AppContent() {
         const all = await listAllUsers();
         if (!cancelled) {
           setPerfisCadastroUsuarios(
-            all.filter((u) => u.ativo !== false && !isDeveloperEmail(u.email)),
+            all.filter((u) => u.ativo !== false && !isDeveloperProfile(u)),
           );
         }
       } catch {
@@ -940,13 +941,22 @@ function AppContent() {
 
   const quadroPrioridades = useMemo<Prioridade[]>(() => {
     const todas = [...ritmo.board.prioridades, ...sinteticasFromItems];
-    const porEmpresa = todas.filter((p) => matchWorkspaceRitmo(p.empresa));
-    if (profile?.role === 'administrador') return porEmpresa;
+    if (profile?.role === 'administrador') {
+      // Admins veem o workspace atual + prioridades de outros workspaces que contêm
+      // planos deste workspace (cross-workspace de planos atribuídos ao workspace ativo).
+      const idsPrioridadesDePlanos = new Set(
+        ritmo.board.planos
+          .filter((pl) => matchWorkspaceRitmo(pl.empresa))
+          .map((pl) => pl.prioridade_id),
+      );
+      return todas.filter((p) => matchWorkspaceRitmo(p.empresa) || idsPrioridadesDePlanos.has(p.id));
+    }
     // Cross-workspace: inclui prioridades de outros workspaces quando o usuário é WHO de
     // algum plano filho ou tem tarefa atribuída — independente do workspace da prioridade.
     return todas.filter((p) => prioridadeVisivelPorDemandaAtribuida(p));
   }, [
     ritmo.board.prioridades,
+    ritmo.board.planos,
     sinteticasFromItems,
     matchWorkspaceRitmo,
     profile?.role,
@@ -1771,7 +1781,7 @@ function AppContent() {
               items={agenda.items}
               loading={agenda.loading}
               onAdd={agenda.addItem}
-              onCycleStatus={agenda.cycleStatus}
+              onSetStatus={agenda.setStatus}
               onDelete={agenda.deleteItem}
               onEdit={agenda.updateItem}
               availableUsers={agenda.availableUsers}
@@ -1787,11 +1797,13 @@ function AppContent() {
               onRespondEventInvite={agenda.respondEventInvite}
             />
           ) : activeView === 'chat' ? (
-              <TeamChatScreen
-                currentUser={chatUser}
-                availableUsers={agenda.availableUsers}
-                onlineUids={onlineUids}
-              />
+              <ChunkErrorBoundary>
+                <TeamChatScreen
+                  currentUser={chatUser}
+                  availableUsers={agenda.availableUsers}
+                  onlineUids={onlineUids}
+                />
+              </ChunkErrorBoundary>
           ) : activeView === 'workspace' ? (
             <div className="pb-8 max-w-xl">
               <div className="bg-slate-900/70 border border-slate-800 rounded-xl p-4 space-y-4">
@@ -2341,7 +2353,7 @@ function AppContent() {
             <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
             Conectado
           </div>
-          <span>MAVO 2.3.0</span>
+          <span>MAVO 2.3.1</span>
         </footer>
       </main>
     </div>

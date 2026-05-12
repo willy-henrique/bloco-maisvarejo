@@ -20,6 +20,7 @@ import {
 } from 'firebase/firestore';
 import { getFirebaseAuth, getDb, USERS_COLLECTION } from './firebase';
 import type { UserProfile } from '../types/user';
+import { isDeveloperProfile } from '../config/developer';
 
 export async function loginWithEmail(email: string, password: string): Promise<User> {
   const auth = getFirebaseAuth();
@@ -116,5 +117,7 @@ export async function listAllUsers(): Promise<UserProfile[]> {
   const db = getDb();
   if (!db) return [];
   const snap = await getDocs(collection(db, USERS_COLLECTION));
-  return snap.docs.map((d) => d.data() as UserProfile);
+  return snap.docs
+    .map((d) => d.data() as UserProfile)
+    .filter((profile) => !isDeveloperProfile(profile));
 }

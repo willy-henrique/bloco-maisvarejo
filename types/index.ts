@@ -59,6 +59,8 @@ export type StatusTarefa = 'Pendente' | 'EmExecucao' | 'Bloqueada' | 'Concluida'
 export interface Responsavel {
   id: string;
   nome: string;
+  empresas?: string[];
+  email?: string;
 }
 
 /** Backlog: repositório de demandas potenciais. Não representa compromisso ativo. */
@@ -99,6 +101,11 @@ export interface AgendaItem {
   status: AgendaStatus;
   created_at: number;
   participantes?: AgendaMember[];
+  google_event_id?: string;
+  google_calendar_id?: string;
+  shared_owner_uid?: string;
+  shared_owner_nome?: string;
+  shared_event_id?: string;
 }
 
 /** Priorizar (nível estratégico). Máx 3 priorizadas por quadro. */
