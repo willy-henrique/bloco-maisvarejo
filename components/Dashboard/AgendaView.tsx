@@ -502,7 +502,12 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
         </div>
       </div>
 
-      {showGoogleCalendar && <GoogleCalendarPanel calendar={googleCalendar} />}
+      {showGoogleCalendar && (
+        <GoogleCalendarPanel
+          calendar={googleCalendar}
+          onNewEvent={() => setShowForm(true)}
+        />
+      )}
 
       {pendingIncomingInvites.length > 0 && !showInvites && (
         <button

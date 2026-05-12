@@ -406,9 +406,10 @@ export function useGoogleCalendar(): GoogleCalendarController {
 
 interface GoogleCalendarPanelProps {
   calendar: GoogleCalendarController;
+  onNewEvent?: () => void;
 }
 
-export const GoogleCalendarPanel: React.FC<GoogleCalendarPanelProps> = ({ calendar }) => {
+export const GoogleCalendarPanel: React.FC<GoogleCalendarPanelProps> = ({ calendar, onNewEvent }) => {
   const [showForm, setShowForm] = useState(false);
   const [evtTitle, setEvtTitle] = useState('');
   const [evtStart, setEvtStart] = useState(() => toInputDefault(3600000));
@@ -461,9 +462,13 @@ export const GoogleCalendarPanel: React.FC<GoogleCalendarPanelProps> = ({ calend
               <button
                 type="button"
                 onClick={() => {
-                  setShowForm((v) => !v);
-                  setEvtStart(toInputDefault(3600000));
-                  setEvtEnd(toInputDefault(7200000));
+                  if (onNewEvent) {
+                    onNewEvent();
+                  } else {
+                    setShowForm((v) => !v);
+                    setEvtStart(toInputDefault(3600000));
+                    setEvtEnd(toInputDefault(7200000));
+                  }
                 }}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium transition-colors"
               >
