@@ -41,6 +41,7 @@ export interface GoogleCalendarEventInput {
   start: string | number | Date;
   end?: string | number | Date;
   allDay?: boolean;
+  attendees?: string[];
 }
 
 export interface GoogleCalendarController {
@@ -142,9 +143,11 @@ function addDays(dateOnly: string, days: number): string {
 }
 
 function buildGoogleEventBody(event: GoogleCalendarEventInput): Record<string, unknown> {
+  const validAttendees = (event.attendees ?? []).filter(Boolean);
   const body: Record<string, unknown> = {
     summary: event.title.trim(),
     ...(event.description?.trim() && { description: event.description.trim() }),
+    ...(validAttendees.length > 0 && { attendees: validAttendees.map((email) => ({ email })) }),
   };
 
   if (event.allDay) {

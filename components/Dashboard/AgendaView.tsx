@@ -311,11 +311,13 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
     setSavingAgendaEvent(true);
     try {
       if (googleCalendar.isConnected) {
+        const attendeeEmails = participantes.map((p) => p.email).filter(Boolean);
         const googleEvent = await googleCalendar.createEvent({
           title: agendaItem.titulo,
           description: agendaItem.descricao,
           start: agendaItem.data_hora,
           end: agendaItem.data_hora + 60 * 60 * 1000,
+          attendees: attendeeEmails,
         });
         agendaItem.google_event_id = googleEvent.id;
         agendaItem.google_calendar_id = 'primary';
@@ -395,6 +397,21 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
       setInviteActionError(err);
       return;
     }
+
+    if (googleCalendar.isConnected) {
+      try {
+        const endTime = invite.event.data_hora + 60 * 60 * 1000;
+        await googleCalendar.createEvent({
+          title: invite.event.titulo,
+          description: invite.event.descricao,
+          start: invite.event.data_hora,
+          end: endTime,
+        });
+      } catch {
+        // Não bloqueia: convite foi aceito no MAVO, só não sincronizou com Google Calendar
+      }
+    }
+
     setDecliningInviteKey(null);
     setDeclineReason('');
   };
@@ -498,77 +515,51 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
       )}
 
       {showInvites && (
-        <div className="bg-slate-800/60 border border-purple-500/20 rounded-xl p-4 space-y-5">
+        <div className="bg-slate-800/60 border border-purple-500/20 rounded-xl p-3 space-y-3">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2">
-              <Users size={15} className="text-purple-400" />
+              <Users size={14} className="text-purple-400" />
               <span className="text-sm font-semibold text-slate-100">Convites de reuniões</span>
             </div>
-            <button type="button" onClick={() => setShowInvites(false)} className="text-slate-500 hover:text-slate-300">
-              <X size={14} />
-            </button>
+            <div className="flex items-center gap-2">
+              {systemNotificationsSupported && (
+                systemNotificationPermission !== 'granted' ? (
+                  <button
+                    type="button"
+                    onClick={() => void onEnableSystemNotifications()}
+                    className="flex items-center gap-1 px-2 py-1 rounded-md border border-amber-500/40 text-amber-300 hover:bg-amber-500/10 text-[11px] font-medium"
+                    title="Ativar notificações do Windows"
+                  >
+                    <Bell size={11} /> Ativar notificações
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => void onToggleSystemNotifications()}
+                    title={systemNotificationsEnabled ? 'Desativar notificações' : 'Ativar notificações'}
+                    className={`flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold transition-colors ${
+                      systemNotificationsEnabled
+                        ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/15'
+                        : 'border-slate-600 bg-slate-800/60 text-slate-400 hover:bg-slate-800'
+                    }`}
+                  >
+                    {systemNotificationsEnabled ? <BellOff size={11} /> : <Bell size={11} />}
+                    {systemNotificationsEnabled ? 'Desat.' : 'Notif.'}
+                  </button>
+                )
+              )}
+              <button type="button" onClick={() => setShowInvites(false)} className="text-slate-500 hover:text-slate-300">
+                <X size={14} />
+              </button>
+            </div>
           </div>
 
-          {systemNotificationsSupported && (
-            <div className="flex flex-col gap-2 rounded-lg border border-slate-700 bg-slate-900/50 px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex items-center gap-2 min-w-0">
-                <Bell
-                  size={14}
-                  className={
-                    systemNotificationPermission === 'granted' && systemNotificationsEnabled
-                      ? 'text-emerald-400'
-                      : systemNotificationPermission === 'denied'
-                        ? 'text-red-400'
-                        : 'text-amber-400'
-                  }
-                />
-                <div className="min-w-0">
-                  <p className="text-xs font-medium text-slate-200">Notificações do Windows</p>
-                  <p className="text-[11px] text-slate-500">
-                    {systemNotificationPermission === 'granted'
-                      ? systemNotificationsEnabled
-                        ? 'Ativas para novos convites.'
-                        : 'Desativadas no Mavo.'
-                      : systemNotificationPermission === 'denied'
-                        ? 'Bloqueadas nas permissões do navegador.'
-                        : 'Ative para receber avisos fora da tela do app.'}
-                  </p>
-                </div>
-              </div>
-              {systemNotificationPermission !== 'granted' ? (
-                <button
-                  type="button"
-                  onClick={() => void onEnableSystemNotifications()}
-                  className="shrink-0 px-3 py-2 rounded-lg border border-amber-500/40 text-amber-200 hover:bg-amber-500/10 text-xs font-medium"
-                >
-                  Ativar notificações
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => void onToggleSystemNotifications()}
-                  className={`shrink-0 inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[10px] font-semibold transition-colors ${
-                    systemNotificationsEnabled
-                      ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/15'
-                      : 'border-slate-600 bg-slate-800/60 text-slate-300 hover:bg-slate-800'
-                  }`}
-                >
-                  {systemNotificationsEnabled ? (
-                    <>
-                      <BellOff size={11} /> Desativar
-                    </>
-                  ) : (
-                    <>
-                      <Bell size={11} /> Ativar
-                    </>
-                  )}
-                </button>
-              )}
-            </div>
+          {incomingEventInvites.length === 0 && outgoingGroups.length === 0 && (
+            <p className="text-xs text-slate-500 py-1">Nenhum convite de reunião.</p>
           )}
 
           {incomingEventInvites.length > 0 && (
-            <section className="space-y-2">
+            <section className="space-y-1.5">
               <p className="text-[10px] text-slate-500 uppercase tracking-wider font-medium">Convites recebidos</p>
               {inviteActionError && <p className="text-xs text-red-400">{inviteActionError}</p>}
               {incomingEventInvites.map((invite) => {
@@ -576,15 +567,15 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
                 const key = `${invite.ownerUid}:${invite.eventId}`;
                 const isDeclining = decliningInviteKey === key;
                 return (
-                  <div key={key} className="bg-slate-900/50 border border-slate-700/60 rounded-lg px-3 py-3 space-y-3">
-                    <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                  <div key={key} className="bg-slate-900/50 border border-slate-700/60 rounded-lg px-3 py-2.5 space-y-2">
+                    <div className="flex items-center justify-between gap-2">
                       <div className="min-w-0">
                         <p className="text-sm text-slate-100 font-medium truncate">{invite.event.titulo}</p>
                         <p className="text-[11px] text-slate-500 truncate">
                           {invite.ownerNome} · {fmtDateTime(invite.event.data_hora)}
                         </p>
                       </div>
-                      <span className={`shrink-0 self-start rounded-full border px-2 py-0.5 text-[10px] font-semibold ${cfg.cls}`}>
+                      <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${cfg.cls}`}>
                         {cfg.label}
                       </span>
                     </div>
@@ -604,57 +595,48 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
                             rows={2}
                             autoFocus
                           />
-                          <div className="flex flex-col gap-2 sm:flex-row">
+                          <div className="flex gap-2">
                             <button
                               type="button"
-                              onClick={() => {
-                                setDecliningInviteKey(null);
-                                setDeclineReason('');
-                                setInviteActionError(null);
-                              }}
-                              className="flex-1 px-3 py-2 rounded-lg border border-slate-600 text-slate-300 hover:bg-slate-800 text-xs"
+                              onClick={() => { setDecliningInviteKey(null); setDeclineReason(''); setInviteActionError(null); }}
+                              className="flex-1 px-3 py-1.5 rounded-lg border border-slate-600 text-slate-300 hover:bg-slate-800 text-xs"
                             >
                               Cancelar
                             </button>
                             <button
                               type="submit"
                               disabled={sharingLoading}
-                              className="flex-1 px-3 py-2 rounded-lg bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white text-xs font-medium"
+                              className="flex-1 px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white text-xs font-medium"
                             >
                               Enviar recusa
                             </button>
                           </div>
                         </form>
                       ) : (
-                        <div className="flex flex-col gap-2 sm:flex-row">
+                        <div className="flex gap-2">
                           <button
                             type="button"
                             onClick={() => void handleAcceptInvite(invite)}
                             disabled={sharingLoading}
-                            className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-medium"
+                            className="flex-1 flex items-center justify-center gap-1 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-medium"
                           >
-                            <Check size={13} /> Aceitar
+                            <Check size={12} /> Aceitar
                           </button>
                           <button
                             type="button"
-                            onClick={() => {
-                              setDecliningInviteKey(key);
-                              setDeclineReason('');
-                              setInviteActionError(null);
-                            }}
+                            onClick={() => { setDecliningInviteKey(key); setDeclineReason(''); setInviteActionError(null); }}
                             disabled={sharingLoading}
-                            className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-red-500/40 text-red-300 hover:bg-red-500/10 disabled:opacity-50 text-xs font-medium"
+                            className="flex-1 flex items-center justify-center gap-1 px-3 py-1.5 rounded-lg border border-red-500/40 text-red-300 hover:bg-red-500/10 disabled:opacity-50 text-xs font-medium"
                           >
-                            <X size={13} /> Recusar
+                            <X size={12} /> Recusar
                           </button>
                         </div>
                       )
                     )}
 
                     {invite.status === 'accepted' && (
-                      <p className="text-xs text-emerald-400">Você aceitou. Essa reunião aparece na sua agenda.</p>
+                      <p className="text-xs text-emerald-400">Você aceitou. Aparece na sua agenda.</p>
                     )}
-
                     {invite.status === 'declined' && invite.rejectionReason && (
                       <p className="text-xs text-red-300">Você recusou: {invite.rejectionReason}</p>
                     )}
@@ -664,39 +646,69 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
             </section>
           )}
 
-          <section className="space-y-2 pt-2 border-t border-slate-700/50">
-            <p className="text-[10px] text-slate-500 uppercase tracking-wider font-medium">Respostas dos convidados</p>
-            {outgoingGroups.length === 0 ? (
-              <p className="text-xs text-slate-500">Nenhuma reunião com membros convidados ainda.</p>
-            ) : (
-              outgoingGroups.map((group) => (
-                <div key={group.event.id} className="bg-slate-900/50 border border-slate-700/60 rounded-lg px-3 py-3 space-y-2">
-                  <div className="min-w-0">
-                    <p className="text-sm text-slate-100 font-medium truncate">{group.event.titulo}</p>
-                    <p className="text-[11px] text-slate-500">{fmtDateTime(group.event.data_hora)}</p>
-                  </div>
-                  <div className="space-y-1.5">
-                    {group.invites.map((invite) => {
-                      const cfg = INVITE_STATUS_CFG[invite.status];
-                      return (
-                        <div key={`${group.event.id}-${invite.viewerUid}`} className="flex flex-col gap-1 rounded-lg border border-slate-800 bg-slate-950/40 px-2 py-2">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span className="text-xs text-slate-200 font-medium">{invite.viewerNome}</span>
-                            <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${cfg.cls}`}>
-                              {cfg.label}
-                            </span>
-                          </div>
-                          {invite.status === 'declined' && invite.rejectionReason && (
-                            <p className="text-xs text-red-300 whitespace-pre-wrap">Motivo: {invite.rejectionReason}</p>
-                          )}
+          {outgoingGroups.length > 0 && (
+            <section className="space-y-1.5 pt-2 border-t border-slate-700/50">
+              <p className="text-[10px] text-slate-500 uppercase tracking-wider font-medium">Respostas dos convidados</p>
+              {outgoingGroups.map((group) => {
+                const ownItem = allItems.find((i) => i.id === group.event.id && !i.ownerUid);
+                return (
+                  <div key={group.event.id} className="bg-slate-900/50 border border-slate-700/60 rounded-lg px-3 py-2.5 space-y-1.5">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="text-sm text-slate-100 font-medium truncate">{group.event.titulo}</p>
+                        <p className="text-[11px] text-slate-500">{fmtDateTime(group.event.data_hora)}</p>
+                      </div>
+                      {ownItem && ownItem.source !== 'google' && (
+                        <div className="flex gap-1 shrink-0">
+                          <button
+                            type="button"
+                            title="Editar evento"
+                            onClick={() => {
+                              setShowInvites(false);
+                              setTab(ownItem.status as Tab);
+                              setEditingId(ownItem.id);
+                            }}
+                            className="p-1.5 rounded-md text-slate-500 hover:text-blue-400 hover:bg-blue-500/10 transition-colors"
+                          >
+                            <Pencil size={13} />
+                          </button>
+                          <button
+                            type="button"
+                            title="Excluir evento"
+                            onClick={() => {
+                              setShowInvites(false);
+                              setDeleteTarget(ownItem);
+                            }}
+                            className="p-1.5 rounded-md text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                          >
+                            <Trash2 size={13} />
+                          </button>
                         </div>
-                      );
-                    })}
+                      )}
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {group.invites.map((invite) => {
+                        const cfg = INVITE_STATUS_CFG[invite.status];
+                        return (
+                          <div key={`${group.event.id}-${invite.viewerUid}`} className="flex flex-col gap-0.5">
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-xs text-slate-200 font-medium">{invite.viewerNome}</span>
+                              <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${cfg.cls}`}>
+                                {cfg.label}
+                              </span>
+                            </div>
+                            {invite.status === 'declined' && invite.rejectionReason && (
+                              <p className="text-[11px] text-red-300">Motivo: {invite.rejectionReason}</p>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
-                </div>
-              ))
-            )}
-          </section>
+                );
+              })}
+            </section>
+          )}
         </div>
       )}
 
@@ -1208,7 +1220,7 @@ const AgendaCard: React.FC<AgendaCardProps> = ({
           <button
             type="button"
             onClick={handleStartEdit}
-            className="p-1 rounded text-slate-600 hover:text-blue-400 hover:bg-blue-500/10 transition-colors opacity-0 group-hover:opacity-100"
+            className="p-1 rounded text-slate-600 hover:text-blue-400 hover:bg-blue-500/10 transition-colors"
             title="Editar"
           >
             <Pencil size={12} />
