@@ -433,11 +433,21 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
     setDeclineReason('');
   };
 
-  const handleConfirmDelete = () => {
+  const handleConfirmDelete = async () => {
     if (!deleteTarget) return;
-    onDelete(deleteTarget.id);
-    if (editingId === deleteTarget.id) setEditingId(null);
+    const target = deleteTarget;
     setDeleteTarget(null);
+    if (editingId === target.id) setEditingId(null);
+
+    if (target.google_event_id && googleCalendar.isConnected) {
+      try {
+        await googleCalendar.deleteEvent(target.google_event_id);
+      } catch {
+        // Falha silenciosa: remove do MAVO mesmo se o Google Calendar falhar
+      }
+    }
+
+    onDelete(target.id);
   };
 
   const TABS: { id: Tab; label: string }[] = [
@@ -884,7 +894,7 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
             </button>
             <button
               type="button"
-              onClick={handleConfirmDelete}
+              onClick={() => void handleConfirmDelete()}
               className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-sm font-medium text-white"
             >
               Excluir

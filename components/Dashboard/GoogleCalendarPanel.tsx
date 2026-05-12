@@ -32,7 +32,7 @@ interface GoogleTokenResponse {
 }
 
 interface GoogleTokenClient {
-  requestAccessToken: () => void;
+  requestAccessToken: (overrides?: { prompt?: string; hint?: string }) => void;
 }
 
 export interface GoogleCalendarEventInput {
@@ -60,6 +60,7 @@ export interface GoogleCalendarController {
   refresh: () => Promise<void>;
   createEvent: (event: GoogleCalendarEventInput) => Promise<GoogleCalendarEvent>;
   updateEvent: (eventId: string, event: GoogleCalendarEventInput) => Promise<GoogleCalendarEvent>;
+  deleteEvent: (eventId: string) => Promise<void>;
 }
 
 declare global {
@@ -181,10 +182,37 @@ function eventWindow(): { timeMin: string; timeMax: string } {
   return { timeMin: min.toISOString(), timeMax: max.toISOString() };
 }
 
+const STORAGE_KEY = 'mavo_gcal_session';
+
+function readStoredSession(): { token: string; expiry: number } | null {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { token?: string; expiry?: number };
+    if (!parsed.token || !parsed.expiry || parsed.expiry <= Date.now() + 30_000) return null;
+    return { token: parsed.token, expiry: parsed.expiry };
+  } catch {
+    return null;
+  }
+}
+
+function writeStoredSession(token: string, expiry: number) {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ token, expiry })); } catch { /* storage unavailable */ }
+}
+
+function clearStoredSession() {
+  try { localStorage.removeItem(STORAGE_KEY); } catch { /* storage unavailable */ }
+}
+
+function hadPreviousSession(): boolean {
+  try { return !!localStorage.getItem(STORAGE_KEY); } catch { return false; }
+}
+
 export function useGoogleCalendar(): GoogleCalendarController {
+  const stored = readStoredSession();
   const [scriptLoaded, setScriptLoaded] = useState(false);
-  const [token, setToken] = useState<string | null>(null);
-  const [tokenExpiry, setTokenExpiry] = useState(0);
+  const [token, setToken] = useState<string | null>(stored?.token ?? null);
+  const [tokenExpiry, setTokenExpiry] = useState(stored?.expiry ?? 0);
   const [calendars, setCalendars] = useState<GCalCalendar[]>([]);
   const [events, setEvents] = useState<GoogleCalendarEvent[]>([]);
   const [frameKey, setFrameKey] = useState(0);
@@ -192,6 +220,25 @@ export function useGoogleCalendar(): GoogleCalendarController {
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const tokenClientRef = useRef<GoogleTokenClient | null>(null);
+  const isSilentRef = useRef(false);
+
+  const applyToken = useCallback((accessToken: string, expiresIn: number) => {
+    const expiry = Date.now() + expiresIn * 1000 - 60_000;
+    setToken(accessToken);
+    setTokenExpiry(expiry);
+    setError(null);
+    writeStoredSession(accessToken, expiry);
+  }, []);
+
+  const trySilentRefresh = useCallback(() => {
+    if (!tokenClientRef.current || !CLIENT_ID) return;
+    isSilentRef.current = true;
+    try {
+      tokenClientRef.current.requestAccessToken({ prompt: '' });
+    } catch {
+      isSilentRef.current = false;
+    }
+  }, []);
 
   useEffect(() => {
     if (document.getElementById('gsi-script')) {
@@ -221,34 +268,58 @@ export function useGoogleCalendar(): GoogleCalendarController {
         scope: SCOPES,
         callback: (resp) => {
           if (resp.error || !resp.access_token) {
-            setError('Falha na autenticação: ' + (resp.error ?? 'token não recebido'));
+            if (!isSilentRef.current) {
+              setError('Falha na autenticação: ' + (resp.error ?? 'token não recebido'));
+            }
+            isSilentRef.current = false;
             return;
           }
-          setToken(resp.access_token);
-          setTokenExpiry(Date.now() + (resp.expires_in ?? 3600) * 1000 - 60000);
-          setError(null);
+          isSilentRef.current = false;
+          applyToken(resp.access_token, resp.expires_in ?? 3600);
         },
       });
+      // Se havia sessão anterior, tenta renovar silenciosamente sem popup
+      if (hadPreviousSession()) {
+        trySilentRefresh();
+      }
       return true;
     };
     if (!tryInit()) {
       const t = setTimeout(() => tryInit(), 500);
       return () => clearTimeout(t);
     }
-  }, [scriptLoaded]);
+  }, [scriptLoaded, applyToken, trySilentRefresh]);
+
+  // Auto-renova o token 5 minutos antes de expirar
+  useEffect(() => {
+    if (!token || !tokenExpiry) return;
+    const msUntilRefresh = tokenExpiry - Date.now() - 5 * 60_000;
+    if (msUntilRefresh <= 0) {
+      trySilentRefresh();
+      return;
+    }
+    const timer = setTimeout(trySilentRefresh, msUntilRefresh);
+    return () => clearTimeout(timer);
+  }, [token, tokenExpiry, trySilentRefresh]);
+
+  const invalidateToken = useCallback(() => {
+    setToken(null);
+    setTokenExpiry(0);
+    clearStoredSession();
+  }, []);
 
   const fetchCalendars = useCallback(async (accessToken: string) => {
     const resp = await fetch(`${CALENDAR_API}/users/me/calendarList?minAccessRole=reader&maxResults=50`, {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
     if (resp.status === 401) {
-      setToken(null);
+      invalidateToken();
       throw new Error('Sessão expirada. Conecte novamente.');
     }
     if (!resp.ok) throw new Error(`Erro ${resp.status}`);
     const data = (await resp.json()) as { items?: GCalCalendar[] };
     setCalendars(data.items ?? []);
-  }, []);
+  }, [invalidateToken]);
 
   const fetchEvents = useCallback(async (accessToken: string) => {
     const { timeMin, timeMax } = eventWindow();
@@ -263,13 +334,13 @@ export function useGoogleCalendar(): GoogleCalendarController {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
     if (resp.status === 401) {
-      setToken(null);
+      invalidateToken();
       throw new Error('Sessão expirada. Conecte novamente.');
     }
     if (!resp.ok) throw new Error(`Erro ${resp.status}`);
     const data = (await resp.json()) as { items?: GoogleCalendarEvent[] };
     setEvents(data.items ?? []);
-  }, []);
+  }, [invalidateToken]);
 
   const fetchGoogleData = useCallback(async (accessToken: string) => {
     setLoading(true);
@@ -303,9 +374,11 @@ export function useGoogleCalendar(): GoogleCalendarController {
 
   const disconnect = useCallback(() => {
     setToken(null);
+    setTokenExpiry(0);
     setCalendars([]);
     setEvents([]);
     setError(null);
+    clearStoredSession();
   }, []);
 
   const refresh = useCallback(async () => {
@@ -382,6 +455,30 @@ export function useGoogleCalendar(): GoogleCalendarController {
     }
   }, [fetchGoogleData, token, tokenExpiry]);
 
+  const deleteEvent = useCallback(async (eventId: string) => {
+    if (!token || Date.now() >= tokenExpiry) {
+      throw new Error('Conecte o Google Calendar antes de excluir no Google.');
+    }
+    try {
+      const resp = await fetch(`${CALENDAR_API}/calendars/primary/events/${encodeURIComponent(eventId)}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (resp.status === 401) {
+        invalidateToken();
+        throw new Error('Sessão expirada. Conecte novamente.');
+      }
+      // 404 = evento já não existe no Google, não é erro fatal
+      if (!resp.ok && resp.status !== 404) throw new Error(`Erro ${resp.status}`);
+      setEvents((prev) => prev.filter((e) => e.id !== eventId));
+      setFrameKey((current) => current + 1);
+    } catch (e) {
+      const message = e instanceof Error ? e.message : 'Erro ao excluir evento do Google Calendar.';
+      setError(message);
+      throw e;
+    }
+  }, [token, tokenExpiry, invalidateToken]);
+
   const isConnected = !!token && Date.now() < tokenExpiry;
   const embedUrl = useMemo(() => buildEmbedUrl(calendars), [calendars]);
 
@@ -401,6 +498,7 @@ export function useGoogleCalendar(): GoogleCalendarController {
     refresh,
     createEvent,
     updateEvent,
+    deleteEvent,
   };
 }
 
