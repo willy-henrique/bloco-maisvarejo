@@ -183,6 +183,7 @@ function eventWindow(): { timeMin: string; timeMax: string } {
 }
 
 const STORAGE_KEY = 'mavo_gcal_session';
+const HINT_KEY = 'mavo_gcal_hint';
 
 function readStoredSession(): { token: string; expiry: number } | null {
   try {
@@ -205,7 +206,20 @@ function clearStoredSession() {
 }
 
 function hadPreviousSession(): boolean {
-  try { return !!localStorage.getItem(STORAGE_KEY); } catch { return false; }
+  // Considera sessão anterior se há hint salvo (persiste mesmo após token expirar)
+  try { return !!localStorage.getItem(HINT_KEY) || !!localStorage.getItem(STORAGE_KEY); } catch { return false; }
+}
+
+function readStoredHint(): string | null {
+  try { return localStorage.getItem(HINT_KEY); } catch { return null; }
+}
+
+function writeStoredHint(email: string) {
+  try { localStorage.setItem(HINT_KEY, email); } catch { /* storage unavailable */ }
+}
+
+function clearStoredHint() {
+  try { localStorage.removeItem(HINT_KEY); } catch { /* storage unavailable */ }
 }
 
 export function useGoogleCalendar(): GoogleCalendarController {
@@ -228,13 +242,25 @@ export function useGoogleCalendar(): GoogleCalendarController {
     setTokenExpiry(expiry);
     setError(null);
     writeStoredSession(accessToken, expiry);
+    // Salva o email da conta Google para usar como hint no silent refresh,
+    // evitando o seletor de contas em renovações automáticas.
+    if (!readStoredHint()) {
+      fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      })
+        .then((r) => (r.ok ? (r.json() as Promise<{ email?: string }>) : null))
+        .then((user) => { if (user?.email) writeStoredHint(user.email); })
+        .catch(() => { /* ignora falha no hint */ });
+    }
   }, []);
 
   const trySilentRefresh = useCallback(() => {
     if (!tokenClientRef.current || !CLIENT_ID) return;
     isSilentRef.current = true;
+    const hint = readStoredHint();
     try {
-      tokenClientRef.current.requestAccessToken({ prompt: '' });
+      // hint pre-seleciona a conta, evitando o popup de seleção de conta
+      tokenClientRef.current.requestAccessToken({ prompt: '', ...(hint ? { hint } : {}) });
     } catch {
       isSilentRef.current = false;
     }
@@ -379,6 +405,7 @@ export function useGoogleCalendar(): GoogleCalendarController {
     setEvents([]);
     setError(null);
     clearStoredSession();
+    clearStoredHint();
   }, []);
 
   const refresh = useCallback(async () => {
