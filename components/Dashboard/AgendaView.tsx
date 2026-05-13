@@ -17,7 +17,7 @@ import {
 import type { AgendaItem, AgendaMember, AgendaStatus } from '../../types';
 import type { AgendaEventInvite, AgendaInviteStatus, AgendaSharedUser, SharedAgendaEntry } from '../../services/agendaService';
 import { Modal } from '../Shared/Modal';
-import { GoogleCalendarPanel, type GoogleCalendarEvent, useGoogleCalendar } from './GoogleCalendarPanel';
+import { GoogleCalendarPanel, type GoogleCalendarEvent, type GoogleCalendarController } from './GoogleCalendarPanel';
 
 interface AgendaViewProps {
   items: AgendaItem[];
@@ -42,6 +42,7 @@ interface AgendaViewProps {
     status: Exclude<AgendaInviteStatus, 'pending'>,
     rejectionReason?: string,
   ) => Promise<string | null>;
+  googleCalendar: GoogleCalendarController;
 }
 
 const STATUS_CFG: Record<AgendaStatus, { label: string; cls: string; dot: string }> = {
@@ -201,8 +202,8 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
   onEnableSystemNotifications,
   onToggleSystemNotifications,
   onRespondEventInvite,
+  googleCalendar,
 }) => {
-  const googleCalendar = useGoogleCalendar();
   const [showGoogleCalendar, setShowGoogleCalendar] = useState(true);
   const [titulo, setTitulo] = useState('');
   const [descricao, setDescricao] = useState('');

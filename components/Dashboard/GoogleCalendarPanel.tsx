@@ -259,8 +259,8 @@ export function useGoogleCalendar(): GoogleCalendarController {
     isSilentRef.current = true;
     const hint = readStoredHint();
     try {
-      // hint pre-seleciona a conta, evitando o popup de seleção de conta
-      tokenClientRef.current.requestAccessToken({ prompt: '', ...(hint ? { hint } : {}) });
+      // prompt: 'none' = totalmente silencioso, nunca abre popup; se falhar, callback recebe error
+      tokenClientRef.current.requestAccessToken({ prompt: 'none', ...(hint ? { hint } : {}) });
     } catch {
       isSilentRef.current = false;
     }
