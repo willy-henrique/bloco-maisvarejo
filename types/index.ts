@@ -101,8 +101,6 @@ export interface AgendaItem {
   status: AgendaStatus;
   created_at: number;
   participantes?: AgendaMember[];
-  google_event_id?: string;
-  google_calendar_id?: string;
   shared_owner_uid?: string;
   shared_owner_nome?: string;
   shared_event_id?: string;

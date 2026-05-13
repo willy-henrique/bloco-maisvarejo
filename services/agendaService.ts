@@ -127,8 +127,6 @@ function normalizeAgendaItem(raw: Record<string, unknown>, fallbackId: string): 
   const data_hora = typeof raw.data_hora === 'number' ? raw.data_hora : Date.now();
   const created_at = typeof raw.created_at === 'number' ? raw.created_at : data_hora;
   const participantes = normalizeMembers(raw.participantes);
-  const google_event_id = typeof raw.google_event_id === 'string' ? raw.google_event_id : undefined;
-  const google_calendar_id = typeof raw.google_calendar_id === 'string' ? raw.google_calendar_id : undefined;
   const shared_owner_uid = typeof raw.shared_owner_uid === 'string' ? raw.shared_owner_uid : undefined;
   const shared_owner_nome = typeof raw.shared_owner_nome === 'string' ? raw.shared_owner_nome : undefined;
   const shared_event_id = typeof raw.shared_event_id === 'string' ? raw.shared_event_id : undefined;
@@ -140,8 +138,6 @@ function normalizeAgendaItem(raw: Record<string, unknown>, fallbackId: string): 
     status: normalizeAgendaStatus(raw.status),
     created_at,
     ...(participantes.length > 0 ? { participantes } : {}),
-    ...(google_event_id ? { google_event_id } : {}),
-    ...(google_calendar_id ? { google_calendar_id } : {}),
     ...(shared_owner_uid ? { shared_owner_uid } : {}),
     ...(shared_owner_nome ? { shared_owner_nome } : {}),
     ...(shared_event_id ? { shared_event_id } : {}),
@@ -276,8 +272,6 @@ function eventSnapshot(item: AgendaItem): AgendaItem {
     created_at: item.created_at,
   };
   if (item.descricao !== undefined) snapshot.descricao = item.descricao;
-  if (item.google_event_id !== undefined) snapshot.google_event_id = item.google_event_id;
-  if (item.google_calendar_id !== undefined) snapshot.google_calendar_id = item.google_calendar_id;
   if (item.shared_owner_uid !== undefined) snapshot.shared_owner_uid = item.shared_owner_uid;
   if (item.shared_owner_nome !== undefined) snapshot.shared_owner_nome = item.shared_owner_nome;
   if (item.shared_event_id !== undefined) snapshot.shared_event_id = item.shared_event_id;

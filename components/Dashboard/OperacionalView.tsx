@@ -353,9 +353,10 @@ const TarefaDetailDrawer: React.FC<{
               </div>
             </div>
           ) : (
-            <div className="bg-slate-900/40 border border-slate-800 rounded-xl p-4 text-center">
-              <Layers size={16} className="mx-auto text-slate-600 mb-2" />
-              <p className="text-xs text-slate-500">Plano de ação não disponível neste contexto.</p>
+            <div className="bg-amber-500/5 border border-amber-500/20 rounded-xl p-4 text-center">
+              <Layers size={16} className="mx-auto text-amber-500/50 mb-2" />
+              <p className="text-xs text-amber-300/70 font-medium">Plano de outro workspace</p>
+              <p className="text-[11px] text-slate-500 mt-1">Esta tarefa pertence a um plano de ação de um workspace ao qual você não tem acesso completo.</p>
             </div>
           )}
 
@@ -1197,6 +1198,7 @@ export const OperacionalView: React.FC<OperacionalProps> = ({
   operacionalCaps,
 }) => {
   const [visibilityFilters, setVisibilityFilters] = useState<VisibilityFilter[]>(['assigned']);
+  const [showConcluidas, setShowConcluidas] = useState(false);
   const [openTaskObservers, setOpenTaskObservers] = useState<Record<string, boolean>>({});
   const [tarefaParaBloquear, setTarefaParaBloquear] = useState<Tarefa | null>(null);
   const [tarefaParaExcluirGlobal, setTarefaParaExcluirGlobal] = useState<Tarefa | null>(null);
@@ -1387,6 +1389,15 @@ export const OperacionalView: React.FC<OperacionalProps> = ({
     loggedUserUid,
   ]);
 
+  const visibleTarefasAtivas = useMemo(
+    () => visibleTarefas.filter((t) => t.status_tarefa !== 'Concluida'),
+    [visibleTarefas],
+  );
+  const visibleTarefasConcluidas = useMemo(
+    () => visibleTarefas.filter((t) => t.status_tarefa === 'Concluida'),
+    [visibleTarefas],
+  );
+
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between gap-3 flex-wrap">
@@ -1426,153 +1437,203 @@ export const OperacionalView: React.FC<OperacionalProps> = ({
           </button>
         </div>
         <span className="text-[10px] text-slate-500 bg-slate-800 px-2 py-1 rounded tabular-nums">
-          {visibleTarefas.length} {visibleTarefas.length === 1 ? 'tarefa' : 'tarefas'}
+          {visibleTarefasAtivas.length} ativa{visibleTarefasAtivas.length !== 1 ? 's' : ''}
+          {visibleTarefasConcluidas.length > 0 && ` · ${visibleTarefasConcluidas.length} concluída${visibleTarefasConcluidas.length !== 1 ? 's' : ''}`}
         </span>
       </div>
 
       <section className="bg-slate-900/60 border border-slate-800 rounded-xl overflow-hidden">
         <div className="p-4">
-          {visibleTarefas.length === 0 ? (
+          {visibleTarefasAtivas.length === 0 && visibleTarefasConcluidas.length === 0 ? (
             <div className="px-4 py-10 text-sm text-slate-500 text-center">
               Nenhuma tarefa operacional disponível {seesAllPrioridades ? '' : 'para o seu usuário'}.
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full table-fixed min-w-[900px] text-sm">
-                <thead>
-                  <tr className="bg-slate-900/80 text-slate-400 text-[10px] uppercase tracking-wider border-b border-slate-800">
-                    <th className="px-4 py-3 font-semibold text-left">Tarefa</th>
-                    <th className="px-4 py-3 font-semibold text-left">Responsável</th>
-                    <th className="px-4 py-3 font-semibold text-left">Prazo</th>
-                    <th className="px-4 py-3 font-semibold text-left">Status</th>
-                    <th className="px-2 py-3 font-semibold text-right w-16">Ações</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-800/60">
-                  {visibleTarefas.map((t) => {
-                    const respNome = displayNomeDonoPrioridade(t.responsavel_id, responsaveis) || t.responsavel_id;
-                    const cfg = TAREFA_CFG[t.status_tarefa] || TAREFA_CFG.Pendente;
-                    const StatusIcon = cfg.Icon;
-                    const isConcluida = t.status_tarefa === 'Concluida';
-                    const isOverdue = t.data_vencimento < Date.now() && !isConcluida;
-                    return (
-                      <React.Fragment key={t.id}>
-                        <tr
-                          className="hover:bg-slate-800/20 transition-colors cursor-pointer"
-                          onClick={() => setTarefaDetalhe(t)}
-                        >
-                          <td className="px-4 py-3">
-                            <div className="flex items-start gap-2.5">
-                              <button
-                                type="button"
-                                disabled={!oc.tarefaWrite}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  const idx = TAREFA_ORDER.indexOf(t.status_tarefa);
-                                  const next = TAREFA_ORDER[(idx + 1) % TAREFA_ORDER.length];
-                                  handleTaskStatusChange(t, next);
-                                }}
-                                className="mt-0.5 shrink-0 text-slate-500 hover:text-slate-200 disabled:opacity-40 disabled:pointer-events-none"
-                                title="Alternar status"
-                              >
-                                <StatusIcon
-                                  size={14}
-                                  className={
-                                    t.status_tarefa === 'Bloqueada'
-                                      ? 'text-red-400'
-                                      : isConcluida || t.status_tarefa === 'EmExecucao'
-                                        ? 'text-emerald-400'
-                                        : 'text-slate-500'
-                                  }
-                                />
-                              </button>
-                              <div className="min-w-0">
-                                <p className={`text-sm font-medium ${isConcluida ? 'line-through text-slate-500' : 'text-slate-200'}`}>{t.titulo}</p>
-                                {t.descricao ? <p className="text-[11px] text-slate-500 truncate max-w-[320px]">{t.descricao}</p> : null}
-                                {t.status_tarefa === 'Bloqueada' && t.bloqueio_motivo ? (
-                                  <p className="text-[11px] text-red-400/80 mt-0.5 flex items-center gap-1">
-                                    <AlertTriangle size={10} /> {t.bloqueio_motivo}
-                                  </p>
-                                ) : null}
-                                {isConcluida && t.data_conclusao && (
-                                  <span className="inline-flex items-center gap-1 text-[10px] text-emerald-300/70 mt-0.5">
-                                    <Calendar size={9} /> {fmtDate(t.data_conclusao)}
-                                  </span>
+            <div className="space-y-4">
+              {/* ── Tarefas ativas ── */}
+              {visibleTarefasAtivas.length === 0 ? (
+                <p className="text-xs text-slate-500 text-center py-4">Nenhuma tarefa ativa.</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full table-fixed min-w-[1020px] text-sm">
+                    <thead>
+                      <tr className="bg-slate-900/80 text-slate-400 text-[10px] uppercase tracking-wider border-b border-slate-800">
+                        <th className="px-4 py-3 font-semibold text-left">Tarefa</th>
+                        <th className="px-4 py-3 font-semibold text-left">Responsável</th>
+                        <th className="px-4 py-3 font-semibold text-left w-40">Plano de Ação</th>
+                        <th className="px-4 py-3 font-semibold text-left">Prazo</th>
+                        <th className="px-4 py-3 font-semibold text-left">Status</th>
+                        <th className="px-2 py-3 font-semibold text-right w-16">Ações</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800/60">
+                      {visibleTarefasAtivas.map((t) => {
+                        const planoT = allPlanosById.get(t.plano_id);
+                        const respNome = displayNomeDonoPrioridade(t.responsavel_id, responsaveis) || t.responsavel_id;
+                        const cfg = TAREFA_CFG[t.status_tarefa] || TAREFA_CFG.Pendente;
+                        const StatusIcon = cfg.Icon;
+                        const isOverdue = t.data_vencimento < Date.now();
+                        return (
+                          <React.Fragment key={t.id}>
+                            <tr
+                              className="hover:bg-slate-800/20 transition-colors cursor-pointer"
+                              onClick={() => setTarefaDetalhe(t)}
+                            >
+                              <td className="px-4 py-3">
+                                <div className="flex items-start gap-2.5">
+                                  <button
+                                    type="button"
+                                    disabled={!oc.tarefaWrite}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      const idx = TAREFA_ORDER.indexOf(t.status_tarefa);
+                                      const next = TAREFA_ORDER[(idx + 1) % TAREFA_ORDER.length];
+                                      handleTaskStatusChange(t, next);
+                                    }}
+                                    className="mt-0.5 shrink-0 text-slate-500 hover:text-slate-200 disabled:opacity-40 disabled:pointer-events-none"
+                                    title="Alternar status"
+                                  >
+                                    <StatusIcon size={14} className={t.status_tarefa === 'Bloqueada' ? 'text-red-400' : t.status_tarefa === 'EmExecucao' ? 'text-emerald-400' : 'text-slate-500'} />
+                                  </button>
+                                  <div className="min-w-0">
+                                    <p className="text-sm font-medium text-slate-200">{t.titulo}</p>
+                                    {t.descricao ? <p className="text-[11px] text-slate-500 truncate max-w-[280px]">{t.descricao}</p> : null}
+                                    {t.status_tarefa === 'Bloqueada' && t.bloqueio_motivo ? (
+                                      <p className="text-[11px] text-red-400/80 mt-0.5 flex items-center gap-1"><AlertTriangle size={10} /> {t.bloqueio_motivo}</p>
+                                    ) : null}
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="px-4 py-3 text-xs text-slate-300">{respNome || '—'}</td>
+                              <td className="px-4 py-3">
+                                {planoT ? (
+                                  <span className="text-xs text-blue-300/80 truncate block max-w-[150px]" title={planoT.titulo}>{planoT.titulo}</span>
+                                ) : (
+                                  <span className="text-xs text-slate-600">—</span>
                                 )}
-                              </div>
-                            </div>
-                          </td>
-                          <td className={`px-4 py-3 text-xs ${isConcluida ? 'text-slate-500' : 'text-slate-300'}`}>{respNome || '—'}</td>
-                          <td className="px-4 py-3">
-                            <span className={`text-xs flex items-center gap-1 ${isOverdue ? 'text-red-400 font-medium' : isConcluida ? 'text-slate-500' : 'text-slate-400'}`}>
-                              {isOverdue && <AlertTriangle size={10} />}
-                              {fmtDate(t.data_vencimento)}
-                            </span>
-                          </td>
-                          <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
-                            <div className="flex flex-col gap-1">
-                              <div className="flex items-center gap-2">
-                                <select
-                                  value={t.status_tarefa}
-                                  onChange={(e) => {
-                                    const next = e.target.value as StatusTarefa;
-                                    handleTaskStatusChange(t, next);
-                                  }}
-                                  disabled={!oc.tarefaWrite}
-                                  className="text-[10px] font-semibold px-2 py-1 rounded-sm uppercase bg-slate-800 border border-slate-700 text-slate-200 outline-none focus:border-slate-500 disabled:opacity-50"
-                                >
-                                  <option value="Pendente">PENDENTE</option>
-                                  <option value="EmExecucao">EM EXECUÇÃO</option>
-                                  <option value="Bloqueada">BLOQUEADA</option>
-                                  <option value="Concluida">CONCLUÍDA</option>
-                                </select>
-                                <button
-                                  type="button"
-                                  onClick={(e) => { e.stopPropagation(); setOpenTaskObservers((prev) => ({ ...prev, [t.id]: !prev[t.id] })); }}
-                                  className={`p-1 rounded transition-colors ${openTaskObservers[t.id] ? 'text-slate-100 bg-slate-700/80' : 'text-slate-500 hover:text-slate-200 hover:bg-slate-800/60'}`}
-                                  title={`${(t.observadores ?? []).length} observador(es)`}
-                                  aria-label="Abrir observadores da tarefa"
-                                >
-                                  <Eye size={13} />
-                                </button>
-                              </div>
-                            </div>
-                          </td>
-                          <td className="px-2 py-3 text-right w-16" onClick={(e) => e.stopPropagation()}>
-                            {oc.tarefaDelete && (
-                              <button
-                                type="button"
-                                onClick={(e) => { e.stopPropagation(); setTarefaParaExcluirGlobal(t); }}
-                                className="p-1.5 rounded text-slate-600 hover:text-red-400 hover:bg-red-500/10 transition-colors"
-                                title="Excluir tarefa"
-                              >
-                                <Trash2 size={13} />
-                              </button>
+                              </td>
+                              <td className="px-4 py-3">
+                                <span className={`text-xs flex items-center gap-1 ${isOverdue ? 'text-red-400 font-medium' : 'text-slate-400'}`}>
+                                  {isOverdue && <AlertTriangle size={10} />}
+                                  {fmtDate(t.data_vencimento)}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                                <div className="flex items-center gap-2">
+                                  <select
+                                    value={t.status_tarefa}
+                                    onChange={(e) => handleTaskStatusChange(t, e.target.value as StatusTarefa)}
+                                    disabled={!oc.tarefaWrite}
+                                    className="text-[10px] font-semibold px-2 py-1 rounded-sm uppercase bg-slate-800 border border-slate-700 text-slate-200 outline-none focus:border-slate-500 disabled:opacity-50"
+                                  >
+                                    <option value="Pendente">PENDENTE</option>
+                                    <option value="EmExecucao">EM EXECUÇÃO</option>
+                                    <option value="Bloqueada">BLOQUEADA</option>
+                                    <option value="Concluida">CONCLUÍDA</option>
+                                  </select>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => { e.stopPropagation(); setOpenTaskObservers((prev) => ({ ...prev, [t.id]: !prev[t.id] })); }}
+                                    className={`p-1 rounded transition-colors ${openTaskObservers[t.id] ? 'text-slate-100 bg-slate-700/80' : 'text-slate-500 hover:text-slate-200 hover:bg-slate-800/60'}`}
+                                    title={`${(t.observadores ?? []).length} observador(es)`}
+                                  >
+                                    <Eye size={13} />
+                                  </button>
+                                </div>
+                              </td>
+                              <td className="px-2 py-3 text-right w-16" onClick={(e) => e.stopPropagation()}>
+                                {oc.tarefaDelete && (
+                                  <button type="button" onClick={(e) => { e.stopPropagation(); setTarefaParaExcluirGlobal(t); }} className="p-1.5 rounded text-slate-600 hover:text-red-400 hover:bg-red-500/10 transition-colors" title="Excluir tarefa">
+                                    <Trash2 size={13} />
+                                  </button>
+                                )}
+                              </td>
+                            </tr>
+                            {openTaskObservers[t.id] && (
+                              <tr className="bg-slate-900/40">
+                                <td colSpan={6} className="px-4 pb-2">
+                                  <ObserversPanel entity="tarefa" entityId={t.id} observers={t.observadores ?? []} allUsers={observerPool.map(toObserverUserInput)} resolveUserName={(userId) => displayNomeDonoPrioridade(userId, responsaveis) || userId} onAdd={(userId) => onAddObserver?.('tarefa', t.id, userId)} onRemove={(userId) => onRemoveObserver?.('tarefa', t.id, userId)} canEdit={oc.observerEdit} hideTrigger />
+                                </td>
+                              </tr>
                             )}
-                          </td>
-                        </tr>
-                        {openTaskObservers[t.id] && (
-                          <tr className="bg-slate-900/40">
-                            <td colSpan={5} className="px-4 pb-2">
-                              <ObserversPanel
-                                entity="tarefa"
-                                entityId={t.id}
-                                observers={t.observadores ?? []}
-                                allUsers={observerPool.map(toObserverUserInput)}
-                                resolveUserName={(userId) => displayNomeDonoPrioridade(userId, responsaveis) || userId}
-                                onAdd={(userId) => onAddObserver?.('tarefa', t.id, userId)}
-                                onRemove={(userId) => onRemoveObserver?.('tarefa', t.id, userId)}
-                                canEdit={oc.observerEdit}
-                                hideTrigger
-                              />
-                            </td>
+                          </React.Fragment>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {/* ── Tarefas concluídas (colapsável) ── */}
+              {visibleTarefasConcluidas.length > 0 && (
+                <div className="border-t border-slate-800 pt-3">
+                  <button
+                    type="button"
+                    onClick={() => setShowConcluidas((v) => !v)}
+                    className="flex items-center gap-2 text-[11px] font-medium text-slate-500 hover:text-slate-300 transition-colors mb-2"
+                  >
+                    {showConcluidas ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+                    <CheckCircle size={12} className="text-emerald-500/70" />
+                    {visibleTarefasConcluidas.length} tarefa{visibleTarefasConcluidas.length !== 1 ? 's' : ''} concluída{visibleTarefasConcluidas.length !== 1 ? 's' : ''}
+                  </button>
+                  {showConcluidas && (
+                    <div className="overflow-x-auto opacity-70">
+                      <table className="w-full table-fixed min-w-[1020px] text-sm">
+                        <thead>
+                          <tr className="text-slate-600 text-[10px] uppercase tracking-wider border-b border-slate-800/60">
+                            <th className="px-4 py-2 font-semibold text-left">Tarefa</th>
+                            <th className="px-4 py-2 font-semibold text-left">Responsável</th>
+                            <th className="px-4 py-2 font-semibold text-left w-40">Plano de Ação</th>
+                            <th className="px-4 py-2 font-semibold text-left">Prazo</th>
+                            <th className="px-4 py-2 font-semibold text-left">Status</th>
+                            <th className="px-2 py-2 text-right w-16" />
                           </tr>
-                        )}
-                      </React.Fragment>
-                    );
-                  })}
-                </tbody>
-              </table>
+                        </thead>
+                        <tbody className="divide-y divide-slate-800/40">
+                          {visibleTarefasConcluidas.map((t) => {
+                            const planoT = allPlanosById.get(t.plano_id);
+                            const respNome = displayNomeDonoPrioridade(t.responsavel_id, responsaveis) || t.responsavel_id;
+                            return (
+                              <tr key={t.id} className="hover:bg-slate-800/10 transition-colors cursor-pointer" onClick={() => setTarefaDetalhe(t)}>
+                                <td className="px-4 py-2">
+                                  <div className="flex items-center gap-2">
+                                    <CheckCircle size={13} className="text-emerald-500/60 shrink-0" />
+                                    <div className="min-w-0">
+                                      <p className="text-sm line-through text-slate-500">{t.titulo}</p>
+                                      {t.data_conclusao && (
+                                        <span className="text-[10px] text-emerald-400/60 flex items-center gap-1"><Calendar size={9} /> {fmtDate(t.data_conclusao)}</span>
+                                      )}
+                                    </div>
+                                  </div>
+                                </td>
+                                <td className="px-4 py-2 text-xs text-slate-600">{respNome || '—'}</td>
+                                <td className="px-4 py-2">
+                                  {planoT ? (
+                                    <span className="text-xs text-slate-600 truncate block max-w-[150px]" title={planoT.titulo}>{planoT.titulo}</span>
+                                  ) : (
+                                    <span className="text-xs text-slate-700">—</span>
+                                  )}
+                                </td>
+                                <td className="px-4 py-2 text-xs text-slate-600">{fmtDate(t.data_vencimento)}</td>
+                                <td className="px-4 py-2">
+                                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full text-emerald-400/70 bg-emerald-500/10">CONCLUÍDA</span>
+                                </td>
+                                <td className="px-2 py-2 text-right w-16" onClick={(e) => e.stopPropagation()}>
+                                  {oc.tarefaDelete && (
+                                    <button type="button" onClick={(e) => { e.stopPropagation(); setTarefaParaExcluirGlobal(t); }} className="p-1.5 rounded text-slate-700 hover:text-red-400 hover:bg-red-500/10 transition-colors" title="Excluir tarefa">
+                                      <Trash2 size={13} />
+                                    </button>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </div>

@@ -15,7 +15,6 @@ const RoadmapView = React.lazy(() => import('./components/Dashboard/RoadmapView'
 const OperacionalView = React.lazy(() => import('./components/Dashboard/OperacionalView').then(m => ({ default: m.OperacionalView })));
 const AgendaView = React.lazy(() => import('./components/Dashboard/AgendaView').then(m => ({ default: m.AgendaView })));
 import { useAgenda } from './controllers/useAgenda';
-import { useGoogleCalendar } from './components/Dashboard/GoogleCalendarPanel';
 import type { ViewId } from './components/Layout/Sidebar';
 import { useStrategicBoard } from './controllers/useStrategicBoard';
 import { useRitmoGestao } from './controllers/useRitmoGestao';
@@ -151,7 +150,6 @@ function empresaParaDemandaDoDono(
 function AppContent() {
   const { isAuthenticated, encryptionKey, logout, profile, hasModuleAction, firebaseUser, loading: authLoading } = useUser();
   const agenda = useAgenda(firebaseUser?.uid ?? null, profile);
-  const googleCalendar = useGoogleCalendar();
   const [activeView, setActiveView] = useState<ViewId>('backlog');
   const chatUser = useMemo(
     () => firebaseUser ? { uid: firebaseUser.uid, nome: profile?.nome?.trim() || firebaseUser.email || firebaseUser.uid } : null,
@@ -1797,7 +1795,6 @@ function AppContent() {
               onEnableSystemNotifications={requestSystemNotifications}
               onToggleSystemNotifications={toggleSystemNotifications}
               onRespondEventInvite={agenda.respondEventInvite}
-              googleCalendar={googleCalendar}
             />
           ) : activeView === 'chat' ? (
               <ChunkErrorBoundary>
