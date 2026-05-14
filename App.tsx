@@ -996,16 +996,23 @@ function AppContent() {
       if (myResponsavelIdsForBoard.size === 0) {
         return base.filter((pl) => isCreatedByMe(pl.created_by, pl.who_id));
       }
-      return base.filter(
-        (pl) =>
+      return base.filter((pl) => {
+        const hasTarefaAtribuida = ritmo.board.tarefas.some(
+          (t) =>
+            t.plano_id === pl.id &&
+            tarefaAtribuidaAoUsuario(t, myResponsavelIdsForBoard, responsaveisParaAtribuicao),
+        );
+        return (
+          hasTarefaAtribuida ||
           isCreatedByMe(pl.created_by, pl.who_id) ||
           canViewByOwnershipOrObserver([pl.who_id], pl.observadores, myResponsavelIdsForBoard, responsaveisParaAtribuicao) ||
           donoPrioridadeCorrespondeAoUsuario(
             pl.who_id,
             myResponsavelIdsForBoard,
             responsaveisParaAtribuicao,
-          ),
-      );
+          )
+        );
+      });
     },
     [
       ritmo.board.planos,
